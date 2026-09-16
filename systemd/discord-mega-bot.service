@@ -1,0 +1,21 @@
+[Unit]
+Description=Discord Mega Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=discord
+Group=discord
+WorkingDirectory=/opt/discord-mega-bot
+EnvironmentFile=/opt/discord-mega-bot/.env
+ExecStart=/opt/discord-mega-bot/.venv/bin/python main.py
+Restart=always
+RestartSec=5
+# Медленные голосовые операции и yt-dlp в отдельном потоке
+TimeoutStartSec=60
+# Защита от утечки памяти: перезапуск при длительном разрастании
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

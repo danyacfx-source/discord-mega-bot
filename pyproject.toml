@@ -1,0 +1,16 @@
+[project]
+name = "discord-mega-bot"
+version = "3.0.0"
+description = "Модульный Discord-бот: модерация, музыка, администрирование"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
