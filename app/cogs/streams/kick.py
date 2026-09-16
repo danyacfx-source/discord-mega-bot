@@ -79,7 +79,7 @@ class KickCog(MegaCog, name="Kick"):
 
     async def _set_presence(self, title: str | None, viewers: int = 0) -> None:
         try:
-            await self.bot.change_presence(activity=stream_activity(title, viewers, fallback=self.bot.config.status_activity))
+            await self.bot.change_presence(activity=stream_activity(title, viewers))
         except Exception:
             logger.debug("Kick: не удалось сменить присутствие", exc_info=True)
 

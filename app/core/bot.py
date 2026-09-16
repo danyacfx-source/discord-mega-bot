@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from app.config import Config
 from app.core import embeds
+from app.core.stream_state import stream_activity
 
 if TYPE_CHECKING:
     from app.core.container import DependencyContainer
@@ -40,7 +41,7 @@ class MegaBot(commands.Bot):
             command_prefix=config.prefix,
             intents=intents,
             help_command=None,
-            activity=discord.Activity(type=discord.ActivityType.watching, name=config.status_activity),
+            activity=stream_activity(None),
         )
         self.config = config
         self.db = None
