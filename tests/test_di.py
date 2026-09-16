@@ -91,38 +91,6 @@ async def test_app_container_injects_cog():
 
 
 @pytest.mark.asyncio
-async def test_app_container_injects_youtube_cog():
-    from app.cogs.youtube.youtube import YouTubeCog
-    from app.config import Config
-    from app.core.bot import MegaBot
-
-    with tempfile.TemporaryDirectory() as tmp:
-        config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
-        bot = MegaBot(config)
-        await bot.setup_hook()
-        try:
-            packages = bot.packages
-            assert packages is not None
-
-            service = packages["app.services"].resolve("youtube")
-            assert isinstance(service, bot.services.youtube.__class__)
-            assert service is bot.services.youtube
-
-            # загруженный ког получил сервис из общего контейнера (синглтон)
-            loaded = bot.get_cog("YouTube")
-            assert isinstance(loaded, YouTubeCog)
-            assert loaded.youtube is bot.services.youtube
-
-            # контейнер пакета кога собирает ког с тем же экземпляром сервиса
-            cog_container = packages.container_for("app.cogs.youtube.youtube")
-            assert cog_container is not None
-            built = cog_container.build(YouTubeCog)
-            assert built.youtube is bot.services.youtube
-        finally:
-            await bot.close()
-
-
-@pytest.mark.asyncio
 async def test_all_cogs_build_through_di():
     import importlib
     import pkgutil

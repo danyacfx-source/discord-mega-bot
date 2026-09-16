@@ -161,12 +161,6 @@ class Config:
     season_reward_roles: tuple[str, ...] = ()
     season_announce_channel_id: int | None = None
 
-    # YouTube (youtube, как в Node youtube.js / youtube_growth.js)
-    youtube_enabled: bool = False
-    youtube_api_key: str | None = None
-    youtube_channel: str | None = None
-    youtube_notify_channel_id: int | None = None
-
     # Авто-модерация (discord_automod, как в Node automod.js)
     automod_enabled: bool = True
     automod_banned_words: str = ""
@@ -303,10 +297,6 @@ class Config:
             season_enabled=_bool(os.getenv("SEASON_ENABLED")),
             season_reward_roles=_strs(os.getenv("SEASON_REWARD_ROLES")),
             season_announce_channel_id=_single_int(os.getenv("SEASON_ANNOUNCE_CHANNEL_ID")),
-            youtube_enabled=_bool(os.getenv("YOUTUBE_ENABLED")),
-            youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
-            youtube_channel=os.getenv("YOUTUBE_CHANNEL"),
-            youtube_notify_channel_id=_single_int(os.getenv("YOUTUBE_NOTIFY_CHANNEL_ID")),
         )
 
 

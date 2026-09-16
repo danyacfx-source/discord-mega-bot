@@ -30,7 +30,6 @@ from app.services.settings_service import SettingsService
 from app.services.temp_voice_service import TempVoiceService
 from app.services.ticket_service import TicketService
 from app.services.twitch_service import TwitchService
-from app.services.youtube_service import YouTubeService
 
 SERVICE_CLASSES: tuple[type, ...] = (
     SettingsService,
@@ -48,7 +47,6 @@ SERVICE_CLASSES: tuple[type, ...] = (
     TempVoiceService,
     BirthdayService,
     SeasonService,
-    YouTubeService,
 )
 
 SERVICE_ALIASES: dict[str, str] = {
@@ -67,7 +65,6 @@ SERVICE_ALIASES: dict[str, str] = {
     "tempvoice": TempVoiceService.__name__,
     "birthdays": BirthdayService.__name__,
     "seasons": SeasonService.__name__,
-    "youtube": YouTubeService.__name__,
 }
 
 
@@ -88,7 +85,6 @@ class Services:
     tempvoice: TempVoiceService
     birthdays: BirthdayService
     seasons: SeasonService
-    youtube: YouTubeService
 
 
 def build_services(container: DependencyContainer) -> Services:
@@ -109,5 +105,4 @@ def build_services(container: DependencyContainer) -> Services:
         tempvoice=container.resolve("tempvoice"),
         birthdays=container.resolve("birthdays"),
         seasons=container.resolve("seasons"),
-        youtube=container.resolve("youtube"),
     )
