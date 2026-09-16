@@ -161,6 +161,9 @@ class Config:
     season_reward_roles: tuple[str, ...] = ()
     season_announce_channel_id: int | None = None
 
+    # Яндекс Музыка (только ссылки music.yandex.*, нужен токен с Яндекс Плюс)
+    yandex_music_token: str | None = None
+
     # Авто-модерация (discord_automod, как в Node automod.js)
     automod_enabled: bool = True
     automod_banned_words: str = ""
@@ -297,6 +300,7 @@ class Config:
             season_enabled=_bool(os.getenv("SEASON_ENABLED")),
             season_reward_roles=_strs(os.getenv("SEASON_REWARD_ROLES")),
             season_announce_channel_id=_single_int(os.getenv("SEASON_ANNOUNCE_CHANNEL_ID")),
+            yandex_music_token=os.getenv("YANDEX_MUSIC_TOKEN"),
         )
 
 

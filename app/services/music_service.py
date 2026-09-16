@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from app.services.audio.player import GuildPlayer
 from app.services.audio.resolver import TrackNotFoundError, TrackResolver
 from app.services.audio.track import Track
+from app.services.audio.yandex_resolver import YandexMusicResolver, parse_yandex_track_id
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -24,6 +25,7 @@ class MusicService:
         self._bot = bot
         self._players: dict[int, GuildPlayer] = {}
         self.resolver = TrackResolver()
+        self._yandex: YandexMusicResolver | None = None
 
     def get_player(self, guild_id: int) -> GuildPlayer:
         if guild_id not in self._players:
@@ -31,7 +33,17 @@ class MusicService:
         return self._players[guild_id]
 
     async def resolve(self, query: str) -> Track:
-        return await self.resolver.resolve(query)
+        yandex_id = parse_yandex_track_id(query)
+        if yandex_id is None:
+            return await self.resolver.resolve(query)
+        token = self._bot.config.yandex_music_token
+        if not token:
+            raise TrackNotFoundError(
+                "Для ссылок Яндекс Музыки задайте YANDEX_MUSIC_TOKEN в .env (токен аккаунта с Яндекс Плюс)."
+            )
+        if self._yandex is None:
+            self._yandex = YandexMusicResolver(token)
+        return await self._yandex.resolve(query, yandex_id)
 
 
 __all__ = ["MusicService", "TrackNotFoundError", "Track", "ffmpeg_available"]
