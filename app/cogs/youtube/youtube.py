@@ -1,9 +1,14 @@
-"""YouTube: статистика канала (/yt_stats) и статус роста (/yt_growth), как в Node youtube.js/youtube_growth.js."""
+"""YouTube: статистика канала (/yt_stats) и рост (/yt_growth), как в Node youtube.js/youtube_growth.js.
+
+Состояние роста (известные Shorts, премьеры, дата последней аналитики) хранится
+в KvRepository и переживает рестарты. Циклы запускаются, если модуль включён
+и задан API-ключ (как в Node) — уведомления зависят от notify-канала.
+"""
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
@@ -19,8 +24,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.cogs")
 
 _YOUTUBE_COLOR = 0xFF0000
-_GROWTH_STATE_KEY = "youtube:growth"
 _SHORTS_LIMIT = 60
+_ANALYTICS_PERIOD = timedelta(days=7)
+_MSC_OFFSET = timedelta(hours=3)
+
+
+def _msk(now: datetime | None = None) -> datetime:
+    return (now or datetime.now(UTC)) + _MSC_OFFSET
 
 
 class YouTubeCog(MegaCog, name="YouTube"):
@@ -29,14 +39,18 @@ class YouTubeCog(MegaCog, name="YouTube"):
         self.youtube = youtube
         self._known_video_ids: set[str] = set()
         self._video_seeded = False
-        self._growth_state: dict[str, Any] = {}
 
     async def cog_load(self) -> None:
         if not self.youtube.enabled:
+            logger.info("YouTube: модуль отключён (youtube.enabled=false)")
             return
-        if self.bot.config.youtube_notify_channel_id:
-            self.video_check_loop.start()
-            self.growth_loop.start()
+        if not self.youtube.api_key:
+            logger.error("YouTube: включён, но не задан YOUTUBE_API_KEY — циклы не запущены")
+            return
+        await self.youtube.load_state()
+        self.video_check_loop.start()
+        self.growth_loop.start()
+        logger.info("YouTube: модуль запущен: @%s", self.youtube.handle)
 
     async def cog_unload(self) -> None:
         self.video_check_loop.cancel()
@@ -54,6 +68,23 @@ class YouTubeCog(MegaCog, name="YouTube"):
             if isinstance(channel, discord.TextChannel):
                 return channel
         return None
+
+    @staticmethod
+    def _small_embed(title: str, url: str, thumbnail: str | None, footer: str | None = None) -> discord.Embed:
+        embed = discord.Embed(title=title, url=url, color=discord.Color(_YOUTUBE_COLOR))
+        if thumbnail:
+            embed.set_thumbnail(url=thumbnail)
+        if footer:
+            embed.set_footer(text=footer)
+        return embed
+
+    async def _send_notify(self, channel: discord.TextChannel, embed: discord.Embed) -> None:
+        if channel is None:
+            return
+        try:
+            await channel.send(embed=embed)
+        except discord.HTTPException:
+            logger.debug("YouTube: не удалось отправить уведомление", exc_info=True)
 
     # ------------------------------------------------------------- loops
 
@@ -79,16 +110,13 @@ class YouTubeCog(MegaCog, name="YouTube"):
             if len(self._known_video_ids) > 200:
                 self._known_video_ids.pop()
             if channel is not None:
-                embed = embeds.info("📹 Новое видео", f"**{snippet.get('title') or '?'}**")
-                embed.url = f"https://www.youtube.com/watch?v={vid}"
-                embed.color = discord.Color(_YOUTUBE_COLOR)
-                thumb = (snippet.get("thumbnails") or {}).get("high", {}).get("url")
-                if thumb:
-                    embed.set_thumbnail(url=thumb)
-                try:
-                    await channel.send(embed=embed)
-                except discord.HTTPException:
-                    logger.debug("YouTube: не удалось отправить уведомление о видео", exc_info=True)
+                title = snippet.get("title") or "?"
+                embed = self._small_embed(
+                    f"📹 Новое видео: {title}",
+                    f"https://www.youtube.com/watch?v={vid}",
+                    (snippet.get("thumbnails") or {}).get("high", {}).get("url"),
+                )
+                await self._send_notify(channel, embed)
         if not self._video_seeded:
             self._video_seeded = True
             logger.info("YouTube: инициализировано %d известных видео", len(self._known_video_ids))
@@ -98,6 +126,7 @@ class YouTubeCog(MegaCog, name="YouTube"):
         try:
             await self._check_shorts()
             await self._check_premieres()
+            await self._post_weekly_analytics()
         except Exception:
             logger.exception("YouTubeGrowth: ошибка цикла")
 
@@ -105,11 +134,13 @@ class YouTubeCog(MegaCog, name="YouTube"):
         channel = self._notify_channel()
         if channel is None:
             return
+        state = await self.youtube.load_state()
+        known = list(state.get("known_shorts") or [])
+        known_set = set(known)
         videos = await self.youtube.recent_videos(10)
-        known = set(self._growth_state.get("known_shorts", []))
         for item in videos:
             vid = (item.get("id") or {}).get("videoId")
-            if not vid or vid in known:
+            if not vid or vid in known_set:
                 continue
             details = await self.youtube.video_details([vid])
             if not details:
@@ -118,18 +149,17 @@ class YouTubeCog(MegaCog, name="YouTube"):
             snippet = details[0].get("snippet") or {}
             if not (content.startswith("PT") and parse_duration_seconds(content) <= _SHORTS_LIMIT):
                 continue
-            known.add(vid)
-            self._growth_state["known_shorts"] = list(known)[-200:]
-            embed = embeds.info("📱 Новый YouTube Short", f"**{snippet.get('title') or '?'}**")
-            embed.url = f"https://www.youtube.com/shorts/{vid}"
-            embed.color = discord.Color(_YOUTUBE_COLOR)
-            thumb = (snippet.get("thumbnails") or {}).get("high", {}).get("url")
-            if thumb:
-                embed.set_thumbnail(url=thumb)
-            try:
-                await channel.send(embed=embed)
-            except discord.HTTPException:
-                logger.debug("YouTubeGrowth: не удалось опубликовать Short", exc_info=True)
+            known.append(vid)
+            state["known_shorts"] = known[-200:]
+            title = snippet.get("title") or "?"
+            embed = self._small_embed(
+                f"📱 Новый YouTube Short: {title}",
+                f"https://www.youtube.com/shorts/{vid}",
+                (snippet.get("thumbnails") or {}).get("high", {}).get("url"),
+                footer="YouTube Shorts",
+            )
+            await self._send_notify(channel, embed)
+        await self.youtube.save_state()
 
     async def _check_premieres(self) -> None:
         channel = self._notify_channel()
@@ -138,22 +168,27 @@ class YouTubeCog(MegaCog, name="YouTube"):
         channel_id = await self.youtube.resolve_channel_id()
         if not channel_id:
             return
-        # поиск upcoming промо-видео нет в сервисе, проверяем через video_details свежих
+        state = await self.youtube.load_state()
         videos = await self.youtube.recent_videos(5)
         for item in videos:
             vid = (item.get("id") or {}).get("videoId")
             if not vid:
                 continue
             key = f"premiere:{vid}"
-            if self._growth_state.get(key):
+            if state.get(key):
                 continue
             snippet = item.get("snippet") or {}
             if snippet.get("liveBroadcastContent") != "upcoming":
                 continue
-            self._growth_state[key] = True
-            embed = embeds.info("🎬 Премьера", f"**{snippet.get('title') or '?'}**\nСкоро на YouTube! Не пропусти.")
-            embed.url = f"https://www.youtube.com/watch?v={vid}"
-            embed.color = discord.Color(_YOUTUBE_COLOR)
+            state[key] = True
+            title = snippet.get("title") or "?"
+            embed = self._small_embed(
+                f"🎬 Премьера: {title}",
+                f"https://www.youtube.com/watch?v={vid}",
+                (snippet.get("thumbnails") or {}).get("high", {}).get("url"),
+                footer="Добавь в календарь!",
+            )
+            embed.description = "Скоро на YouTube! Не пропусти."
             published = snippet.get("publishedAt")
             if published:
                 try:
@@ -161,10 +196,52 @@ class YouTubeCog(MegaCog, name="YouTube"):
                     embed.add_field(name="Старт", value=f"<t:{int(ts.timestamp())}:R>")
                 except ValueError:
                     pass
-            try:
-                await channel.send(embed=embed)
-            except discord.HTTPException:
-                logger.debug("YouTubeGrowth: не удалось опубликовать премьеру", exc_info=True)
+            await self._send_notify(channel, embed)
+        await self.youtube.save_state()
+
+    async def _post_weekly_analytics(self) -> None:
+        channel = self._notify_channel()
+        if channel is None:
+            return
+        state = await self.youtube.load_state()
+        last = state.get("last_analytics_post")
+        if last and datetime.now(UTC) - datetime.fromtimestamp(last, tz=UTC) < _ANALYTICS_PERIOD:
+            return
+        item = await self.youtube.channel_stats()
+        if not item:
+            return
+        stats = item.get("statistics") or {}
+        snippet = item.get("snippet") or {}
+        subs = int(stats.get("subscriberCount") or 0)
+        views = int(stats.get("viewCount") or 0)
+        videos_count = int(stats.get("videoCount") or 0)
+
+        embed = embeds.info(f"📈 YouTube аналитика: {snippet.get('title') or '?'}")
+        embed.color = discord.Color(_YOUTUBE_COLOR)
+        embed.add_field(name="Подписчики", value=format_number(subs), inline=True)
+        embed.add_field(name="Просмотры", value=format_number(views), inline=True)
+        embed.add_field(name="Видео", value=str(videos_count), inline=True)
+
+        try:
+            videos = await self.youtube.recent_videos(5)
+            ids = [(v.get("id") or {}).get("videoId") for v in videos if (v.get("id") or {}).get("videoId")]
+            if ids:
+                lines: list[str] = []
+                for item_v in await self.youtube.video_details(ids[:5]):
+                    stats_v = item_v.get("statistics") or {}
+                    title = (item_v.get("snippet") or {}).get("title") or "?"
+                    vc = int(stats_v.get("viewCount") or 0)
+                    lk = int(stats_v.get("likeCount") or 0)
+                    lines.append(f"**{title[:40]}** — 👁 {format_number(vc)} · 👍 {format_number(lk)}")
+                if lines:
+                    embed.add_field(name="Последние видео", value="\n".join(lines), inline=False)
+        except Exception:
+            logger.debug("YouTubeGrowth: не удалось собрать последние видео для аналитики", exc_info=True)
+
+        embed.set_footer(text=f"Обновлено {_msk().strftime('%Y-%m-%d %H:%M')} МСК")
+        await self._send_notify(channel, embed)
+        state["last_analytics_post"] = int(datetime.now(UTC).timestamp())
+        await self.youtube.save_state()
 
     # ------------------------------------------------------------- commands
 
@@ -214,7 +291,7 @@ class YouTubeCog(MegaCog, name="YouTube"):
                 embed.add_field(name="Последние видео", value="\n\n".join(lines), inline=False)
         except Exception:
             logger.debug("YouTube: не удалось получить последние видео", exc_info=True)
-        embed.set_footer(text=f"Обновлено {(datetime.now(UTC) + timedelta(hours=3)).strftime('%H:%M')} МСК")
+        embed.set_footer(text=f"Обновлено {_msk().strftime('%H:%M')} МСК")
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="yt_growth", description="Статус YouTube-Growth модуля")
@@ -226,13 +303,14 @@ class YouTubeCog(MegaCog, name="YouTube"):
         if not self.config.youtube_api_key:
             await interaction.response.send_message("YouTubeGrowth: отключён — не задан YOUTUBE_API_KEY.", ephemeral=True)
             return
-        known_shorts = len(self._growth_state.get("known_shorts", []))
+        state = await self.youtube.load_state()
+        known_shorts = len(state.get("known_shorts") or [])
         embed = embeds.info(
             "📈 YouTube Growth",
             f"Модуль работает в режиме **API-ключа** (только чтение).\n"
             f"Канал: @{self.youtube.handle}\n"
             f"Известно Shorts: {known_shorts}\n"
-            f"Функции: уведомления о Shorts, премьеры.",
+            f"Функции: уведомления о Shorts, премьеры, еженедельная аналитика.",
         )
         embed.color = discord.Color(_YOUTUBE_COLOR)
         await interaction.response.send_message(embed=embed, ephemeral=True)

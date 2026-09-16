@@ -91,6 +91,80 @@ async def test_app_container_injects_cog():
 
 
 @pytest.mark.asyncio
+async def test_app_container_injects_youtube_cog():
+    from app.cogs.youtube.youtube import YouTubeCog
+    from app.config import Config
+    from app.core.bot import MegaBot
+
+    with tempfile.TemporaryDirectory() as tmp:
+        config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
+        bot = MegaBot(config)
+        await bot.setup_hook()
+        try:
+            packages = bot.packages
+            assert packages is not None
+
+            service = packages["app.services"].resolve("youtube")
+            assert isinstance(service, bot.services.youtube.__class__)
+            assert service is bot.services.youtube
+
+            # загруженный ког получил сервис из общего контейнера (синглтон)
+            loaded = bot.get_cog("YouTube")
+            assert isinstance(loaded, YouTubeCog)
+            assert loaded.youtube is bot.services.youtube
+
+            # контейнер пакета кога собирает ког с тем же экземпляром сервиса
+            cog_container = packages.container_for("app.cogs.youtube.youtube")
+            assert cog_container is not None
+            built = cog_container.build(YouTubeCog)
+            assert built.youtube is bot.services.youtube
+        finally:
+            await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_all_cogs_build_through_di():
+    import importlib
+    import pkgutil
+
+    from discord.ext import commands
+
+    from app.cogs import COGS_PACKAGE
+    from app.config import Config
+    from app.core.bot import MegaBot
+
+    with tempfile.TemporaryDirectory() as tmp:
+        config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
+        bot = MegaBot(config)
+        await bot.setup_hook()
+        try:
+            packages = bot.packages
+            assert packages is not None
+            package = importlib.import_module(COGS_PACKAGE)
+            modules = sorted(
+                (m for m in pkgutil.walk_packages(package.__path__, prefix=f"{COGS_PACKAGE}.") if not m.ispkg),
+                key=lambda m: m.name,
+            )
+            built_names: set[str] = set()
+            for module in modules:
+                mod = importlib.import_module(module.name)
+                for member_name, member in vars(mod).items():
+                    if not (isinstance(member, type) and issubclass(member, commands.Cog)):
+                        continue
+                    if member is commands.Cog or member.__module__ != mod.__name__:
+                        continue
+                    container = packages.container_for(module.name)
+                    assert container is not None, f"нет контейнера для {module.name}"
+                    # если DI не собрал ког, loader молча уходит в fallback member(bot) — ловим это
+                    cogs = container.build(member)
+                    assert isinstance(cogs, member)
+                    built_names.add(member.__name__)
+            assert len(built_names) >= 20, f"собрано когов через DI: {len(built_names)}"
+        finally:
+            await bot.close()
+
+
+@pytest.mark.asyncio
 async def test_layers_block_repository_in_cogs():
     from app.config import Config
     from app.core.bot import MegaBot

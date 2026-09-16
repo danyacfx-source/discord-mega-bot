@@ -1,6 +1,7 @@
-"""Сервис YouTube: статистика канала через YouTube Data API v3 (как Node youtube.js)."""
+"""Сервис YouTube: статистика канала + устойчивое состояние (как Node youtube.js/youtube_growth.js)."""
 from __future__ import annotations
 
+import json
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.services")
 
 _API_BASE = "https://www.googleapis.com/youtube/v3"
+_STATE_KEY = "youtube:growth"
 
 
 def format_number(n: int) -> str:
@@ -42,6 +44,8 @@ class YouTubeService:
         self._config = config
         self._session: aiohttp.ClientSession | None = None
         self._channel_id: str | None = None
+        self._state: dict[str, Any] = {}
+        self._state_loaded = False
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -121,3 +125,24 @@ class YouTubeService:
             return []
         data = await self._fetch("/videos", {"part": "contentDetails,snippet,statistics", "id": ",".join(video_ids)})
         return data.get("items") or []
+
+    # ------------------------------------------------------------- state (рост канала)
+
+    async def load_state(self) -> dict[str, Any]:
+        """Состояние роста (known_shorts/премьеры/analytics) из Kv, с мемкэшем."""
+        if not self._state_loaded:
+            self._state_loaded = True
+            raw = await self._repo.get(_STATE_KEY)
+            if raw:
+                try:
+                    self._state = json.loads(raw)
+                except (ValueError, TypeError):
+                    self._state = {}
+        return self._state
+
+    async def save_state(self) -> None:
+        try:
+            await self._repo.set(_STATE_KEY, json.dumps(self._state, ensure_ascii=False))
+        except Exception:
+            logger.exception("YouTube: не удалось сохранить состояние роста")
+            self._state_loaded = False

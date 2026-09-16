@@ -22,6 +22,7 @@ from app.services.donation_service import DonationService
 from app.services.kick_service import KickService
 from app.services.temp_voice_service import TempVoiceService
 from app.services.twitch_service import TwitchService
+from app.services.youtube_service import YouTubeService, format_number, parse_duration_seconds
 
 
 def test_config_new_options(tmp_path):
@@ -59,6 +60,10 @@ def test_config_new_options(tmp_path):
                 "ROLE_MENU_ROLES=War Thunder,Minecraft",
                 "ROLE_MENU_MAX_VALUES=2",
                 "GUILD_ID=1524743223866556456",
+                "YOUTUBE_ENABLED=1",
+                "YOUTUBE_API_KEY=key123",
+                "YOUTUBE_CHANNEL=Dendosich",
+                "YOUTUBE_NOTIFY_CHANNEL_ID=12345",
                 "AI_ENABLED=1",
                 "AI_CHANNELS=11,22",
                 "AI_MODEL=gemini-3.6-flash",
@@ -124,6 +129,10 @@ def test_config_new_options(tmp_path):
     assert config.role_menu_roles == ("War Thunder", "Minecraft")
     assert config.role_menu_max_values == 2
     assert config.guild_id == 1524743223866556456
+    assert config.youtube_enabled is True
+    assert config.youtube_api_key == "key123"
+    assert config.youtube_channel == "Dendosich"
+    assert config.youtube_notify_channel_id == 12345
     assert config.ai_enabled is True
     assert config.ai_channels == (11, 22)
     assert config.ai_model == "gemini-3.6-flash"
@@ -277,8 +286,43 @@ async def test_ported_services_resolve_from_containers(tmp_path):
             assert services_container.resolve("tempvoice") is bot.services.tempvoice
             assert isinstance(services_container.resolve("birthdays"), BirthdayService)
             assert services_container.resolve("birthdays") is bot.services.birthdays
+            assert isinstance(services_container.resolve("youtube"), YouTubeService)
+            assert services_container.resolve("youtube") is bot.services.youtube
         finally:
             await bot.close()
+
+
+def test_youtube_helpers():
+    assert format_number(0) == "0"
+    assert format_number(1234567) == "1 234 567"
+    assert parse_duration_seconds("PT1H2M3S") == 3723
+    assert parse_duration_seconds("PT45S") == 45
+    assert parse_duration_seconds("PT2M") == 120
+    assert parse_duration_seconds("") == 0
+
+
+@pytest.mark.asyncio
+async def test_youtube_service_state_persistence(tmp_path):
+    db = Database(str(tmp_path / "youtube.db"))
+    await db.connect()
+    try:
+        repo = KvRepository(db)
+        config = Config(token="x", prefix="!", db_path=str(tmp_path / "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
+        service = YouTubeService(repo, config)
+        assert await service.load_state() == {}
+        state = await service.load_state()
+        state["known_shorts"] = ["abc", "def"]
+        state["premiere:xyz"] = True
+        await service.save_state()
+
+        fresh = YouTubeService(repo, config)
+        assert await fresh.load_state() == {"known_shorts": ["abc", "def"], "premiere:xyz": True}
+
+        assert await repo.delete("youtube:growth")
+        after_delete = YouTubeService(repo, config)
+        assert await after_delete.load_state() == {}
+    finally:
+        await db.close()
 
 
 def _panel_bot(tmp_path, **kwargs) -> MegaBot:
