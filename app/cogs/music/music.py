@@ -40,7 +40,7 @@ class MusicCog(MegaCog, name="Music"):
         return True
 
     @music_group.command(name="play", description="Воспроизвести трек по названию или ссылке")
-    @app_commands.describe(query="Название трека или ссылка (YouTube / Яндекс Музыка)")
+    @app_commands.describe(query="Название трека или ссылка на YouTube")
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()

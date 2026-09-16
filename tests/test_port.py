@@ -17,7 +17,6 @@ from app.data.database import Database
 from app.data.donations_repository import DonationsRepository
 from app.data.kv_repository import KvRepository
 from app.data.temp_voices_repository import TempVoicesRepository
-from app.services.audio.yandex_resolver import parse_yandex_track_id
 from app.services.birthday_service import BirthdayService
 from app.services.donation_service import DonationService
 from app.services.kick_service import KickService
@@ -280,15 +279,6 @@ async def test_ported_services_resolve_from_containers(tmp_path):
             assert services_container.resolve("birthdays") is bot.services.birthdays
         finally:
             await bot.close()
-
-
-def test_parse_yandex_track_id():
-    assert parse_yandex_track_id("https://music.yandex.ru/album/123/track/456") == 456
-    assert parse_yandex_track_id("https://music.yandex.ru/track/789") == 789
-    assert parse_yandex_track_id("https://music.yandex.kz/users/u/playlists/2/track/3/1/track/555") == 555
-    assert parse_yandex_track_id("https://music.yandex.ru/album/1") is None
-    assert parse_yandex_track_id("https://www.youtube.com/watch?v=abc") is None
-    assert parse_yandex_track_id("какой-то текст") is None
 
 
 def _panel_bot(tmp_path, **kwargs) -> MegaBot:
