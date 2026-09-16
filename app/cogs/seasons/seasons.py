@@ -63,11 +63,11 @@ class SeasonsCog(MegaCog, name="Seasons"):
     @app_commands.command(name="season_top", description="Топ активности за текущий сезон")
     @app_commands.guild_only()
     async def season_top(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer()
         rows = await self.seasons.leaderboard(interaction.guild.id, 10)
         if not rows:
-            await interaction.response.send_message("Сезон только начался — данных пока нет.")
+            await interaction.followup.send("Сезон только начался — данных пока нет.")
             return
-        await interaction.response.defer()
         lines = []
         for index, row in enumerate(rows):
             pos = index + 1

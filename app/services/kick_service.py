@@ -1,6 +1,7 @@
 """Сервис Kick: статус стрима (публичный API v2) и модерация (Dev API v1)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.services")
 
 _PUBLIC_BASE = "https://kick.com/api/v2"
-_DEV_BASE = "https://api.kick.com/public/v1"
+_DEV_BASE = "https://api.kick.com/public/v1"  # https://docs.kick.com/reference/
 
 
 class KickService:
@@ -21,6 +22,7 @@ class KickService:
         self._repo = repo
         self._config = config
         self._session: aiohttp.ClientSession | None = None
+        self._broadcaster: dict[str, Any] | None = None
 
     @property
     def session(self) -> aiohttp.ClientSession:
@@ -103,37 +105,97 @@ class KickService:
             logger.exception("Kick: не удалось найти пользователя %s", username)
         return None
 
-    async def ban(self, channel_id: int, user_id: int, *, minutes: int | None = None, reason: str = "") -> bool:
-        return await self._moderate("ban", channel_id, user_id, minutes=minutes, reason=reason)
+    async def resolve_broadcaster(self) -> dict[str, Any] | None:
+        """Определяет текущего пользователя токена (вещателя) через GET /users.
 
-    async def unban(self, channel_id: int, user_id: int) -> bool:
-        url = f"{_DEV_BASE}/channels/{channel_id}/users/{user_id}/ban"
+        Как в Node ``kick_mod.js`` getBroadcaster: токен должен быть от личного
+        аккаунта, ответ может быть списком или одиночным объектом.
+        """
+        if self._broadcaster is not None:
+            return self._broadcaster
         try:
-            async with self.session.delete(url, headers=self._headers()) as response:
+            async with self.session.get(f"{_DEV_BASE}/users", headers=self._headers()) as response:
+                if response.status != 200:
+                    logger.warning("Kick: не удалось определить вещателя (HTTP %s)", response.status)
+                    return None
+                body = await response.json(content_type=None)
+        except (aiohttp.ClientError, ValueError):
+            logger.exception("Kick: ошибка запроса вещателя")
+            return None
+        me = (body or {}).pop("data", None) if isinstance(body, dict) else body
+        if isinstance(me, list):
+            me = me[0] if me else None
+        if not isinstance(me, dict) or not me.get("user_id"):
+            logger.warning("Kick: ответ /users без user_id — токен должен быть от личного аккаунта")
+            return None
+        self._broadcaster = {
+            "user_id": int(me["user_id"]),
+            "name": str(me.get("name") or me.get("username") or ""),
+        }
+        return self._broadcaster
+
+    async def resolve_chatroom_id(self, slug: str, retries: int = 3) -> int | None:
+        """Определяет id чатрума канала через GET /api/v2/channels/{slug}/chatroom."""
+        last_err: Exception | None = None
+        for attempt in range(retries):
+            try:
+                async with self.session.get(f"{_PUBLIC_BASE}/channels/{slug}/chatroom") as response:
+                    if response.status != 200:
+                        raise RuntimeError(f"Kick: chatroom канала {slug} вернул HTTP {response.status}")
+                    body = await response.json(content_type=None)
+                if isinstance(body, dict) and body.get("id"):
+                    return int(body["id"])
+                raise RuntimeError(f"Kick: chatroom канала {slug} без id")
+            except (aiohttp.ClientError, TypeError, ValueError, RuntimeError) as exc:
+                last_err = exc
+                if attempt < retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+        logger.error("Kick: не удалось получить chatroom канала %s: %s", slug, last_err)
+        return None
+
+    async def delete_message(self, message_id: int | str) -> bool:
+        """Удаляет сообщение из чата Kick (Dev API)."""
+        try:
+            async with self.session.delete(f"{_DEV_BASE}/chat/{message_id}", headers=self._headers()) as response:
+                return response.status in (200, 204)
+        except aiohttp.ClientError:
+            logger.exception("Kick: не удалось удалить сообщение %s", message_id)
+            return False
+
+    async def ban(self, user_id: int, *, minutes: int | None = None, reason: str = "") -> bool:
+        """Бан/таймаут пользователя в чате через POST /moderation/bans (как Node kick_mod.js)."""
+        broadcaster = await self.resolve_broadcaster()
+        if broadcaster is None:
+            return False
+        payload: dict[str, Any] = {
+            "broadcaster_user_id": broadcaster["user_id"],
+            "user_id": user_id,
+            "reason": (reason or "")[:100],
+        }
+        if minutes is not None:
+            payload["duration"] = minutes
+        try:
+            async with self.session.post(f"{_DEV_BASE}/moderation/bans", json=payload, headers=self._headers()) as response:
+                ok = response.status in (200, 201, 204)
+                if not ok:
+                    logger.warning("Kick: бан %s вернул HTTP %s", user_id, response.status)
+                return ok
+        except aiohttp.ClientError:
+            logger.exception("Kick: ошибка бана пользователя %s", user_id)
+            return False
+
+    async def unban(self, user_id: int) -> bool:
+        """Снимает бан/таймаут через DELETE /moderation/bans."""
+        broadcaster = await self.resolve_broadcaster()
+        if broadcaster is None:
+            return False
+        try:
+            async with self.session.delete(
+                f"{_DEV_BASE}/moderation/bans",
+                json={"broadcaster_user_id": broadcaster["user_id"], "user_id": user_id},
+                headers=self._headers(),
+            ) as response:
                 return response.status in (200, 204)
         except aiohttp.ClientError:
             logger.exception("Kick: ошибка разбана пользователя %s", user_id)
-            return False
-
-    async def _moderate(
-        self,
-        action: str,
-        channel_id: int,
-        user_id: int,
-        *,
-        minutes: int | None,
-        reason: str,
-    ) -> bool:
-        url = f"{_DEV_BASE}/channels/{channel_id}/users/{user_id}/ban"
-        payload: dict[str, Any] = {"reason": reason or ""}
-        if minutes is not None:
-            payload["banned_duration"] = minutes * 60
-        try:
-            async with self.session.post(url, json=payload, headers=self._headers()) as response:
-                ok = response.status in (200, 201, 204)
-                if not ok:
-                    logger.warning("Kick %s %s/%s: статус %s", action, channel_id, user_id, response.status)
-                return ok
-        except aiohttp.ClientError:
-            logger.exception("Kick: ошибка %s пользователя %s", action, user_id)
             return False

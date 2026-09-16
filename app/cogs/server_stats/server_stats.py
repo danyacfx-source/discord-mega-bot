@@ -48,6 +48,7 @@ class ServerStatsCog(MegaCog, name="ServerStats"):
 
     async def cog_load(self) -> None:
         if self.bot.config.server_stats_enabled:
+            self.update_loop.change_interval(seconds=self.bot.config.server_stats_update_seconds)
             self.update_loop.start()
 
     async def cog_unload(self) -> None:
@@ -55,7 +56,6 @@ class ServerStatsCog(MegaCog, name="ServerStats"):
 
     @tasks.loop(seconds=300.0)
     async def update_loop(self) -> None:
-        self.update_loop.change_interval(seconds=self.bot.config.server_stats_update_seconds)
         for guild in self.bot.guilds:
             try:
                 await self._update_guild(guild)

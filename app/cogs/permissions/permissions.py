@@ -48,6 +48,23 @@ def _resolve_role(guild: discord.Guild, name: str) -> discord.Role | None:
     return discord.utils.get(guild.roles, name=name)
 
 
+def _as_bool(value: Any) -> bool | None:
+    """Приводит JSON-значение из конфига к bool (справляется со строками 'true'/'false')."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("1", "true", "yes", "on", "да", "+"):  # noqa: SIM114
+            return True
+        if lowered in ("0", "false", "no", "off", "нет", "-"):
+            return False
+    return None
+
+
 class PermissionsCog(MegaCog, name="Permissions"):
     def __init__(self, bot: MegaBot) -> None:
         super().__init__(bot)
@@ -57,6 +74,7 @@ class PermissionsCog(MegaCog, name="Permissions"):
         return _parse_categories(self.bot.config.permissions_categories)
 
     @discord.app_commands.command(name="apply_permissions", description="Применить права категорий из конфига")
+    @discord.app_commands.default_permissions(manage_guild=True)
     @discord.app_commands.guild_only()
     async def apply_permissions(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -109,14 +127,21 @@ class PermissionsCog(MegaCog, name="Permissions"):
                     return f"❌ {category.name}: роль «{rule.get('role')}» не найдена"
                 permissions: dict[str, bool] = {}
                 for key, value in rule.items():
-                    if key == "role" or value is None:
+                    if key == "role":
                         continue
-                    permissions[_PERM_ATTR.get(key, key)] = bool(value)
+                    perm_name = _PERM_ATTR.get(key)
+                    if perm_name is None:
+                        logger.warning("Permissions: неизвестное право «%s» в категории %s", key, category.name)
+                        continue
+                    parsed = _as_bool(value)
+                    if parsed is None:
+                        continue
+                    permissions[perm_name] = parsed
                 if permissions:
                     overwrite = discord.PermissionOverwrite(**permissions)
                     await category.set_permissions(role, overwrite=overwrite, reason="Права категорий из конфига")
             return f"✅ {category.name}"
         except discord.Forbidden:
             return f"⛔ {category.name}: у бота нет прав"
-        except discord.HTTPException as exc:
+        except (discord.HTTPException, TypeError, ValueError) as exc:
             return f"❌ {category.name}: {exc}"

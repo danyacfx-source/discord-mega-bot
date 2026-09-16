@@ -42,7 +42,11 @@ class KickCog(MegaCog, name="Kick"):
         if self.bot.config.kick_channel_slug:
             self.poll_loop.change_interval(seconds=self.bot.config.kick_poll_seconds)
             self.poll_loop.start()
-        if self.bot.config.kick_mod_channel_id and self.bot.config.kick_access_token:
+        if self.bot.config.kick_access_token and self.bot.config.kick_channel_slug:
+            if self.bot.config.kick_mod_channel_id:
+                logger.warning(
+                    "KICK_MOD_CHANNEL_ID больше не используется — chatroom определяется из KICK_CHANNEL_SLUG через API"
+                )
             self._chat_task = self.bot.loop.create_task(self._chat_watcher())
 
     async def cog_unload(self) -> None:
@@ -167,14 +171,10 @@ class KickCog(MegaCog, name="Kick"):
     @app_commands.guild_only()
     @app_commands.check(_can_moderate)
     async def kick_ban(self, interaction: discord.Interaction, username: str, reason: str = "") -> None:
-        channel_id = self.bot.config.kick_mod_channel_id
-        if not channel_id:
-            await interaction.response.send_message(embed=embeds.error("Не настроено", "Нет KICK_MOD_CHANNEL_ID."), ephemeral=True)
-            return
         user = await self._mod_target(interaction, username)
         if user is None:
             return
-        ok = await self.kick.ban(channel_id, user["id"], reason=reason)
+        ok = await self.kick.ban(user["id"], reason=reason)
         if ok:
             embed = embeds.success("Kick: бан", f"Пользователь **{user['username']}** забанен.")
         else:
@@ -186,15 +186,11 @@ class KickCog(MegaCog, name="Kick"):
     @app_commands.guild_only()
     @app_commands.check(_can_moderate)
     async def kick_timeout(self, interaction: discord.Interaction, username: str, minutes: int = 10, reason: str = "") -> None:
-        channel_id = self.bot.config.kick_mod_channel_id
-        if not channel_id:
-            await interaction.response.send_message(embed=embeds.error("Не настроено", "Нет KICK_MOD_CHANNEL_ID."), ephemeral=True)
-            return
         minutes = max(1, min(minutes, 10080))
         user = await self._mod_target(interaction, username)
         if user is None:
             return
-        ok = await self.kick.ban(channel_id, user["id"], minutes=minutes, reason=reason)
+        ok = await self.kick.ban(user["id"], minutes=minutes, reason=reason)
         if ok:
             embed = embeds.success("Kick: таймаут", f"**{user['username']}** замьючен на {minutes} мин.")
         else:
@@ -206,14 +202,10 @@ class KickCog(MegaCog, name="Kick"):
     @app_commands.guild_only()
     @app_commands.check(_can_moderate)
     async def kick_unban(self, interaction: discord.Interaction, username: str) -> None:
-        channel_id = self.bot.config.kick_mod_channel_id
-        if not channel_id:
-            await interaction.response.send_message(embed=embeds.error("Не настроено", "Нет KICK_MOD_CHANNEL_ID."), ephemeral=True)
-            return
         user = await self._mod_target(interaction, username)
         if user is None:
             return
-        ok = await self.kick.unban(channel_id, user["id"])
+        ok = await self.kick.unban(user["id"])
         if ok:
             embed = embeds.success("Kick: разбан", f"С **{user['username']}** снят бан.")
         else:
@@ -236,25 +228,40 @@ class KickCog(MegaCog, name="Kick"):
 
     async def _chat_cycle(self) -> None:
         config = self.bot.config
-        channel_id = config.kick_mod_channel_id or 0
+        slug = config.kick_channel_slug or ""
+        if not slug:
+            return
+        chatroom_id = await self.kick.resolve_chatroom_id(slug)
+        if chatroom_id is None:
+            return
+        channel = f"chatrooms.{chatroom_id}.v2"
         url = f"wss://{config.kick_pusher_host}/app/{config.kick_pusher_app_key}?protocol=7&client=js&version=8.0.0&flash=false"
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(url, heartbeat=25) as ws:
                 await ws.send_json(
-                    {"event": "pusher:subscribe", "data": {"auth": "", "channel": f"channel.{channel_id}"}}
+                    {"event": "pusher:subscribe", "data": {"auth": "", "channel": channel}}
                 )
                 async for message in ws:
                     if message.type != aiohttp.WSMsgType.TEXT:
+                        continue
+                    if message.data == "pusher:connection_established":
                         continue
                     try:
                         payload = json.loads(message.data)
                     except (TypeError, json.JSONDecodeError):
                         continue
-                    if payload.get("event") != "message.create":
+                    if payload.get("event") != "App\\Events\\ChatMessageEvent":
                         continue
-                    await self._handle_chat_message(channel_id, payload.get("data") or {})
+                    data = payload.get("data")
+                    if isinstance(data, str):
+                        try:
+                            data = json.loads(data)
+                        except (TypeError, json.JSONDecodeError):
+                            continue
+                    if isinstance(data, dict):
+                        await self._handle_chat_message(data)
 
-    async def _handle_chat_message(self, channel_id: int, data: dict[str, Any]) -> None:
+    async def _handle_chat_message(self, data: dict[str, Any]) -> None:
         content = (data.get("content") or "")[:200].lower()
         ban_words = self.bot.config.kick_ban_words
         if not ban_words or not any(word.lower() in content for word in ban_words):
@@ -263,8 +270,11 @@ class KickCog(MegaCog, name="Kick"):
         user_id = sender.get("id")
         if not user_id:
             return
-        ok = await self.kick.ban(channel_id, int(user_id), minutes=10, reason="Автомод: бан-слово")
+        message_id = data.get("id") or data.get("message_id")
+        ok_delete = await self.kick.delete_message(message_id) if message_id is not None else False
+        ok_ban = await self.kick.ban(int(user_id), minutes=10, reason="Автомод: бан-слово")
         words = plural(len(ban_words), "слово", "слова", "слов")
-        logger.info("Kick: автомод %s (%s), совпадение среди %s: %s", sender.get("username"), user_id, words, content[:60])
-        if not ok:
-            logger.warning("Kick: автомод не сработал — проверьте KICK_ACCESS_TOKEN")
+        logger.info(
+            "Kick: автомод %s (%s) — удаление=%s, бан=%s, совпадение среди %s: %s",
+            sender.get("username"), user_id, ok_delete, ok_ban, words, content[:60],
+        )
