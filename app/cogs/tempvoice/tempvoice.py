@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 
 from app.core import embeds
@@ -21,25 +22,29 @@ logger = logging.getLogger("bot.cogs")
 class RenameVoiceModal(discord.ui.Modal, title="Переименовать канал"):
     name_input = discord.ui.TextInput(label="Новое название", max_length=40)
 
+    def __init__(self, channel: discord.VoiceChannel) -> None:
+        super().__init__()
+        self.channel = channel
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel):
-            return
         try:
-            await channel.edit(name=self.name_input.value.strip()[:40] or "комната")
+            await self.channel.edit(name=self.name_input.value.strip()[:40] or "комната")
         except discord.HTTPException:
             await interaction.response.send_message(embed=embeds.error("Ошибка", "Не удалось переименовать."), ephemeral=True)
             return
-        await interaction.response.send_message(embed=embeds.success("Готово", f"Канал переименован в «{self.name_input.value[:40]}»."))
+        await interaction.response.send_message(
+            embed=embeds.success("Готово", f"Канал переименован в «{self.name_input.value[:40]}».")
+        )
 
 
 class LimitVoiceModal(discord.ui.Modal, title="Лимит участников"):
     limit_input = discord.ui.TextInput(label="Лимит (0 — без лимита)", max_length=3)
 
+    def __init__(self, channel: discord.VoiceChannel) -> None:
+        super().__init__()
+        self.channel = channel
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel):
-            return
         raw = self.limit_input.value.strip()
         try:
             limit = int(raw)
@@ -47,7 +52,7 @@ class LimitVoiceModal(discord.ui.Modal, title="Лимит участников")
             limit = 0
         limit = 0 if limit < 0 else min(limit, 99)
         try:
-            await channel.edit(user_limit=limit)
+            await self.channel.edit(user_limit=limit)
         except discord.HTTPException:
             await interaction.response.send_message(embed=embeds.error("Ошибка", "Не удалось изменить лимит."), ephemeral=True)
             return
@@ -74,8 +79,7 @@ class MemberSelectView(discord.ui.View):
         select = self.children[0]
         assert isinstance(select, discord.ui.Select) and select.values
         member = interaction.guild.get_member(int(select.values[0])) if interaction.guild else None
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel) or member is None:
+        if member is None:
             await interaction.response.edit_message(content="Участник не найден.", view=None)
             return
         if self.kind == "kick":
@@ -86,21 +90,18 @@ class MemberSelectView(discord.ui.View):
                 return
             await interaction.response.edit_message(content=f"🚫 Выгнан: {member.display_name}", view=None)
         elif self.kind == "transfer":
-            await self.service.transfer(channel.id, member.id)
+            await self.service.transfer(self.channel.id, member.id)
             await self._rebuild_panel(interaction, member)
             await interaction.response.edit_message(content=f"👑 Владелец передан: {member.display_name}", view=None)
 
     async def _rebuild_panel(self, interaction: discord.Interaction, new_owner: discord.Member) -> None:
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel):
-            return
         if isinstance(interaction.message, discord.Message):
             try:
                 await interaction.message.delete()
             except discord.HTTPException:
                 pass
         try:
-            await channel.send("⭐ Панель управления каналом", view=TempVoicePanelView(new_owner.id, self.service))
+            await self.channel.send("⭐ Панель управления каналом", view=TempVoicePanelView(new_owner.id, self.service))
         except discord.HTTPException:
             logger.debug("TempVoice: не удалось пересоздать панель", exc_info=True)
 
@@ -118,27 +119,55 @@ class TempVoicePanelView(discord.ui.View):
         except discord.HTTPException:
             pass
 
+    async def _owner_channel(self, interaction: discord.Interaction) -> discord.VoiceChannel | None:
+        if isinstance(interaction.channel, discord.VoiceChannel):
+            return interaction.channel
+        if interaction.guild is None:
+            return None
+        channel_id = await self.service.channel_of_owner(interaction.user.id)
+        if channel_id is None:
+            return None
+        channel = interaction.guild.get_channel(channel_id)
+        return channel if isinstance(channel, discord.VoiceChannel) else None
+
     @discord.ui.button(label="Переименовать", emoji="✏️", style=discord.ButtonStyle.primary)
     async def rename_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if interaction.user.id != self.owner_id:
             await self._deny(interaction)
             return
-        await interaction.response.send_modal(RenameVoiceModal())
+        channel = await self._owner_channel(interaction)
+        if channel is None:
+            await interaction.response.send_message(
+                embed=embeds.warning("Нет канала", "Вы не находитесь во временном канале."), ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(RenameVoiceModal(channel))
 
     @discord.ui.button(label="Лимит", emoji="👥", style=discord.ButtonStyle.primary)
     async def limit_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if interaction.user.id != self.owner_id:
             await self._deny(interaction)
             return
-        await interaction.response.send_modal(LimitVoiceModal())
+        channel = await self._owner_channel(interaction)
+        if channel is None:
+            await interaction.response.send_message(
+                embed=embeds.warning("Нет канала", "Вы не находитесь во временном канале."), ephemeral=True
+            )
+            return
+        await interaction.response.send_modal(LimitVoiceModal(channel))
 
     @discord.ui.button(label="Выгнать", emoji="🚫", style=discord.ButtonStyle.danger)
     async def kick_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         if interaction.user.id != self.owner_id:
             await self._deny(interaction)
             return
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel) or not channel.members:
+        channel = await self._owner_channel(interaction)
+        if channel is None:
+            await interaction.response.send_message(
+                embed=embeds.warning("Нет канала", "Вы не находитесь во временном канале."), ephemeral=True
+            )
+            return
+        if not channel.members:
             await interaction.response.send_message(embed=embeds.warning("Пусто", "В канале никого нет."), ephemeral=True)
             return
         await interaction.response.send_message("Кого выгнать?", view=MemberSelectView(channel, "kick", self.service), ephemeral=True)
@@ -148,8 +177,13 @@ class TempVoicePanelView(discord.ui.View):
         if interaction.user.id != self.owner_id:
             await self._deny(interaction)
             return
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel) or not channel.members:
+        channel = await self._owner_channel(interaction)
+        if channel is None:
+            await interaction.response.send_message(
+                embed=embeds.warning("Нет канала", "Вы не находитесь во временном канале."), ephemeral=True
+            )
+            return
+        if not channel.members:
             await interaction.response.send_message(embed=embeds.warning("Пусто", "Передавать владельца некому."), ephemeral=True)
             return
         await interaction.response.send_message(
@@ -163,8 +197,11 @@ class TempVoicePanelView(discord.ui.View):
         if interaction.user.id != self.owner_id:
             await self._deny(interaction)
             return
-        channel = interaction.channel
-        if not isinstance(channel, discord.VoiceChannel):
+        channel = await self._owner_channel(interaction)
+        if channel is None:
+            await interaction.response.send_message(
+                embed=embeds.warning("Нет канала", "Вы не находитесь во временном канале."), ephemeral=True
+            )
             return
         await self.service.delete(channel.id)
         try:
@@ -187,6 +224,28 @@ class TempVoiceCog(MegaCog, name="TempVoice"):
 
     async def cog_unload(self) -> None:
         self.cleanup_loop.cancel()
+
+    @app_commands.command(name="temp_panel", description="Отправить панель управления временными каналами")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_channels=True)
+    async def temp_panel(self, interaction: discord.Interaction) -> None:
+        channel = interaction.channel
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Панель можно отправить только в текстовый канал."),
+                ephemeral=True,
+            )
+            return
+        embed = embeds.info(
+            "🎛️ Панель управления временным каналом",
+            "Зайдите в свой временный голосовой канал и нажмите кнопку:\n\n"
+            "✏️ **Переименовать** — переименовать канал\n"
+            "👥 **Лимит** — ограничить число участников\n"
+            "🚫 **Выгнать** — выгнать участника\n"
+            "👑 **Передать** — передать права владельца\n"
+            "🗑️ **Удалить** — удалить канал",
+        )
+        await interaction.response.send_message(embed=embed, view=TempVoicePanelView(interaction.user.id, self.tempvoice))
 
     @tasks.loop(seconds=60.0)
     async def cleanup_loop(self) -> None:

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext import tasks
+from discord.ext import commands, tasks
 
 from app.core import embeds
 from app.core.base import MegaCog

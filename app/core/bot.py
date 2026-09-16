@@ -84,7 +84,20 @@ class MegaBot(commands.Bot):
 
             self.overlay = Overlay(self)
             await self.overlay.start()
+        await self._sync_commands()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
+
+    async def _sync_commands(self) -> None:
+        if self.user is None or self.application_id is None:
+            logger.debug("Синк команд: application_id ещё не известен — пропуск")
+            return
+        try:
+            synced = await self.tree.sync()
+        except (discord.HTTPException, discord.MissingApplicationID, discord.ConnectionClosed) as exc:
+            logger.warning("Не удалось синхронизировать команды: %s", exc)
+            return
+        names = [command.name for command in synced if getattr(command, "name", None)]
+        logger.info("Синхронизировано команд: %d (%s)", len(synced), ", ".join(names[:20]))
 
     async def close(self) -> None:
         webpanel = self.webpanel

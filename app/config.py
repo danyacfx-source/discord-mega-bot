@@ -165,6 +165,7 @@ class Config:
     youtube_enabled: bool = False
     youtube_api_key: str | None = None
     youtube_channel: str | None = None
+    youtube_notify_channel_id: int | None = None
 
     # Авто-модерация (discord_automod, как в Node automod.js)
     automod_enabled: bool = True
@@ -305,6 +306,7 @@ class Config:
             youtube_enabled=_bool(os.getenv("YOUTUBE_ENABLED")),
             youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
             youtube_channel=os.getenv("YOUTUBE_CHANNEL"),
+            youtube_notify_channel_id=_single_int(os.getenv("YOUTUBE_NOTIFY_CHANNEL_ID")),
         )
 
 
