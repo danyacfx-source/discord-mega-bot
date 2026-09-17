@@ -17,6 +17,17 @@ _PUBLIC_BASE = "https://kick.com/api/v2"
 _DEV_BASE = "https://api.kick.com/public/v1"  # https://docs.kick.com/reference/
 
 
+def _first_viewer_count(*values: Any) -> int:
+    for value in values:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            return number
+    return 0
+
+
 class KickService:
     def __init__(self, repo: KvRepository, config: Config) -> None:
         self._repo = repo
@@ -56,7 +67,7 @@ class KickService:
         return {
             "slug": slug,
             "title": live.get("session_title") or live.get("title") or "Без названия",
-            "viewers": int(live.get("viewers") or 0),
+            "viewers": _first_viewer_count(live.get("viewer_count"), live.get("viewers"), body.get("viewer_count")),
             "category": category.get("name") or "—",
             "started_at": live.get("created_at"),
             "thumbnail": thumbnail.get("url"),
