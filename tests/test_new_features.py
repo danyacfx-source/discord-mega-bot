@@ -7,12 +7,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.data.database import Database
-from app.data.giveaways_repository import GiveawaysRepository
-from app.data.polls_repository import PollsRepository
-from app.data.reaction_roles_repository import ReactionRolesRepository
-from app.data.reminders_repository import RemindersRepository
-from app.data.warns_repository import WarnsRepository
+from app.db.database import Database
+from app.db.giveaways_repository import GiveawaysRepository
+from app.db.polls_repository import PollsRepository
+from app.db.reaction_roles_repository import ReactionRolesRepository
+from app.db.reminders_repository import RemindersRepository
+from app.db.warns_repository import WarnsRepository
 
 
 @pytest.fixture

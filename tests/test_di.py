@@ -136,7 +136,7 @@ async def test_all_cogs_build_through_di():
 async def test_layers_block_repository_in_cogs():
     from app.config import Config
     from app.core.bot import MegaBot
-    from app.data.settings_repository import SettingsRepository
+    from app.db.settings_repository import SettingsRepository
 
     with tempfile.TemporaryDirectory() as tmp:
         config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
@@ -144,7 +144,7 @@ async def test_layers_block_repository_in_cogs():
         await bot.setup_hook()
         packages = bot.packages
 
-        data_container = packages["app.data"]
+        data_container = packages["app.db"]
         services_container = packages["app.services"]
         cogs_container = packages["app.cogs"]
 

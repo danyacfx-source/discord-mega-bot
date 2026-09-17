@@ -7,7 +7,7 @@ from discord.ext import commands
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.data.base_repository import BaseRepository
+    from app.db.base_repository import BaseRepository
     from app.services import Services
 
 

@@ -9,7 +9,7 @@ from app.core.base import BaseService
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.data.temp_voices_repository import TempVoicesRepository
+    from app.db.temp_voices_repository import TempVoicesRepository
 
 
 class TempVoiceService(BaseService):

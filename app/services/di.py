@@ -6,7 +6,7 @@ from app.core.container import DependencyContainer
 from app.services import SERVICE_ALIASES, SERVICE_CLASSES
 
 #: Контейнер, в который этот пакет включается как ребёнок (сервисы видят слой данных).
-PARENT = "app.data"
+PARENT = "app.db"
 
 
 def register(container: DependencyContainer) -> None:

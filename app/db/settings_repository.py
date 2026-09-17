@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.data.base_repository import BaseRepository
+from app.db.base_repository import BaseRepository
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "welcome_channel_id": None,

@@ -1,7 +1,7 @@
 """Репозиторий предупреждений (warn-система)."""
 from __future__ import annotations
 
-from app.data.base_repository import BaseRepository
+from app.db.base_repository import BaseRepository
 
 ORDERED = "ORDER BY id DESC"
 
@@ -16,8 +16,8 @@ class WarnsRepository(BaseRepository):
 
     async def list_for_user(self, guild_id: int, user_id: int, limit: int = 50) -> list:
         rows = await self.db.fetchall(
-            f"SELECT id, reason, moderator_id, created_at FROM warns WHERE guild_id = ? AND user_id = ? "
-            f"ORDER BY id DESC LIMIT ?",
+            "SELECT id, reason, moderator_id, created_at FROM warns WHERE guild_id = ? AND user_id = ? "
+            "ORDER BY id DESC LIMIT ?",
             (guild_id, user_id, limit),
         )
         return [dict(row) for row in rows]

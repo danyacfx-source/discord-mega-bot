@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.core.base import BaseService
-from app.data.birthdays_repository import BirthdaysRepository
+from app.db.birthdays_repository import BirthdaysRepository
 
 
 class BirthdayService(BaseService):

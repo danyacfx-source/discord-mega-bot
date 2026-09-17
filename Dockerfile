@@ -21,4 +21,4 @@ VOLUME ["/app/data", "/app/logs"]
 EXPOSE 17890
 
 # Диагностика при старте: печатает, что реально попало в образ
-CMD ["sh", "-c", "echo '--- /app contents ---'; ls -la /app; echo '--- app/ contents ---'; ls -la /app/app; echo '--- app/data ---'; if [ -d /app/app/data ]; then ls -la /app/app/data; echo 'app/data OK'; else echo 'app/data ABSENT'; fi; exec python main.py"]
+CMD ["sh", "-c", "echo '--- /app contents ---'; ls -la /app; echo '--- app/ contents ---'; ls -la /app/app; echo '--- app/db ---'; if [ -d /app/app/db ]; then ls -la /app/app/db; echo 'app/db OK'; else echo 'app/db ABSENT'; fi; exec python main.py"]

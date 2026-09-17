@@ -9,7 +9,7 @@ import discord
 from app.core.base import BaseService
 
 if TYPE_CHECKING:
-    from app.data.polls_repository import PollsRepository
+    from app.db.polls_repository import PollsRepository
 
 
 class PollService(BaseService):

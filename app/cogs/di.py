@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-from app.data import REPOSITORY_CLASSES
+from app.db import REPOSITORY_CLASSES
 
 #: Контейнер, в который этот пакет включается как ребёнок (коги видят сервисы).
 PARENT = "app.services"
 
 #: Ключи слоя данных, недоступные для когов (граница презентации).
-DENIED = frozenset(("db", "Database", "app.data.database.Database")) | {cls.__name__ for cls in REPOSITORY_CLASSES}
+DENIED = frozenset(("db", "Database", "app.db.database.Database")) | {cls.__name__ for cls in REPOSITORY_CLASSES}

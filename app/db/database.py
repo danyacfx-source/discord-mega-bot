@@ -163,7 +163,13 @@ class Database:
         cursor = await self._conn.execute("PRAGMA table_info(guild_settings)")
         rows = await cursor.fetchall()
         columns = {row["name"] for row in rows}
-        for column in ("member_log_channel_id", "message_log_channel_id", "voice_log_channel_id", "mod_log_channel_id", "bot_log_channel_id"):
+        for column in (
+            "member_log_channel_id",
+            "message_log_channel_id",
+            "voice_log_channel_id",
+            "mod_log_channel_id",
+            "bot_log_channel_id",
+        ):
             if column not in columns:
                 await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} INTEGER")
         gv_cursor = await self._conn.execute("PRAGMA table_info(giveaways)")

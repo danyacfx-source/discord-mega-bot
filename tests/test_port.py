@@ -12,11 +12,11 @@ from app.config import Config
 from app.core.bot import MegaBot
 from app.core.overlay import Overlay
 from app.core.webpanel.webpanel import WebPanel, _embed_from_dict, _trim_embeds
-from app.data.birthdays_repository import BirthdaysRepository
-from app.data.database import Database
-from app.data.donations_repository import DonationsRepository
-from app.data.kv_repository import KvRepository
-from app.data.temp_voices_repository import TempVoicesRepository
+from app.db.birthdays_repository import BirthdaysRepository
+from app.db.database import Database
+from app.db.donations_repository import DonationsRepository
+from app.db.kv_repository import KvRepository
+from app.db.temp_voices_repository import TempVoicesRepository
 from app.services.birthday_service import BirthdayService
 from app.services.donation_service import DonationService
 from app.services.kick_service import KickService

@@ -4,11 +4,11 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from app.data.settings_repository import _INT_COLUMNS
+from app.db.settings_repository import _INT_COLUMNS
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.data.settings_repository import SettingsRepository
+    from app.db.settings_repository import SettingsRepository
 
 
 class SettingsService:

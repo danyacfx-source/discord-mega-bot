@@ -9,7 +9,7 @@ import aiohttp
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.data.kv_repository import KvRepository
+    from app.db.kv_repository import KvRepository
 
 logger = logging.getLogger("bot.services")
 

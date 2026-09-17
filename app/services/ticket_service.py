@@ -14,7 +14,7 @@ from app.core import embeds
 from app.core.views import TicketCloseView
 
 if TYPE_CHECKING:
-    from app.data.tickets_repository import TicketsRepository
+    from app.db.tickets_repository import TicketsRepository
     from app.services.logging_service import LoggingService
     from app.services.settings_service import SettingsService
 

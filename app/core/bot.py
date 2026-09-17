@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.core.overlay import Overlay
     from app.core.packages import PackageContainers
     from app.core.webpanel import WebPanel
-    from app.data.database import Database
+    from app.db.database import Database
     from app.services import Services
 
 logger = logging.getLogger("bot")
@@ -60,7 +60,7 @@ class MegaBot(commands.Bot):
     async def setup_hook(self) -> None:
         from app.core.loader import load_cogs, register_persistent_views
         from app.core.packages import build_package_containers
-        from app.data.database import Database
+        from app.db.database import Database
         from app.services import build_services
 
         self.db = Database(self.config.db_path)
@@ -68,7 +68,7 @@ class MegaBot(commands.Bot):
         self.packages = build_package_containers(
             supplied={
                 "app.core": {"bot": self, "config": self.config},
-                "app.data": {"db": self.db},
+                "app.db": {"db": self.db},
             }
         )
         self.container = self.packages["app.cogs"]

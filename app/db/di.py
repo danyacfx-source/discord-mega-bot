@@ -1,9 +1,9 @@
-"""DI пакета ``app.data``: свой контейнер слоя данных, репозитории регистрируются здесь."""
+"""DI пакета ``app.db``: свой контейнер слоя данных, репозитории регистрируются здесь."""
 
 from __future__ import annotations
 
 from app.core.container import DependencyContainer
-from app.data import REPOSITORY_CLASSES
+from app.db import REPOSITORY_CLASSES
 
 #: Контейнер, в который этот пакет включается как ребёнок (данные видят ядро).
 PARENT = "app.core"

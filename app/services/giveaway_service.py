@@ -10,7 +10,7 @@ import discord
 from app.core.base import BaseService
 
 if TYPE_CHECKING:
-    from app.data.giveaways_repository import GiveawaysRepository
+    from app.db.giveaways_repository import GiveawaysRepository
 
 
 class GiveawayService(BaseService):

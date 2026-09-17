@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.base import BaseService
 
 if TYPE_CHECKING:
-    from app.data.reminders_repository import RemindersRepository
+    from app.db.reminders_repository import RemindersRepository
 
 
 class ReminderService(BaseService):

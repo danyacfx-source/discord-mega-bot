@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from app.data.base_repository import BaseRepository
+from app.db.base_repository import BaseRepository
 
 if TYPE_CHECKING:
-    from app.data.database import Database
+    from app.db.database import Database
 
 
 class SeasonRepository(BaseRepository):
-    def __init__(self, db: "Database") -> None:
+    def __init__(self, db: Database) -> None:
         super().__init__(db)
 
     async def add_message(self, guild_id: int, user_id: int) -> None:

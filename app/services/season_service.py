@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.base import BaseService
 
 if TYPE_CHECKING:
-    from app.data.season_repository import SeasonRepository
+    from app.db.season_repository import SeasonRepository
 
 
 class SeasonService(BaseService):

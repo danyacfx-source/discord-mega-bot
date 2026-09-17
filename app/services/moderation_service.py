@@ -10,7 +10,7 @@ from app.core.checks import can_moderate
 from app.utils.time import parse_duration
 
 if TYPE_CHECKING:
-    from app.data.warns_repository import WarnsRepository
+    from app.db.warns_repository import WarnsRepository
     from app.services.settings_service import SettingsService
 
 logger = logging.getLogger("bot.services")

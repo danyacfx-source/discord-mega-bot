@@ -4,10 +4,10 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, Any
 
-from app.data.base_repository import BaseRepository
+from app.db.base_repository import BaseRepository
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    pass
 
 
 class PollsRepository(BaseRepository):

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from app.core.base import BaseService
 
 if TYPE_CHECKING:
-    from app.data.reaction_roles_repository import ReactionRolesRepository
+    from app.db.reaction_roles_repository import ReactionRolesRepository
 
 
 class ReactionRolesService(BaseService):
