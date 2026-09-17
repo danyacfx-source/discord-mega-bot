@@ -7,7 +7,7 @@ __pycache__
 .ruff_cache
 .env
 .env.example
-data
-logs
+/data
+/logs
 tests
 *.md
