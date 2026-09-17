@@ -3,9 +3,9 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# ffmpeg — обязателен для воспроизведения музыки (yt-dlp)
+# ffmpeg и libopus — обязательны для музыки и голосовых каналов (py-nacl, discordsrv)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg libopus0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
