@@ -63,11 +63,14 @@ class DonationsCog(MegaCog, name="Donations"):
     def __init__(self, bot: MegaBot, donations: DonationService) -> None:
         super().__init__(bot)
         self.donations = donations
+        self._base_seconds = 15.0
+        self._failures = 0
 
     async def cog_load(self) -> None:
         config = self.bot.config
+        self._base_seconds = max(5.0, config.donation_poll_seconds)
         if config.donations_token:
-            self.donation_loop.change_interval(seconds=config.donation_poll_seconds)
+            self.donation_loop.change_interval(seconds=self._base_seconds)
             self.donation_loop.start()
         if config.donate_button_channel_id:
             self.bot.add_view(DonateButtonView(self.donations))
@@ -82,13 +85,35 @@ class DonationsCog(MegaCog, name="Donations"):
         if self.bot.is_ready():
             await self._ensure_sponsor_message()
 
+    def _schedule(self) -> None:
+        if self._failures:
+            seconds = min(self._base_seconds * (2 ** min(self._failures, 5)), 300.0)
+        else:
+            seconds = self._base_seconds
+        self.donation_loop.change_interval(seconds=seconds)
+
     @tasks.loop(seconds=15.0)
     async def donation_loop(self) -> None:
         try:
             new_donations = await self.donations.process_new(limit=50)
-        except Exception:
-            logger.exception("DonationAlerts: ошибка поллинга")
+        except RuntimeError as exc:
+            self._failures += 1
+            if self._failures <= 3 or self._failures % 20 == 0:
+                logger.error(
+                    "DonationAlerts недоступен (попытка %d): %s — пауза до %ds",
+                    self._failures,
+                    exc,
+                    min(self._base_seconds * (2 ** min(self._failures, 5)), 300.0),
+                )
+            self._schedule()
             return
+        except Exception:
+            self._failures += 1
+            logger.exception("DonationAlerts: ошибка поллинга (попытка %d)", self._failures)
+            self._schedule()
+            return
+        self._failures = 0
+        self._schedule()
         for donation in new_donations:
             try:
                 await self._handle(donation)
