@@ -37,6 +37,8 @@ class LoggingService:
         if not channel_id:
             channel_id = settings.get("log_channel_id")
         if not channel_id:
+            channel_id = self._bot.config.bot_log_channel_id
+        if not channel_id:
             return None
         channel = guild.get_channel(channel_id)
         if channel is not None and isinstance(channel, discord.TextChannel):

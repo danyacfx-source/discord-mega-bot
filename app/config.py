@@ -69,6 +69,7 @@ class Config:
     # Расширенные логи
     logs_ignore_channel_ids: tuple[int, ...] = ()
     logs_ignore_category_ids: tuple[int, ...] = ()
+    bot_log_channel_id: int | None = None
 
     # Правила-гейт
     rules_message_id: int | None = None
@@ -220,6 +221,7 @@ class Config:
             kick_pusher_host=os.getenv("KICK_PUSHER_HOST", "ws-us2.pusher.com"),
             logs_ignore_channel_ids=_ints(os.getenv("LOGS_IGNORE_CHANNEL_IDS")),
             logs_ignore_category_ids=_ints(os.getenv("LOGS_IGNORE_CATEGORY_IDS")),
+            bot_log_channel_id=_single_int(os.getenv("BOT_LOG_CHANNEL_ID")),
             rules_message_id=_single_int(os.getenv("RULES_MESSAGE_ID")),
             rules_role_id=_single_int(os.getenv("RULES_ROLE_ID")),
             temp_voice_trigger_ids=_ints(os.getenv("TEMP_VOICE_TRIGGER_IDS")),
