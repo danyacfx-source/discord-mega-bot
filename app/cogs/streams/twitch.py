@@ -47,6 +47,8 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
             status = next(iter(live.values()))
             await self._set_presence(status["title"], int(status.get("viewers") or 0))
         else:
+            if self.bot.config.kick_channel_slug:
+                return
             try:
                 await self.bot.change_presence(activity=stream_activity(None))
             except Exception:

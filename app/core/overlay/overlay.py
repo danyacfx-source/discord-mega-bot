@@ -123,22 +123,33 @@ class Overlay:
 
     async def _stream_payload(self) -> dict[str, Any] | None:
         config = self.bot.config
-        if not config.twitch_channels:
+        if not config.twitch_channels and not config.kick_channel_slug:
             return None
-        login = config.twitch_channels[0]
-        base = {
-            "platform": "twitch",
-            "live": False,
-            "viewers": 0,
-            "peak": 0,
-            "title": None,
-            "category": None,
-            "startedAt": None,
-            "url": f"https://www.twitch.tv/{login}",
-        }
         services = self.bot.services
         if services is None:
-            return base
+            return self._base_stream("twitch", None)
+        if config.kick_channel_slug:
+            try:
+                status = await services.kick.channel_status(config.kick_channel_slug)
+            except Exception:
+                logger.debug("Overlay: ошибка опроса Kick %s", config.kick_channel_slug, exc_info=True)
+                status = None
+            base = self._base_stream("kick", f"https://kick.com/{config.kick_channel_slug}")
+            if status is not None:
+                viewers = status.get("viewers") or 0
+                return {
+                    **base,
+                    "live": True,
+                    "viewers": viewers,
+                    "peak": viewers,
+                    "title": str(status.get("title") or "")[:200],
+                    "category": str(status.get("category") or "")[:100],
+                    "startedAt": status.get("started_at"),
+                }
+            if not config.twitch_channels:
+                return base
+        login = config.twitch_channels[0]
+        base = self._base_stream("twitch", f"https://www.twitch.tv/{login}")
         try:
             status = await services.twitch.channel_status(login)
         except Exception:
@@ -152,6 +163,19 @@ class Overlay:
             "viewers": status.get("viewers") or 0,
             "title": str(status.get("title") or "")[:200],
             "category": str(status.get("category") or "")[:100],
+        }
+
+    @staticmethod
+    def _base_stream(platform: str, url: str | None) -> dict[str, Any]:
+        return {
+            "platform": platform,
+            "live": False,
+            "viewers": 0,
+            "peak": 0,
+            "title": None,
+            "category": None,
+            "startedAt": None,
+            "url": url,
         }
 
     # ------------------------------------------------------------------ жизнь
