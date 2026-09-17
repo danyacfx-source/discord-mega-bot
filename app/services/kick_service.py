@@ -62,13 +62,14 @@ class KickService:
         live = body.get("livestream") if isinstance(body, dict) else None
         if not isinstance(live, dict) or not live.get("is_live"):
             return None
-        category = live.get("category") or {}
+        categories = live.get("categories") or []
+        category = categories[0].get("name") if categories and isinstance(categories[0], dict) else None
         thumbnail = live.get("thumbnail") or {}
         return {
             "slug": slug,
             "title": live.get("session_title") or live.get("title") or "Без названия",
             "viewers": _first_viewer_count(live.get("viewer_count"), live.get("viewers"), body.get("viewer_count")),
-            "category": category.get("name") or "—",
+            "category": category or "—",
             "started_at": live.get("created_at"),
             "thumbnail": thumbnail.get("url"),
         }
