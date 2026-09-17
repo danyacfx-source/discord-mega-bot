@@ -1,9 +1,17 @@
-"""Автозагрузчик когов и регистрация persistent-представлений."""
+"""Автозагрузчик когов и регистрация persistent-представлений.
+
+Коги собираются по явной таблице ``COG_PROVIDERS`` (имя параметра конструктора →
+сервис из ``bot.services``) вместо рефлексии DI-контейнера. Граница слоёв
+(коги не видят репозитории/БД) гарантирована статически: имена параметров
+допускают только ``bot`` и ключи таблицы.
+"""
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import pkgutil
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from discord.ext import commands
@@ -14,6 +22,51 @@ if TYPE_CHECKING:
     from app.core.bot import MegaBot
 
 logger = logging.getLogger("bot")
+
+#: Источники зависимостей когов: имя параметра → сервис из bot.services.
+#: Параметр ``bot`` подставляется первым позиционным аргументом.
+COG_PROVIDERS: dict[str, Callable[[MegaBot], object]] = {
+    "settings": lambda b: b.services.settings,
+    "moderation": lambda b: b.services.moderation,
+    "music": lambda b: b.services.music,
+    "tickets": lambda b: b.services.tickets,
+    "logging": lambda b: b.services.logging,
+    "reminders": lambda b: b.services.reminders,
+    "polls": lambda b: b.services.polls,
+    "giveaways": lambda b: b.services.giveaways,
+    "reaction_roles": lambda b: b.services.reaction_roles,
+    "donations": lambda b: b.services.donations,
+    "twitch": lambda b: b.services.twitch,
+    "kick": lambda b: b.services.kick,
+    "tempvoice": lambda b: b.services.tempvoice,
+    "birthdays": lambda b: b.services.birthdays,
+    "seasons": lambda b: b.services.seasons,
+}
+
+
+def _build_cog(bot: MegaBot, cls: type) -> object:
+    """Строит ког по сигнатуре конструктора и таблице ``COG_PROVIDERS``.
+
+    Все обязательные зависимости резолвятся — ``cls(bot, **kwargs)``.
+    Иначе (неизвестный обязательный параметр) — откат к ``cls(bot)``.
+    """
+    params = list(inspect.signature(cls.__init__).parameters.values())[1:]
+    kwargs: dict[str, object] = {}
+    resolvable = True
+    for param in params:
+        if param.name == "bot":
+            continue
+        if param.name in COG_PROVIDERS:
+            kwargs[param.name] = COG_PROVIDERS[param.name](bot)
+        elif param.default is not inspect.Parameter.empty:
+            continue
+        else:
+            resolvable = False
+            break
+    if not resolvable:
+        logger.debug("Явная сборка %s невозможна — резерв cls(bot)", cls.__name__)
+        return cls(bot)
+    return cls(bot, **kwargs)
 
 
 async def load_cogs(bot: MegaBot) -> list[str]:
@@ -50,15 +103,7 @@ async def load_cogs(bot: MegaBot) -> list[str]:
                 failures.append((module.name, f"duplicate:{member_name}"))
                 continue
             try:
-                container = bot.packages.container_for(module.name) if bot.packages is not None else None
-                if container is not None:
-                    instance = container.build(member)
-                else:
-                    instance = member(bot)
-            except Exception:
-                logger.debug("DI-сборка кога не удалась, резерв: %s.%s", module.name, member_name, exc_info=True)
-                instance = member(bot)
-            try:
+                instance = _build_cog(bot, member)
                 await bot.add_cog(instance)
             except Exception:
                 logger.exception("Не удалось загрузить ког %s.%s", module.name, member_name)

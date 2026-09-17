@@ -77,11 +77,11 @@ sudo systemctl start discord-mega-bot
 main.py                 # точка входа
 app/
   config.py             # конфигурация из .env
-  core/                 # ядро: бот, DI-контейнер, логгер, загрузчик когов, embed-фабрика, views, checks
-  data/                 # слой данных: БД (SQLite) + репозитории
-  services/             # бизнес-логика (DI): settings, moderation, tickets, logging, music, reminders…
+  core/                 # ядро: бот, composition root (assemble), порты, логгер, загрузчик когов, embed-фабрика, views, checks
+  db/                   # слой данных: БД (SQLite) + репозитории
+  services/             # бизнес-логика: settings, moderation, tickets, logging, music, reminders…
   services/audio/       # Track, GuildPlayer (очередь/воспроизведение), yt-dlp resolver
-  cogs/                 # коги: сервисы приходят конструктором через DI-контейнер
+  cogs/                 # коги: сервисы приходят конструктором (собирает loader по COG_PROVIDERS)
   utils/                # helpers: time, format, pagination
 systemd/                # юнит для автозапуска на Linux
 scripts/                # install_ubuntu.sh — установка на Ubuntu/Debian

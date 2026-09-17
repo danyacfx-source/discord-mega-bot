@@ -1,4 +1,10 @@
-"""Класс бота: инициализация БД, сервисов, когов и обработка ошибок команд."""
+"""Дискорд-бот без контейнера.
+
+Повторяет прикладную часть ``app.core.bot.MegaBot`` (обработка ошибок команд,
+старт вебпанели/оверлея, синк команд), но не строит выражения DI-контейнеров:
+коги собираются из ``Root`` в setup_hook через ``rewrite.cogs.build_all_cogs``.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -14,30 +20,25 @@ from app.core import embeds
 from app.core.stream_state import stream_activity
 
 if TYPE_CHECKING:
-    from app.core.overlay import Overlay
-    from app.core.root import Root
-    from app.core.webpanel import WebPanel
     from app.db.database import Database
     from app.services import Services
+    from rewrite.root import Root
 
 logger = logging.getLogger("bot")
 
 _SUPPORT_HINT = "Если ошибка повторяется — посмотрите логи или обратитесь к поддержке."
 
 
-class MegaBot(commands.Bot):
+class Bot(commands.Bot):
     config: Config
     db: Database | None
     services: Services | None
     root: Root | None
-    webpanel: WebPanel | None
-    overlay: Overlay | None
 
     def __init__(self, config: Config) -> None:
-        intents = discord.Intents.all()
         super().__init__(
             command_prefix=config.prefix,
-            intents=intents,
+            intents=discord.Intents.all(),
             help_command=None,
             activity=stream_activity(None),
         )
@@ -45,8 +46,6 @@ class MegaBot(commands.Bot):
         self.db = None
         self.services = None
         self.root = None
-        self.webpanel = None
-        self.overlay = None
         self.start_time = datetime.now(UTC)
         self.tree.on_error = self.on_app_command_error
 
@@ -55,16 +54,20 @@ class MegaBot(commands.Bot):
         return datetime.now(UTC) - self.start_time
 
     async def setup_hook(self) -> None:
-        from app.core.composition import assemble
-        from app.core.loader import load_cogs, register_persistent_views
-        from app.db.database import Database
+        root = self.root
+        if root is None:
+            # Резервный путь: обычно бот конструируется в rewrite.composition.assemble(),
+            # который сразу проставляет root, но оставляем защиту от ручного запуска.
+            logger.warning("Bot.setup_hook: root не назначен — коги не загружались")
+            await self._sync_commands()
+            return
 
-        self.db = Database(self.config.db_path)
-        await self.db.connect()
-        root = assemble(config=self.config, db=self.db)
-        self.root = root
+        from app.core.loader import register_persistent_views
+        from rewrite.cogs import build_all_cogs
+
+        self.db = root.db
         self.services = root.services
-        loaded = await load_cogs(self)
+        loaded = await build_all_cogs(root)
         await register_persistent_views(self)
         if self.config.panel_port is not None:
             from app.core.webpanel import WebPanel
@@ -92,14 +95,14 @@ class MegaBot(commands.Bot):
         logger.info("Синхронизировано команд: %d (%s)", len(synced), ", ".join(names[:20]))
 
     async def close(self) -> None:
-        webpanel = self.webpanel
+        webpanel = getattr(self, "webpanel", None)
         if webpanel is not None:
             try:
                 await webpanel.stop()
             except Exception:
                 logger.exception("Ошибка при остановке вебпанели")
             self.webpanel = None
-        overlay = self.overlay
+        overlay = getattr(self, "overlay", None)
         if overlay is not None:
             try:
                 await overlay.stop()

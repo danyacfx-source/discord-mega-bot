@@ -20,18 +20,19 @@ app/
 ├── config.py                  # конфигурация из .env (dataclass)
 ├── core/                      # ядро
 │   ├── bot.py                 #   MegaBot: intents, setup_hook, обработчик ошибок команд
-│   ├── container.py           #   DI-контейнер: родители, запреты, синглтоны, циклы
-│   ├── packages.py            #   композиционный корень: контейнер на каждый пакет
+│   ├── composition.py         #   composition root: assemble() — один граф зависимостей
+│   ├── ports.py               #   Protocol-контракты портов (KvStore, SettingsStore, …)
+│   ├── adapters.py            #   реальные классы как адаптеры портов + assert_ports()
+│   ├── root.py                #   Root: типизированное владение графом
+│   ├── security.py            #   инварианты склейки привилегированных когов
 │   ├── base.py                #   MegaCog (типизированный доступ к сервисам) и BaseService
-│   ├── loader.py              #   автозагрузка когов через контейнер пакета + persistent views
+│   ├── loader.py              #   сборка когов по COG_PROVIDERS + persistent views
 │   ├── views.py               #   ConfirmView, TicketOpen/CloseView, GiveawayView, PollView
 │   ├── embeds.py              #   единый стиль embed (success/error/info/warning)
 │   ├── checks.py              #   права/роли: bot_has_permissions, can_moderate
-│   ├── errors.py              #   ResolutionError, CycleError
 │   └── logger.py              #   логгер: консоль + ротация файлов
-├── data/                      # слой данных
-│   ├── __init__.py            #   REPOSITORY_CLASSES
-│   ├── di.py                  #   регистрация репозиториев в контейнере пакета
+├── db/                        # слой данных
+│   ├── __init__.py            #   реэкспорт репозиториев
 │   ├── database.py            #   подключение, WAL, PRAGMAs, схема всех таблиц
 │   ├── base_repository.py
 │   ├── settings_repository.py #   настройки серверов
@@ -45,8 +46,7 @@ app/
 │   ├── donations_repository.py#  обработанные донаты DonationAlerts
 │   └── temp_voices_repository.py # владельцы временных голосовых
 ├── services/                  # бизнес-логика (сервисы поверх репозиториев)
-│   ├── __init__.py            #   SERVICE_CLASSES/ALIASES + типизированная Services-обвязка
-│   ├── di.py                  #   регистрация сервисов в контейнере пакета
+│   ├── __init__.py            #   типизированная Services-обвязка (15 сервисов)
 │   ├── settings_service.py
 │   ├── moderation_service.py  #   warn-система и иерархия
 │   ├── music_service.py
@@ -94,62 +94,49 @@ app/
     ├── format.py              # плюрализация, относительное время
     └── pagination.py          # PaginatorView (кнопки ◀ ▶)
 
-tests/                         # 44 теста: DI, времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc и smoke-сборки
+tests/                         # 51 тест: структуры (модель-без-контейнера), времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc и smoke-сборки
 ```
 
-### Как DI-контейнеры собирают объекты: пакет = контейнер
+### Как собираются объекты: composition root вместо DI-контейнеров
 
-`app/core/container.py` — лёгкий DI-контейнер (без внешних зависимостей) с поддержкой
-**родителей** (ребёнок резолвит через цепочку) и **запретов** (границы слоёв).
+`app/core/composition.py` — **composition root**: весь граф зависимостей собирается
+вручную в одной функции `assemble(config, db)`. Порядок построения и есть граф:
+репозитории → сервисы → бот → сервисы, зависящие от бота. Замена реализации
+(фейк, другая БД) — параметры `assemble(...)`, а не правка потребителей.
 
-`app/core/packages.py` — композиционный корень: **каждый Python-пакет получает свой
-контейнер**, дерево повторяет структуру исходников. Родитель по умолчанию — контейнер
-родительского пакета; связь пакета с графом объявляется в его собственном `di.py`.
-Сейчас 27 контейнеров:
+`app/core/ports.py` — Protocol-контракты (`KvStore`, `SettingsStore`,
+`KickStatusSource`, `DonationsSource`, `LogSink`). Реальные классы объявлены их
+адаптерами (`app/core/adapters.py`) и структурно проверяются (`assert_ports()`).
 
 ```
-app                → корень
-├── app.core       → ядро:              сюда внедряются bot и config
-│   └── app.db   → слой данных:       db, репозитории   (parent: core)
-│       └── app.services                бизнес-логика      (parent: data)
-│           ├── app.services.audio      (модуль музыки)    (parent: services)
-│           └── app.cogs                коги; репозитории и БД запрещены (parent: services)
-│               └── app.cogs.<категория> каждый подпакет когов наследует границы
-└── app.utils      → вспомогательное
+
+app/core/composition.assemble(config, db)
+├── app.db.*Repository(db)            → репозитории
+├── app.services.*Service(repo, ...)  → сервисы (настройки, моды, подписки…)
+├── app.services.*Service(settings, bot)  ← сервисы, зависящие от бота (логи, тикеты)
+└── Services → прошивается в MegaBot (bot.services)
+    ↓
+app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVIDERS
 ```
 
-Каждый пакет объявляет своё место в графе локально — в `di.py`:
-
-```python
-# app/cogs/di.py
-PARENT = "app.services"                     # коги резолвят сервисы как родитель
-DENIED = {"db", "Database", *…}             # а слой данных — запрещён
-```
-
-1. **Регистрация у себя**: каждый пакет регистрирует только свои компоненты
-   (`app/data/di.py` — репозитории, `app/services/di.py` — сервисы и алиасы).
-   Общих списков в одном файле нет: реестры лежат в `__init__.py` своих пакетов.
-2. **Внедрение**: параметры конструктора резолвятся по имени параметра → аннотации (класс/её имя).
-   `ReminderService(repo: RemindersRepository)` сам подтянет репозиторий, которому инжектится `db`
-   из контейнера `app.db`.
-3. **Коги**: загрузчик находит контейнер пакета кога (`container_for(module)`) — самый глубокий
-   подходящий контейнер — и собирает ког в нём:
+1. **Сборка**: каждый сервис создаётся явным вызовом конструктора в одном месте
+   (`assemble`); дубликатов и рефлексии нет — синглтон гарантирован порядком сборки.
+2. **Внедрение в коги**: `app/core/loader.py` использует читаемую таблицу
+   `COG_PROVIDERS` — имя параметра конструктора → сервис из `bot.services`.
+3. **Коги**:
    ```python
    class ModerationCog(MegaCog, name="Moderation"):
        def __init__(self, bot: MegaBot, moderation: ModerationService, logging: LoggingService) -> None:
            super().__init__(bot)
            self.moderation = moderation
    ```
-4. **Границы наследуются**: подпакет кога (контейнер `app.cogs.moderation`) делегирует вверх своему
-   родителю `app.cogs`, а тот отклоняет `db`/репозитории → коги видят только сервисы.
-5. **Безопасность**: синглтоны кешируются в своём контейнере, циклы дают `CycleError`, запрет/отсутствие
-   — `ResolutionError` (загрузчик падает на резервную сборку `member(bot)`, бот не падает).
-6. **Тестимость**: для теста/профиля любой пакет пересобирается отдельно — свой `di.py` и свой родитель.
-
-**Чтобы добавить фичу** (или порт с Node.js): кладёте пакет `app/<модуль>/` с `di.py`, регистрирующим
-его репозитории/сервисы (или добавляете свои классы в реестр пакета),
-и ког, который принимает нужные сервисы конструктором. Центральных правок нет: контейнер под
-новый пакет создаётся автоматически.
+4. **Граница слоёв статическая**: параметры конструкторов когов допускают только
+   `bot` и ключи `COG_PROVIDERS` → репозитории/БД в коги не попадают, проверяется тестом.
+5. **Безопасность**: `app/core/security.py` фиксирует инварианты склейки —
+   привилегированные коги обязаны получить именно реальные сервисы из Root
+   (`Security.assert_wiring`), секреты только из Config (env).
+6. **Тестимость**: `assemble(..., kick=FakeKick())` подменяет реализацию без
+   изменения потребителей — фейк попадает в Root и далее в коги.
 
 ---
 
@@ -384,5 +371,5 @@ DENIED = {"db", "Database", *…}             # а слой данных — з�
 
 - 44 юнит- и интеграционных теста (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея
 - `ruff check .` — чисто (line-length 140)
-- Единые паттерны: cog → service → repository → БД; контейнер на каждый пакет (`app/core/packages.py`)
+- Единые паттерны: cog → service → repository → БД; граф собирается в composition root (`app/core/composition.py`)
 - Деплой на Ubuntu: `scripts/install_ubuntu.sh` + `systemd/discord-mega-bot.service`

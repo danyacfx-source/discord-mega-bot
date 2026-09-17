@@ -258,25 +258,23 @@ async def test_donation_service_codes(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ported_services_resolve_from_containers(tmp_path):
+async def test_ported_services_available_as_singletons(tmp_path):
     with tempfile.TemporaryDirectory() as tmp:
         config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
         bot = MegaBot(config)
         await bot.setup_hook()
         try:
-            packages = bot.packages
-            services_container = packages["app.services"]
+            services = bot.services
+            assert isinstance(services.donations, DonationService)
+            assert isinstance(services.twitch, TwitchService)
+            assert isinstance(services.kick, KickService)
+            assert isinstance(services.tempvoice, TempVoiceService)
+            assert isinstance(services.birthdays, BirthdayService)
 
-            assert isinstance(services_container.resolve("donations"), DonationService)
-            assert services_container.resolve("donations") is bot.services.donations
-            assert isinstance(services_container.resolve("twitch"), TwitchService)
-            assert services_container.resolve("twitch") is bot.services.twitch
-            assert isinstance(services_container.resolve("kick"), KickService)
-            assert services_container.resolve("kick") is bot.services.kick
-            assert isinstance(services_container.resolve("tempvoice"), TempVoiceService)
-            assert services_container.resolve("tempvoice") is bot.services.tempvoice
-            assert isinstance(services_container.resolve("birthdays"), BirthdayService)
-            assert services_container.resolve("birthdays") is bot.services.birthdays
+            # Ког получил ровно тот же синглтон, что лежит в services.
+            kick_cog = bot.get_cog("Kick")
+            assert kick_cog is not None
+            assert kick_cog.kick is services.kick
         finally:
             await bot.close()
 
