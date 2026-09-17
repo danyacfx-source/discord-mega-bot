@@ -35,6 +35,8 @@ class LoggingService:
         column = _CATEGORY_COLUMNS.get(category or "")
         channel_id = settings.get(column) if column else None
         if not channel_id:
+            channel_id = getattr(self._bot.config, column, None) if column else None
+        if not channel_id:
             channel_id = settings.get("log_channel_id")
         if not channel_id:
             channel_id = self._bot.config.bot_log_channel_id

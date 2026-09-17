@@ -19,6 +19,14 @@ setup_group = app_commands.Group(name="setup", description="Настройка �
 
 _HEX_RE = re.compile(r"^#?([0-9a-fA-F]{6})$")
 
+_LOG_COLUMNS = {
+    "bot": ("bot_log_channel_id", "Бот (запуск)"),
+    "member": ("member_log_channel_id", "Участники"),
+    "message": ("message_log_channel_id", "Сообщения"),
+    "voice": ("voice_log_channel_id", "Голосовые каналы"),
+    "mod": ("mod_log_channel_id", "Модерация и баны"),
+}
+
 _PERM_NAMES = {
     "CreateInstantInvite": "create_instant_invite",
     "KickMembers": "kick_members",
@@ -85,6 +93,27 @@ class SetupCog(MegaCog, name="Setup"):
         await self.settings.update(interaction.guild.id, log_channel_id=channel.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Логи → {channel.mention}"))
 
+    @setup_group.command(name="log-type", description="Отдельный канал для конкретного типа логов")
+    @app_commands.guild_only()
+    @app_commands.choices(
+        kind=[
+            app_commands.Choice(name="Бот (запуск)", value="bot"),
+            app_commands.Choice(name="Участники", value="member"),
+            app_commands.Choice(name="Сообщения", value="message"),
+            app_commands.Choice(name="Голосовые каналы", value="voice"),
+            app_commands.Choice(name="Модерация и баны", value="mod"),
+        ]
+    )
+    async def log_type(
+        self,
+        interaction: discord.Interaction,
+        kind: app_commands.Choice[str],
+        channel: discord.TextChannel,
+    ) -> None:
+        column, label = _LOG_COLUMNS[kind.value]
+        await self.settings.update(interaction.guild.id, **{column: channel.id})
+        await interaction.response.send_message(embed=embeds.success("Настройка", f"{label} → {channel.mention}"))
+
     @setup_group.command(name="ticket-category", description="Категория для создания тикетов")
     @app_commands.guild_only()
     async def ticket_category(self, interaction: discord.Interaction, category: discord.CategoryChannel) -> None:
@@ -100,11 +129,19 @@ class SetupCog(MegaCog, name="Setup"):
             "farewell": "farewell_channel_id",
             "log": "log_channel_id",
             "ticket": "ticket_category_id",
+            "bot": "bot_log_channel_id",
+            "member": "member_log_channel_id",
+            "message": "message_log_channel_id",
+            "voice": "voice_log_channel_id",
+            "mod": "mod_log_channel_id",
         }
         column = mapping.get(option.strip().lower())
         if column is None:
             await interaction.response.send_message(
-                embed=embeds.error("Ошибка", "Варианты: `welcome`, `farewell`, `log`, `ticket`."),
+                embed=embeds.error(
+                    "Ошибка",
+                    "Варианты: `welcome`, `farewell`, `log`, `ticket`, `bot`, `member`, `message`, `voice`, `mod`.",
+                ),
                 ephemeral=True,
             )
             return
@@ -124,6 +161,31 @@ class SetupCog(MegaCog, name="Setup"):
         embed.add_field(name="Канал прощаний", value=mention(settings["farewell_channel_id"]), inline=True)
         embed.add_field(name="Канал логов", value=mention(settings["log_channel_id"]), inline=True)
         embed.add_field(name="Категория тикетов", value=mention(settings["ticket_category_id"]), inline=True)
+        embed.add_field(
+            name="Логи: бот",
+            value=mention(settings.get("bot_log_channel_id")),
+            inline=True,
+        )
+        embed.add_field(
+            name="Логи: участники",
+            value=mention(settings.get("member_log_channel_id")),
+            inline=True,
+        )
+        embed.add_field(
+            name="Логи: сообщения",
+            value=mention(settings.get("message_log_channel_id")),
+            inline=True,
+        )
+        embed.add_field(
+            name="Логи: голос",
+            value=mention(settings.get("voice_log_channel_id")),
+            inline=True,
+        )
+        embed.add_field(
+            name="Логи: модерация",
+            value=mention(settings.get("mod_log_channel_id")),
+            inline=True,
+        )
         embed.add_field(name="Авто-модерация", value="включена ✅" if settings["automod_enabled"] else "выключена ❌", inline=True)
         await interaction.response.send_message(embed=embed)
 
