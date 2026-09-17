@@ -114,6 +114,12 @@ class SetupCog(MegaCog, name="Setup"):
         await self.settings.update(interaction.guild.id, **{column: channel.id})
         await interaction.response.send_message(embed=embeds.success("Настройка", f"{label} → {channel.mention}"))
 
+    @setup_group.command(name="donation-channel", description="Канал, куда присылать новые донаты")
+    @app_commands.guild_only()
+    async def donation_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
+        await self.settings.update(interaction.guild.id, donation_channel_id=channel.id)
+        await interaction.response.send_message(embed=embeds.success("Настройка", f"Донаты → {channel.mention}"))
+
     @setup_group.command(name="ticket-category", description="Категория для создания тикетов")
     @app_commands.guild_only()
     async def ticket_category(self, interaction: discord.Interaction, category: discord.CategoryChannel) -> None:
@@ -134,13 +140,14 @@ class SetupCog(MegaCog, name="Setup"):
             "message": "message_log_channel_id",
             "voice": "voice_log_channel_id",
             "mod": "mod_log_channel_id",
+            "donation": "donation_channel_id",
         }
         column = mapping.get(option.strip().lower())
         if column is None:
             await interaction.response.send_message(
                 embed=embeds.error(
                     "Ошибка",
-                    "Варианты: `welcome`, `farewell`, `log`, `ticket`, `bot`, `member`, `message`, `voice`, `mod`.",
+                    "Варианты: `welcome`, `farewell`, `log`, `ticket`, `bot`, `member`, `message`, `voice`, `mod`, `donation`.",
                 ),
                 ephemeral=True,
             )
@@ -184,6 +191,11 @@ class SetupCog(MegaCog, name="Setup"):
         embed.add_field(
             name="Логи: модерация",
             value=mention(settings.get("mod_log_channel_id")),
+            inline=True,
+        )
+        embed.add_field(
+            name="Канал донатов",
+            value=mention(settings.get("donation_channel_id")),
             inline=True,
         )
         embed.add_field(name="Авто-модерация", value="включена ✅" if settings["automod_enabled"] else "выключена ❌", inline=True)

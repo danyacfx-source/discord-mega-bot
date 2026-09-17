@@ -135,7 +135,7 @@ class DonationsCog(MegaCog, name="Donations"):
                 )
             else:
                 rewarded = await self._grant(link, code, donation)
-        await self._notify(donation, rewarded)
+        await self._notify(donation, rewarded, guild_id=link["guild_id"] if link else None)
 
     async def _grant(self, link: dict[str, Any], code: str, donation: dict[str, Any]) -> bool:
         config = self.bot.config
@@ -181,11 +181,24 @@ class DonationsCog(MegaCog, name="Donations"):
         except discord.HTTPException:
             logger.debug("Donations: не удалось отправить ЛС %s", user_id, exc_info=True)
 
-    async def _notify(self, donation: dict[str, Any], rewarded: bool) -> None:
+    async def _donation_channel(self, guild_id: int | None) -> discord.TextChannel | None:
         config = self.bot.config
-        channel_id = config.donation_notify_channel_id
-        channel = self.bot.get_channel(channel_id) if channel_id else None
-        if not isinstance(channel, discord.TextChannel):
+        if guild_id:
+            try:
+                settings = await self.bot.services.settings.get(guild_id)
+            except Exception:
+                logger.debug("Donations: не удалось получить настройки гильдии %s", guild_id, exc_info=True)
+            else:
+                channel = self.bot.get_channel(settings.get("donation_channel_id")) if settings.get("donation_channel_id") else None
+                if isinstance(channel, discord.TextChannel):
+                    return channel
+        channel = self.bot.get_channel(config.donation_notify_channel_id) if config.donation_notify_channel_id else None
+        return channel if isinstance(channel, discord.TextChannel) else None
+
+    async def _notify(self, donation: dict[str, Any], rewarded: bool, guild_id: int | None = None) -> None:
+        config = self.bot.config
+        channel = await self._donation_channel(guild_id)
+        if channel is None:
             return
         embed = embeds.success(
             "Новый донат 💛",

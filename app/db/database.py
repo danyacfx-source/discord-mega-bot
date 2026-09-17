@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS guild_settings (
     voice_log_channel_id   INTEGER,
     mod_log_channel_id     INTEGER,
     bot_log_channel_id     INTEGER,
+    donation_channel_id    INTEGER,
     automod_enabled     INTEGER NOT NULL DEFAULT 1,
     blocked_words       TEXT    NOT NULL DEFAULT '[]'
 );
@@ -169,6 +170,7 @@ class Database:
             "voice_log_channel_id",
             "mod_log_channel_id",
             "bot_log_channel_id",
+            "donation_channel_id",
         ):
             if column not in columns:
                 await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} INTEGER")

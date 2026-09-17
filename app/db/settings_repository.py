@@ -15,6 +15,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "voice_log_channel_id": None,
     "mod_log_channel_id": None,
     "bot_log_channel_id": None,
+    "donation_channel_id": None,
     "automod_enabled": 1,
     "blocked_words": "[]",
 }
@@ -29,6 +30,7 @@ _INT_COLUMNS = (
     "voice_log_channel_id",
     "mod_log_channel_id",
     "bot_log_channel_id",
+    "donation_channel_id",
 )
 
 
