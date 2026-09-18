@@ -8,4 +8,20 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     ports:
-      - "17890:17890"
+      - "3000:3000"
+    expose:
+      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      - "traefik.http.routers.megabot.rule=Host(`dendich.link`)"
+      - "traefik.http.routers.megabot.entrypoints=websecure"
+      - "traefik.http.routers.megabot.tls=true"
+      - "traefik.http.routers.megabot.tls.certresolver=letsencrypt"
+      - "traefik.http.services.megabot.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
