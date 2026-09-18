@@ -127,6 +127,7 @@ class Config:
     ai_history_size: int = 12
     ai_timeout_seconds: float = 45.0
     ai_system_prompt: str = ""
+    ai_proxy: str | None = None
 
     # Соцсети (/socials)
     socials_discord: str | None = None
@@ -267,6 +268,7 @@ class Config:
             ai_history_size=max(2, int(os.getenv("AI_HISTORY_SIZE", "12"))),
             ai_timeout_seconds=max(10.0, float(os.getenv("AI_TIMEOUT_SECONDS", "45"))),
             ai_system_prompt=os.getenv("AI_SYSTEM_PROMPT", ""),
+            ai_proxy=(os.getenv("AI_PROXY") or os.getenv("GEMINI_PROXY") or None),
             socials_discord=os.getenv("SOCIALS_DISCORD"),
             socials_site=os.getenv("SOCIALS_SITE"),
             socials_youtube=os.getenv("SOCIALS_YOUTUBE"),

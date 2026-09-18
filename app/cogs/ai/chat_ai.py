@@ -48,7 +48,7 @@ class ChatAICog(MegaCog, name="ChatAI"):
 
     async def _session_get(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(proxy=self.bot.config.ai_proxy or None)
         return self._session
 
     async def cog_unload(self) -> None:
@@ -212,6 +212,7 @@ class ChatAICog(MegaCog, name="ChatAI"):
             f"Модель: `{config.ai_model}`",
             f"Кулдаун: {config.ai_cooldown_seconds:.0f}с",
             f"Ключ: {'есть (env GEMINI_API_KEY)' if config.ai_api_key else 'не задан'}",
+            f"Прокси: {'задан' if config.ai_proxy else 'не задан'}",
             f"Каналы: {channels}",
         ]
         await interaction.response.send_message(content="\n".join(lines), ephemeral=True)
