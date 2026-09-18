@@ -1,7 +1,6 @@
 services:
   bot:
     build: .
-    container_name: discord-mega-bot
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -24,4 +23,4 @@ services:
 
 networks:
   traefik:
-    external: true
+    name: traefik
