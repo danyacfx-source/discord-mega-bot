@@ -276,8 +276,12 @@ class WebPanel:
             return False
         if host == self.host or host in _LOCAL_HOSTS:
             return True
-        if self.public_url:
-            if urlparse(self.public_url).hostname == host:
+        for entry in (self.public_url or "").split(","):
+            entry = entry.strip()
+            if not entry:
+                continue
+            candidate = urlparse(entry).hostname if "://" in entry else entry.split("/")[0].split(":")[0]
+            if candidate == host:
                 return True
         return False
 
