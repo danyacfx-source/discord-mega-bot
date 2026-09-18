@@ -1,35 +1,8 @@
 services:
-  proxy:
-    image: traefik:v3
-    container_name: traefik
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/acme.json:/acme.json
-    command:
-      - "--providers.docker=true"
-      - "--providers.docker.network=traefik"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-    networks:
-      - traefik
-
   bot:
     build: .
     restart: unless-stopped
     env_file: .env
-    depends_on:
-      - proxy
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -38,7 +11,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.megabot.rule=Host(`dendich.duckdns.org`)"
+      - "traefik.http.routers.megabot.rule=Host(`dendich.link`)"
       - "traefik.http.routers.megabot.entrypoints=websecure"
       - "traefik.http.routers.megabot.tls=true"
       - "traefik.http.routers.megabot.tls.certresolver=letsencrypt"
