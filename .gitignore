@@ -9,5 +9,6 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+/traefik/
 .idea/
 .vscode/

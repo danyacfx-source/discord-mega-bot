@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Админка — СЕНЕЖ</title>
+<title>Админка</title>
 <style>
   :root {
     --bg: #1e1f22; --bg2: #2b2d31; --card: #313338; --border: #3f4147;
@@ -97,7 +97,7 @@
 </head>
 <body>
 <header>
-  <h1>🛠 Админка — СЕНЕЖ</h1>
+  <h1>🛠 Админка — <span id="panel-name">…</span></h1>
   <span id="status" class="badge off">бот: …</span>
   <span id="guildname" class="mini"></span>
 </header>
@@ -253,7 +253,7 @@
 
 <div id="login">
   <div>
-    <h2>🔒 Панель СЕНЕЖ</h2>
+    <h2>🔒 Панель</h2>
     <p class="mini">Введите пароль панели</p>
     <input id="login_pw" type="password" placeholder="Пароль" />
     <button class="btn success" id="btn_login" style="width:100%;margin-top:12px">Войти</button>
@@ -375,6 +375,9 @@ async function loadOverview() {
   const r = await api("/api/overview");
   const d = r.data;
   if (!d || !d.ok) { toast("❌ Не удалось получить обзор", false); return; }
+  const pname = d.bot_name || (d.guild && d.guild.name) || "";
+  $("panel-name").textContent = pname || "панель";
+  document.title = "Админка" + (pname ? " — " + pname : "");
   $("ov_status").textContent = d.bot_online ? ("онлайн: " + (d.bot_name || "—")) : "офлайн";
   $("ov_uptime").textContent = d.uptime || "—";
   $("ov_mem").textContent = d.mem_mb != null ? (d.mem_mb + " МБ · пик " + d.mem_peak_mb + " МБ") : "—";
@@ -578,7 +581,7 @@ function renderPreview() {
     f.appendChild(document.createTextNode(e.footer.text));
     card.appendChild(f);
   } else if (e.timestamp) {
-    card.appendChild(tag("div", "embed-ts", new Date(e.timestamp).toLocaleString("ru-RU") + " · СЕНЕЖ"));
+    card.appendChild(tag("div", "embed-ts", new Date(e.timestamp).toLocaleString("ru-RU")));
   }
   if (e.image) { const im = tag("img", "embed-image", ""); im.src = e.image.url; card.appendChild(im); }
   pv.appendChild(card);
