@@ -342,6 +342,15 @@ async def test_webpanel_auth_and_status(tmp_path):
             data = await status_resp.json()
             assert data["bot_online"] is False
 
+            same_origin = await client.get(
+                "/api/status",
+                headers={**headers, "Origin": "https://panel.example.com", "Host": "panel.example.com"},
+            )
+            assert same_origin.status == 200
+
+            foreign_origin = await client.get("/api/status", headers={**headers, "Origin": "https://evil.example.com"})
+            assert foreign_origin.status == 401
+
             channels_resp = await client.get("/api/bot/channels", headers=headers)
             assert (await channels_resp.json())["channels"] == []
 

@@ -246,7 +246,7 @@ class WebPanel:
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
         self._runner = runner
-        logger.info("Вебпанель запущена: http://%s:%d/admin/embed-constructor", self.host, self.port)
+        logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
 
     async def stop(self) -> None:
         if self._runner is not None:
@@ -275,6 +275,8 @@ class WebPanel:
         if not host:
             return False
         if host == self.host or host in _LOCAL_HOSTS:
+            return True
+        if host == (request.host or "").split(":")[0]:
             return True
         for entry in (self.public_url or "").split(","):
             entry = entry.strip()
