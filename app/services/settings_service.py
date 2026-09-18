@@ -28,9 +28,19 @@ class SettingsService:
         return settings
 
     async def update(self, guild_id: int, **kwargs: Any) -> None:
+        """Обновляет переданные колонки. ``None`` — осознанная очистка значения."""
         for column, value in kwargs.items():
-            if value is not None:
-                await self._repo.set(guild_id, column, value)
+            await self._repo.set(guild_id, column, value)
+
+    async def set_blocked_words(self, guild_id: int, words: list[str]) -> list[str]:
+        """Полностью заменяет список запрещённых слов (нормализует и убирает дубли)."""
+        normalized: list[str] = []
+        for word in words:
+            clean = str(word).strip().lower()
+            if clean and clean not in normalized:
+                normalized.append(clean)
+        await self._repo.set(guild_id, "blocked_words", json.dumps(normalized, ensure_ascii=False))
+        return normalized
 
     async def blocked_words(self, guild_id: int) -> list[str]:
         settings = await self._repo.get(guild_id)

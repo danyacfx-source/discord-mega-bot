@@ -5,6 +5,7 @@ import logging
 import re
 import secrets
 import time
+import tracemalloc
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +29,18 @@ _LOGIN_WINDOW = 60.0
 _LOGIN_LIMIT = 5
 _SESSION_TTL = 24 * 3600
 _TOKEN_FILE = ".panel-token"
+_SETTING_COLUMNS = (
+    "welcome_channel_id",
+    "farewell_channel_id",
+    "log_channel_id",
+    "ticket_category_id",
+    "member_log_channel_id",
+    "message_log_channel_id",
+    "voice_log_channel_id",
+    "mod_log_channel_id",
+    "bot_log_channel_id",
+    "donation_channel_id",
+)
 
 
 def _trim_embeds(raw: Any) -> list[dict[str, Any]]:
@@ -208,9 +221,14 @@ class WebPanel:
     def _create_app(self) -> web.Application:
         app = web.Application()
         app.router.add_get("/", self._redirect_index)
+        app.router.add_get("/admin", self._serve_index)
+        app.router.add_get("/admin/", self._serve_index)
         app.router.add_get("/admin/embed-constructor", self._serve_index)
         app.router.add_post("/api/login", self._api_login)
         app.router.add_get("/api/status", self._authorized(self._api_status))
+        app.router.add_get("/api/overview", self._authorized(self._api_overview))
+        app.router.add_get("/api/settings", self._authorized(self._api_settings_get))
+        app.router.add_post("/api/settings", self._authorized(self._api_settings_post))
         app.router.add_get("/api/bot/channels", self._authorized(self._api_bot_channels))
         app.router.add_post("/api/bot/send", self._authorized(self._api_bot_send))
         app.router.add_post("/api/bot/edit", self._authorized(self._api_bot_edit))
@@ -280,7 +298,7 @@ class WebPanel:
     # --- страницы ---
 
     async def _redirect_index(self, request: web.Request) -> web.Response:
-        raise web.HTTPFound("/admin/embed-constructor")
+        raise web.HTTPFound("/admin")
 
     async def _serve_index(self, request: web.Request) -> web.Response:
         html = self._index_html
@@ -323,10 +341,30 @@ class WebPanel:
         return self._json(data)
 
     async def _api_bot_channels(self, request: web.Request) -> web.Response:
+        return self._json({"ok": True, "channels": self._channel_options()})
+
+    # --- API: админка (обзор / настройки) ---
+
+    @staticmethod
+    def _human_uptime(seconds: int) -> str:
+        days, rem = divmod(max(seconds, 0), 86400)
+        hours, rem = divmod(rem, 3600)
+        minutes = rem // 60
+        if days:
+            return f"{days} д {hours} ч {minutes} мин"
+        if hours:
+            return f"{hours} ч {minutes} мин"
+        return f"{minutes} мин"
+
+    def _primary_guild(self) -> discord.Guild | None:
+        return self.bot.guilds[0] if self.bot.guilds else None
+
+    def _channel_options(self) -> list[dict[str, Any]]:
         channels: list[dict[str, Any]] = []
         for guild in self.bot.guilds:
+            me = guild.me
             for channel in guild.text_channels:
-                if not channel.permissions_for(guild.me).send_messages:
+                if me is not None and not channel.permissions_for(me).send_messages:
                     continue
                 channels.append(
                     {
@@ -337,7 +375,91 @@ class WebPanel:
                     }
                 )
         channels.sort(key=lambda item: (item["category"], item["name"]))
-        return self._json({"ok": True, "channels": channels})
+        return channels
+
+    def _category_options(self) -> list[dict[str, Any]]:
+        options: list[dict[str, Any]] = []
+        for guild in self.bot.guilds:
+            for category in guild.categories:
+                options.append({"id": str(category.id), "name": category.name})
+        options.sort(key=lambda item: item["name"])
+        return options
+
+    async def _api_overview(self, request: web.Request) -> web.Response:
+        bot = self.bot
+        online = bot.is_ready() and bot.user is not None
+        data: dict[str, Any] = {"ok": True, "bot_online": online}
+        if online:
+            data["bot_name"] = bot.user.name  # type: ignore[union-attr]
+        seconds = int(bot.uptime.total_seconds())
+        data["uptime_seconds"] = seconds
+        data["uptime"] = self._human_uptime(seconds)
+        latency = bot.latency
+        data["latency_ms"] = round(latency * 1000) if latency and latency > 0 else 0
+        if tracemalloc.is_tracing():
+            current, peak = tracemalloc.get_traced_memory()
+            data["mem_mb"] = round(current / 1024 / 1024, 1)
+            data["mem_peak_mb"] = round(peak / 1024 / 1024, 1)
+        guild = self._primary_guild()
+        if guild is not None:
+            data["guild"] = {
+                "id": str(guild.id),
+                "name": guild.name,
+                "members": guild.member_count or len(guild.members),
+                "online": sum(1 for member in guild.members if member.status is not discord.Status.offline),
+                "channels": len(guild.channels),
+                "roles": len(guild.roles),
+            }
+        return self._json(data)
+
+    async def _api_settings_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.settings  # type: ignore[union-attr]
+        settings = await service.get(guild.id)
+        values = {column: (str(settings[column]) if settings.get(column) else "") for column in _SETTING_COLUMNS}
+        return self._json(
+            {
+                "ok": True,
+                "guild_id": str(guild.id),
+                "guild_name": guild.name,
+                "settings": values,
+                "automod_enabled": bool(settings.get("automod_enabled")),
+                "blocked_words": await service.blocked_words(guild.id),
+                "channels": self._channel_options(),
+                "categories": self._category_options(),
+            }
+        )
+
+    async def _api_settings_post(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        service = self.bot.services.settings  # type: ignore[union-attr]
+        values: dict[str, Any] = {}
+        for column in _SETTING_COLUMNS:
+            if column not in payload:
+                continue
+            raw = payload.get(column)
+            if raw in (None, "", 0):
+                values[column] = None
+                continue
+            try:
+                values[column] = int(raw)
+            except (TypeError, ValueError):
+                return self._json({"ok": False, "error": f"Некорректный ID канала: {column}"}, status=400)
+        if "automod_enabled" in payload:
+            values["automod_enabled"] = 1 if payload.get("automod_enabled") else 0
+        if values:
+            await service.update(guild.id, **values)
+        if "blocked_words" in payload:
+            words = payload.get("blocked_words") or []
+            if isinstance(words, str):
+                words = re.split(r"[\n,]+", words)
+            await service.set_blocked_words(guild.id, list(words))
+        return self._json({"ok": True})
 
     # --- API: отправка через бота ---
 

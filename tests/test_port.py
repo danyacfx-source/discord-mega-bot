@@ -327,7 +327,11 @@ async def test_webpanel_auth_and_status(tmp_path):
         async with TestClient(server) as client:
             page = await client.get("/admin/embed-constructor")
             assert page.status == 200
-            assert "Embed Constructor" in await page.text()
+            assert "Админка" in await page.text()
+
+            admin_page = await client.get("/admin")
+            assert admin_page.status == 200
+            assert "Админка" in await admin_page.text()
 
             rejected = await client.get("/api/status")
             assert rejected.status == 401
@@ -340,6 +344,16 @@ async def test_webpanel_auth_and_status(tmp_path):
 
             channels_resp = await client.get("/api/bot/channels", headers=headers)
             assert (await channels_resp.json())["channels"] == []
+
+            overview_resp = await client.get("/api/overview", headers=headers)
+            assert overview_resp.status == 200
+            overview = await overview_resp.json()
+            assert overview["ok"] is True and overview["bot_online"] is False
+            assert overview["latency_ms"] == 0 and overview["uptime_seconds"] >= 0
+
+            settings_resp = await client.get("/api/settings", headers=headers)
+            assert settings_resp.status == 400
+            assert (await settings_resp.json())["ok"] is False
 
             bad_url = await client.post("/api/webhook/send", headers=headers, json={"webhook_url": "https://example.com/1/2"})
             assert bad_url.status == 400

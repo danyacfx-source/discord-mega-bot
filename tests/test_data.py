@@ -7,6 +7,7 @@ from app.db.database import Database
 from app.db.settings_repository import SettingsRepository
 from app.db.tickets_repository import TicketsRepository
 from app.db.warns_repository import WarnsRepository
+from app.services.settings_service import SettingsService
 
 
 @pytest.fixture
@@ -36,6 +37,24 @@ async def test_settings_repository(db):
     updated = await repo.get(111)
     assert updated["welcome_channel_id"] == 555
     assert updated["mod_log_channel_id"] == 666
+
+
+@pytest.mark.asyncio
+async def test_settings_service_clears_values(db):
+    service = SettingsService(SettingsRepository(db))
+    await service.update(111, welcome_channel_id=555)
+    assert (await service.get(111))["welcome_channel_id"] == 555
+
+    await service.update(111, welcome_channel_id=None)
+    assert (await service.get(111))["welcome_channel_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_settings_service_blocked_words(db):
+    service = SettingsService(SettingsRepository(db))
+    words = await service.set_blocked_words(111, [" Spam ", "spam", "Реклама"])
+    assert words == ["spam", "реклама"]
+    assert await service.blocked_words(111) == ["spam", "реклама"]
 
 
 @pytest.mark.asyncio
