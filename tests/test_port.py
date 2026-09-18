@@ -388,6 +388,35 @@ async def test_webpanel_password_login(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_upload(tmp_path):
+    import aiohttp
+
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+
+            fd = aiohttp.FormData()
+            png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+            fd.add_field("file", png, filename="kartinka.png", content_type="image/png")
+            resp = await client.post("/api/upload", data=fd, headers=headers)
+            assert resp.status == 200
+            body = await resp.json()
+            assert body["ok"] is True and body["name"].endswith(".png")
+            assert body["absolute_url"].endswith("/uploads/" + body["name"])
+
+            got = await client.get("/uploads/" + body["name"])
+            assert got.status == 200
+            assert "image/png" in got.headers.get("Content-Type", "")
+
+            bad = aiohttp.FormData()
+            bad.add_field("file", b"hello", filename="a.txt", content_type="text/plain")
+            rejected = await client.post("/api/upload", data=bad, headers=headers)
+            assert rejected.status == 400
+
+
+@pytest.mark.asyncio
 async def test_overlay_server(tmp_path):
     bot = _panel_bot(tmp_path, overlay_token="overlay-secret-token-32chars")
     overlay = Overlay(bot)

@@ -46,6 +46,9 @@
   textarea { resize: vertical; min-height: 64px; }
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; min-width: 0; }
+  .inp-group { display: flex; gap: 6px; }
+  .inp-group input { flex: 1; min-width: 0; }
+  .inp-group .btn { flex: 0 0 auto; padding: 9px 12px; }
   .checks { display: flex; gap: 18px; align-items: center; margin-top: 10px; }
   .checks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 13px; }
   .btn { border: 0; border-radius: 6px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; color: #fff; }
@@ -210,12 +213,18 @@
 
           <div class="row">
             <div>
-              <label>Миниатюра (URL)</label>
-              <input id="f_thumb" type="url" oninput="renderPreview()" />
+              <label>Миниатюра</label>
+              <div class="inp-group">
+                <input id="f_thumb" type="url" placeholder="URL или Загрузить" oninput="renderPreview()" />
+                <button class="btn" type="button" onclick="pickFile('thumb')">Загрузить</button>
+              </div>
             </div>
             <div>
-              <label>Изображение (URL)</label>
-              <input id="f_image" type="url" oninput="renderPreview()" />
+              <label>Изображение</label>
+              <div class="inp-group">
+                <input id="f_image" type="url" placeholder="URL или Загрузить" oninput="renderPreview()" />
+                <button class="btn" type="button" onclick="pickFile('image')">Загрузить</button>
+              </div>
             </div>
           </div>
 
@@ -313,6 +322,42 @@ async function api(path, payload) {
   let data = null;
   try { data = await r.json(); } catch (e) {}
   return { status: r.status, data };
+}
+
+async function uploadFile(file) {
+  if (!TOKEN) {
+    if (!await doLogin()) { toast("Нужен пароль панели", false); return null; }
+  }
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "X-Panel-Token": TOKEN },
+    body: fd,
+  });
+  let d = null;
+  try { d = await r.json(); } catch (e) {}
+  if (!r.ok || !d || !d.ok) {
+    toast("Ошибка загрузки: " + ((d && d.error) || r.status), false);
+    return null;
+  }
+  return d.absolute_url;
+}
+
+function pickFile(kind) {
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "image/png,image/jpeg,image/gif,image/webp";
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    const url = await uploadFile(file);
+    if (!url) return;
+    (kind === "image" ? $("f_image") : $("f_thumb")).value = url;
+    renderPreview();
+    toast("Картинка загружена", true);
+  };
+  inp.click();
 }
 
 /* --- навигация --- */

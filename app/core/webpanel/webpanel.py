@@ -6,6 +6,7 @@ import re
 import secrets
 import time
 import tracemalloc
+import uuid
 from collections import defaultdict, deque
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +30,9 @@ _LOGIN_WINDOW = 60.0
 _LOGIN_LIMIT = 5
 _SESSION_TTL = 24 * 3600
 _TOKEN_FILE = ".panel-token"
+_UPLOAD_DIRNAME = "uploads"
+_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 _SETTING_COLUMNS = (
     "welcome_channel_id",
     "farewell_channel_id",
@@ -200,6 +204,7 @@ class WebPanel:
         self.port = config.panel_port
         self.password = config.panel_password
         self.public_url = config.panel_public_url
+        self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
         self._static_token: str | None = None if self.password else self._load_static_token()
         self._sessions: dict[str, float] = {}
@@ -229,6 +234,9 @@ class WebPanel:
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
         app.router.add_get("/api/settings", self._authorized(self._api_settings_get))
         app.router.add_post("/api/settings", self._authorized(self._api_settings_post))
+        app.router.add_post("/api/upload", self._authorized(self._api_upload))
+        self._uploads_dir.mkdir(parents=True, exist_ok=True)
+        app.router.add_static("/uploads", str(self._uploads_dir), show_index=False)
         app.router.add_get("/api/bot/channels", self._authorized(self._api_bot_channels))
         app.router.add_post("/api/bot/send", self._authorized(self._api_bot_send))
         app.router.add_post("/api/bot/edit", self._authorized(self._api_bot_edit))
@@ -466,6 +474,39 @@ class WebPanel:
                 words = re.split(r"[\n,]+", words)
             await service.set_blocked_words(guild.id, list(words))
         return self._json({"ok": True})
+
+    # --- API: загрузка изображений для эмбедов ---
+
+    async def _api_upload(self, request: web.Request) -> web.Response:
+        reader = await request.multipart()
+        field = await reader.next()
+        if field is None:
+            return self._json({"ok": False, "error": "Файл не передан"}, status=400)
+        ext = Path(field.filename or "").suffix.lower()
+        if ext not in _UPLOAD_EXTS:
+            return self._json(
+                {"ok": False, "error": "Допустимы только PNG, JPG, GIF, WEBP"}, status=400
+            )
+        data = b""
+        while len(data) <= _MAX_UPLOAD_BYTES:
+            chunk = await field.read_chunk()
+            if not chunk:
+                break
+            data += chunk
+        if not data:
+            return self._json({"ok": False, "error": "Пустой файл"}, status=400)
+        if len(data) > _MAX_UPLOAD_BYTES:
+            return self._json({"ok": False, "error": "Файл больше 8 МБ"}, status=400)
+        self._uploads_dir.mkdir(parents=True, exist_ok=True)
+        name = uuid.uuid4().hex + ext
+        (self._uploads_dir / name).write_bytes(data)
+        base = self._public_base(request)
+        return self._json({"ok": True, "name": name, "url": f"/uploads/{name}", "absolute_url": f"{base}/uploads/{name}"})
+
+    @staticmethod
+    def _public_base(request: web.Request) -> str:
+        proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+        return f"{proto}://{request.host}"
 
     # --- API: отправка через бота ---
 
