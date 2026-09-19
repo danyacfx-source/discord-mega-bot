@@ -661,6 +661,12 @@ async function loadMonitorSparks() {
   drawSpark("spark_lat", d.latency || [], "#23a55a");
   drawSpark("spark_mem", d.mem || [], "#f2780d");
   drawSpark("spark_online", d.online || [], "#5865f2");
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const lastOf = (arr) => Array.isArray(arr) && arr.length ? arr[arr.length - 1].v : null;
+  set("spark_lat_num", d.latency_ms != null ? d.latency_ms + " мс" : (lastOf(d.latency) != null ? lastOf(d.latency) + " мс" : "—"));
+  set("spark_mem_num", d.mem_mb != null ? d.mem_mb + " МБ" : (lastOf(d.mem) != null ? lastOf(d.mem) + " МБ" : "—"));
+  const onl = d.guild && d.guild.online != null ? d.guild.online : lastOf(d.online);
+  set("spark_online_num", onl != null ? String(onl) : "—");
   const last = $("mon_last");
   if (last) last.textContent = r.status === 200 ? "· обновлено " + new Date().toLocaleTimeString("ru-RU") : "";
 }
