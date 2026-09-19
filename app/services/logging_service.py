@@ -1,4 +1,4 @@
-"""Сервис логирования событий сервера."""
+"""Сервис логирования событий сервера в веб-ленту (вместо Discord-каналов)."""
 from __future__ import annotations
 
 import logging
@@ -6,59 +6,48 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from app.core import embeds
-
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
     from app.services.settings_service import SettingsService
 
 logger = logging.getLogger("bot.services")
 
-_CATEGORY_COLUMNS: dict[str, str] = {
-    "bot": "bot_log_channel_id",
-    "member": "member_log_channel_id",
-    "message": "message_log_channel_id",
-    "voice": "voice_log_channel_id",
-    "mod": "mod_log_channel_id",
-}
+_AUDIT_LOGGER = logger.getChild("audit")
+_AUDIT_LOGGER.setLevel(logging.INFO)
+
+
+def _embed_to_text(embed: discord.Embed) -> str:
+    """Превращает эмбед в компактный текст для веб-ленты."""
+    parts: list[str] = []
+    if embed.title:
+        parts.append(embed.title)
+    if embed.description:
+        parts.append(embed.description)
+    for field in embed.fields:
+        value = field.value.replace("\n", " ")
+        parts.append(f"{field.name}: {value}")
+    text = "\n".join(p for p in parts if p)
+    return text[:2000] if text else "(пустое событие)"
 
 
 class LoggingService:
+    """Записывает аудит-события в веб-ленту вместо отправки в Discord-каналы."""
+
     def __init__(self, settings: SettingsService, bot: MegaBot) -> None:
         self._settings = settings
         self._bot = bot
 
     async def target_channel(
         self, guild: discord.Guild, *, category: str | None = None
-    ) -> discord.TextChannel | None:
-        settings = await self._settings.get(guild.id)
-        column = _CATEGORY_COLUMNS.get(category or "")
-        channel_id = settings.get(column) if column else None
-        if not channel_id:
-            channel_id = getattr(self._bot.config, column, None) if column else None
-        if not channel_id:
-            channel_id = settings.get("log_channel_id")
-        if not channel_id:
-            channel_id = self._bot.config.bot_log_channel_id
-        if not channel_id:
-            return None
-        channel = guild.get_channel(channel_id)
-        if channel is not None and isinstance(channel, discord.TextChannel):
-            return channel
-        try:
-            fetched = await guild.fetch_channel(channel_id)
-        except discord.HTTPException:
-            return None
-        return fetched if isinstance(fetched, discord.TextChannel) else None
+    ) -> None:
+        """Сохраняет совместимый интерфейс, но реальные каналы не используются."""
+        return
 
     async def send_embed(self, guild: discord.Guild, embed: discord.Embed, *, category: str | None = None) -> None:
-        channel = await self.target_channel(guild, category=category)
-        if channel is None:
-            return
-        try:
-            await channel.send(embed=embed)
-        except discord.HTTPException:
-            logger.debug("Не удалось записать лог-событие", exc_info=True)
+        cat = category or "general"
+        text = _embed_to_text(embed)
+        guild_name = guild.name if guild is not None else "?"
+        self._emit(cat, f"[{guild_name}] {text}")
 
     async def log_event(
         self,
@@ -69,12 +58,15 @@ class LoggingService:
         color: discord.Colour | None = None,
         author: discord.Member | discord.User | None = None,
     ) -> None:
-        embed = discord.Embed(description=description, color=color or discord.Color.dark_embed())
-        embed.set_author(name=guild.name, icon_url=guild.icon.url if guild.icon else None)
-        embed.title = title
+        parts: list[str] = []
+        if title:
+            parts.append(title)
+        if description:
+            parts.append(description)
         if author is not None:
-            embed.set_footer(text=f"Инициатор: {author} ({author.id})")
-        await self.send_embed(guild, embed)
+            parts.append(f"Инициатор: {author} ({author.id})")
+        guild_name = guild.name if guild is not None else "?"
+        self._emit("general", f"[{guild_name}] " + (" | ".join(parts) if parts else "(пустое событие)"))
 
     async def log_mod_action(
         self,
@@ -85,9 +77,20 @@ class LoggingService:
         reason: str = "",
         description: str | None = None,
     ) -> None:
-        embed = embeds.info(f"Модерация: {action}", description)
-        embed.add_field(name="Нарушитель", value=f"{target.mention} ({target.id})", inline=True)
-        embed.add_field(name="Модератор", value=f"{moderator.mention} ({moderator.id})", inline=True)
+        parts: list[str] = []
+        if description:
+            parts.append(description)
+        parts.append(f"Модерация: {action}")
+        parts.append(f"Нарушитель: {target} ({target.id})")
+        parts.append(f"Модератор: {moderator} ({moderator.id})")
         if reason:
-            embed.add_field(name="Причина", value=reason, inline=False)
-        await self.send_embed(guild, embed, category="mod")
+            parts.append(f"Причина: {reason}")
+        guild_name = guild.name if guild is not None else "?"
+        self._emit("mod", f"[{guild_name}] " + " | ".join(parts))
+
+    def _emit(self, category: str, text: str) -> None:
+        """Пишет событие в логгер bot.audit.<category> — его ловит веб-лента панели."""
+        try:
+            _AUDIT_LOGGER.getChild(category).info(text)
+        except Exception:
+            logger.debug("Не удалось записать аудит-событие в ленту", exc_info=True)

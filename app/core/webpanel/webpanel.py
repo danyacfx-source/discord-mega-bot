@@ -29,6 +29,7 @@ logger = logging.getLogger("bot.webpanel")
 
 _INDEX_PATH = Path(__file__).parent / "index.html"
 _SCRIPT_PATH = Path(__file__).parent / "panel.js"
+_LOGS_PAGE_PATH = Path(__file__).parent / "logs.html"
 _WEBHOOK_RE = re.compile(r"^https://(?:discord\.com|discordapp\.com)/api/webhooks/(\d+)/([A-Za-z0-9_\-]+)$")
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
 _MAX_EMBEDS = 10
@@ -62,7 +63,7 @@ _CSP = (
     "form-action 'self'; "
     "frame-ancestors 'none'"
 )
-_LOG_RING_SIZE = 500
+_LOG_RING_SIZE = 2000
 _MAX_COMPONENT_ROWS = 5
 _MAX_COMPONENT_PER_ROW = 5
 _MAX_BUTTON_LABEL = 80
@@ -336,6 +337,7 @@ class WebPanel:
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
         self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
+        self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._static_token: str | None = None if self.password else self._load_static_token()
         self._sessions: dict[str, float] = {}
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
@@ -368,6 +370,7 @@ class WebPanel:
         app.router.add_get("/admin", self._serve_index)
         app.router.add_get("/admin/", self._serve_index)
         app.router.add_get("/admin/embed-constructor", self._serve_index)
+        app.router.add_get("/logs", self._serve_logs_page)
         app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
         app.router.add_post("/api/logout", self._authorized(self._api_logout))
@@ -545,6 +548,14 @@ class WebPanel:
 
     async def _serve_index(self, request: web.Request) -> web.Response:
         html = self._index_html
+        if self.password:
+            html = html.replace("__PANEL_TOKEN__", "")
+        else:
+            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
+        return web.Response(text=html, content_type="text/html", charset="utf-8")
+
+    async def _serve_logs_page(self, request: web.Request) -> web.Response:
+        html = self._logs_html or "<h1>/logs</h1><p>Файл logs.html не найден.</p>"
         if self.password:
             html = html.replace("__PANEL_TOKEN__", "")
         else:
@@ -1797,10 +1808,17 @@ class WebPanel:
     async def _api_logs(self, request: web.Request) -> web.Response:
         limit = request.query.get("n", "200")
         try:
-            limit = max(1, min(int(limit), 500))
+            limit = max(1, min(int(limit), 1000))
         except (TypeError, ValueError):
             limit = 200
-        entries = self._ring.snapshot(limit) if self._ring is not None else []
+        level = request.query.get("level", "")
+        cat = request.query.get("cat", "")
+        audit_only = request.query.get("audit", "").lower() in ("1", "true", "yes")
+        entries = (
+            self._ring.snapshot(limit, level=level, cat=cat, audit_only=audit_only)
+            if self._ring is not None
+            else []
+        )
         return self._json({"ok": True, "count": len(entries), "logs": entries})
 
     def _require_http(self) -> aiohttp.ClientSession:

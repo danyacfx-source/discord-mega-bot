@@ -720,6 +720,125 @@ async def test_webpanel_login_rate_limit(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_logs_page(tmp_path):
+    """Страница /logs отдаёт HTML, содержит фильтры и JS-токен-подстановку."""
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            page = await client.get("/logs")
+            assert page.status == 200
+            text = await page.text()
+            assert "Логи бота" in text
+            assert "__PANEL_TOKEN__" not in text or panel._static_token in text
+
+
+@pytest.mark.asyncio
+async def test_logging_service_writes_to_web_ring(tmp_path):
+    """Аудит-события LoggingService попадают в веб-ленту (а не в Discord-канал)."""
+    import logging
+
+    from app.core.webpanel.log_ring import RingBufferHandler
+    from app.services.logging_service import LoggingService
+
+    ring = RingBufferHandler(50)
+    root = logging.getLogger()
+    root.addHandler(ring)
+    try:
+        bot = _panel_bot(tmp_path)
+        # LoggingService требует SettingsService + bot; подменяем settings простым объектом.
+        class _FakeSettings:
+            async def get(self, guild_id):
+                return {}
+
+        svc = LoggingService(_FakeSettings(), bot)
+        guild = discord.Object(id=111)
+        guild.name = "Тест-сервер"
+        embed = discord.Embed(title="Сообщение удалено", description="text")
+        await svc.send_embed(guild, embed, category="message")
+
+        entries = ring.snapshot()
+        assert len(entries) >= 1
+        entry = entries[-1]
+        assert entry["cat"] == "message"
+        assert entry["audit"] == "1"
+        assert "Сообщение удалено" in entry["msg"]
+    finally:
+        root.removeHandler(ring)
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_logs_filters(tmp_path):
+    """/api/logs поддерживает фильтры по категории и аудиту."""
+    import logging
+
+    from app.core.webpanel.log_ring import RingBufferHandler
+
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    ring = RingBufferHandler(50)
+    panel._ring = ring
+    root = logging.getLogger()
+    root.addHandler(ring)
+    try:
+        logging.getLogger("bot.services.audit.member").info("участник зашёл [Тест] x")
+        logging.getLogger("bot.webpanel").warning("технический warning")
+
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                all_resp = await client.get("/api/logs", headers=headers)
+                body = await all_resp.json()
+                assert body.get("ok") is True
+                assert body["count"] >= 2
+
+                audit_resp = await client.get("/api/logs?audit=1", headers=headers)
+                audit_body = await audit_resp.json()
+                assert all(e["audit"] == "1" for e in audit_body["logs"])
+                assert len(audit_body["logs"]) == 1
+                assert audit_body["logs"][0]["cat"] == "member"
+
+                cat_resp = await client.get("/api/logs?cat=sys", headers=headers)
+                cat_body = await cat_resp.json()
+                assert all(e["cat"] == "sys" for e in cat_body["logs"])
+                assert any("технический warning" in e["msg"] for e in cat_body["logs"])
+    finally:
+        root.removeHandler(ring)
+
+
+@pytest.mark.asyncio
+async def test_logging_service_does_not_use_discord_channels(tmp_path):
+    """LoggingService.send_embed не отправляет ничего в Discord-канал."""
+    from app.services.logging_service import LoggingService
+
+    bot = _panel_bot(tmp_path)
+    sent = []
+
+    class _FakeSettings:
+        async def get(self, guild_id):
+            return {"log_channel_id": 555}
+
+    svc = LoggingService(_FakeSettings(), bot)
+
+    class _Guild:
+        name = "Тест-сервер"
+        id = 111
+
+        def get_channel(self, channel_id):
+            class _Ch:
+                async def send(self, *args, **kwargs):
+                    sent.append((args, kwargs))
+                    return discord.Object(id=1)
+
+            return _Ch()
+
+    guild = _Guild()
+    embed = discord.Embed(title="Событие", description="описание")
+    await svc.send_embed(guild, embed, category="mod")
+    assert sent == [], "LoggingService не должен слать в Discord-канал"
+
+
+@pytest.mark.asyncio
 async def test_webpanel_uploads_list_and_delete(tmp_path):
     import aiohttp
 
