@@ -114,6 +114,8 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .module-card .kv b{color:var(--text);font-weight:600}
 .mod-env{font-size:10px;color:var(--muted);margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:1px 7px}
 #logs_box{font-family:Consolas,monospace;font-size:12px;line-height:1.55;overflow:auto;max-height:60vh}
+#audit_box{font-family:Consolas,monospace;font-size:12px;line-height:1.55;overflow:auto;max-height:60vh}
+#audit_box .log-cat{display:inline-block;padding:0 6px;margin-right:6px;border-radius:5px;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#ff8a80;background:rgba(255,61,46,.1);border:1px solid rgba(255,61,46,.35)}
 .log-line{display:flex;gap:10px;padding:3px 6px;border-radius:6px}
 .log-line:hover{background:var(--card2)}
 .log-t{color:var(--muted);flex:0 0 130px}
@@ -191,6 +193,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
       <button class="nav-item" data-section="test"><span>🧪</span><span>Тест</span></button>
       <button class="nav-item" data-section="files"><span>🖼</span><span>Файлы</span></button>
       <button class="nav-item" data-section="logs"><span>📄</span><span>Логи</span></button>
+      <button class="nav-item" data-section="audit"><span>👁</span><span>Логи Discord</span></button>
       <button class="nav-item" data-section="backup"><span>💾</span><span>Бэкап</span></button>
     </nav>
     <div class="theme-block">
@@ -433,6 +436,32 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
           </div>
           <div id="logs_box"><div class="muted small">Загрузка…</div></div>
           <div class="muted small" id="logs_last" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+      <section id="sec-audit" class="section">
+        <div class="card">
+          <div class="row-inline" style="justify-content:space-between">
+            <h3 class="sec" style="margin:0">👁 Логи Discord</h3>
+            <div class="row-inline" style="margin:0">
+              <select id="audit_level" style="width:auto" onchange="loadAudit()">
+                <option value="">Все категории</option>
+                <option value="bot">Бот</option>
+                <option value="member">Участники</option>
+                <option value="message">Сообщения</option>
+                <option value="voice">Голосовые</option>
+                <option value="mod">Модерация</option>
+                <option value="general">Общее</option>
+              </select>
+              <label class="toggle-holder" style="margin:0;font-size:13px">
+                <span class="switch"><input type="checkbox" id="audit_auto" checked><span class="slider"></span></span>
+                <span>Авто</span>
+              </label>
+              <button class="btn op small" type="button" onclick="loadAudit()">⟳ Обновить</button>
+            </div>
+          </div>
+          <div id="audit_box"><div class="muted small">Загрузка…</div></div>
+          <div class="muted small" id="audit_last" style="margin-top:8px"></div>
         </div>
       </section>
 

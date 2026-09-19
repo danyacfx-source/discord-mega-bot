@@ -3,7 +3,7 @@ const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
-const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", backup: "Бэкап"};
+const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", backup: "Бэкап"};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -22,6 +22,7 @@ let btnRows = [[]];
 let settingsLoaded = false;
 let settingsData = null;
 let logsTimer = null;
+let auditTimer = null;
 let overviewTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -157,6 +158,8 @@ function switchSection(name) {
   if (name === "embed") renderPreview();
   if (name === "logs") { loadLogs(); startLogsTimer(); }
   else stopLogsTimer();
+  if (name === "audit") { loadAudit(); startAuditTimer(); }
+  else stopAuditTimer();
   if (name === "files") loadFiles();
   if (name === "overview") startOverviewTimer();
   else stopOverviewTimer();
@@ -1176,6 +1179,41 @@ function startLogsTimer() {
 }
 function stopLogsTimer() {
   if (logsTimer) { clearInterval(logsTimer); logsTimer = null; }
+}
+
+/* --- логи Discord (события) --- */
+const AUDIT_CATS = {bot: "Бот", member: "Участники", message: "Сообщения", voice: "Голосовые", mod: "Модерация", general: "Общее"};
+async function loadAudit() {
+  const r = await api("/api/logs?n=500&audit=1");
+  const logs = (r.data && r.data.logs) || [];
+  const cat = $("audit_level").value;
+  const box = $("audit_box");
+  box.innerHTML = "";
+  if (!r.data.ok) { box.appendChild(tag("div", "muted", "Логи недоступны")); return; }
+  const filtered = cat ? logs.filter((l) => l.cat === cat) : logs;
+  if (filtered.length === 0) box.appendChild(tag("div", "muted", "Событий нет"));
+  filtered.slice(-300).forEach((l) => {
+    const line = tag("div", "log-line");
+    const t = tag("span", "log-t", escapeHtml(l.t || ""));
+    const c = tag("span", "log-cat", escapeHtml(AUDIT_CATS[l.cat] || l.cat || ""));
+    const m = tag("span", "log-msg", escapeHtml(l.msg));
+    line.append(t, c, m);
+    box.appendChild(line);
+  });
+  if (filtered.length) box.scrollTop = box.scrollHeight;
+  $("audit_last").textContent = "Показано " + filtered.length + " из " + r.data.count + " · обновлено " + new Date().toLocaleTimeString("ru-RU");
+}
+function startAuditTimer() {
+  stopAuditTimer();
+  auditTimer = setInterval(() => {
+    if (!$("sec-audit").classList.contains("active")) return;
+    if (document.hidden) return;
+    if (!$("audit_auto").checked) return;
+    loadAudit();
+  }, 5000);
+}
+function stopAuditTimer() {
+  if (auditTimer) { clearInterval(auditTimer); auditTimer = null; }
 }
 
 /* --- инициализация --- */
