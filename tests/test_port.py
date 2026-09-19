@@ -31,6 +31,14 @@ from app.services.temp_voice_service import TempVoiceService
 from app.services.twitch_service import TwitchService
 
 
+def test_panel_js_token_header():
+    from app.core.webpanel.webpanel import _SCRIPT_PATH
+
+    body = _SCRIPT_PATH.read_text(encoding="utf-8")
+    assert '"X-Panel-Token"' in body
+    assert '"X-Bot-Token"' not in body
+
+
 def test_config_new_options(tmp_path):
     env = tmp_path / ".env"
     env.write_text(

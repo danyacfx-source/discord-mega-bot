@@ -44,7 +44,7 @@ function toast(msg, ok) {
 }
 
 async function api(url, body, method) {
-  const opts = { method: method || (body ? "POST" : "GET"), headers: { "X-Bot-Token": TOKEN } };
+  const opts = { method: method || (body ? "POST" : "GET"), headers: { "X-Panel-Token": TOKEN } };
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   try {
     const r = await fetch(url, opts);
@@ -99,7 +99,7 @@ async function uploadFile(file, targetId) {
   if (file.size > 8 * 1024 * 1024) return toast("Файл больше 8 МБ", false);
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch("/api/upload", { method: "POST", headers: { "X-Bot-Token": TOKEN }, body: fd });
+  const r = await fetch("/api/upload", { method: "POST", headers: { "X-Panel-Token": TOKEN }, body: fd });
   const d = await r.json().catch(() => ({}));
   if (r.status === 401) {
     if (PANEL_LOGIN) showLogin(); else if (TOKEN) location.reload();
