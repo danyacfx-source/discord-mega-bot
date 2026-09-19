@@ -40,6 +40,9 @@ class GiveawayService(BaseService):
     async def active_with_message(self) -> list[dict[str, Any]]:
         return await self._repo.active_with_message()
 
+    async def recent_for_guild(self, guild_id: int, limit: int = 50) -> list[dict[str, Any]]:
+        return await self._repo.recent_for_guild(guild_id, limit)
+
     async def embed(self, giveaway: dict[str, Any]) -> discord.Embed:
         from datetime import datetime
 

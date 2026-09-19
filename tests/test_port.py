@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
@@ -23,10 +23,12 @@ from app.db.birthdays_repository import BirthdaysRepository
 from app.db.database import Database
 from app.db.donations_repository import DonationsRepository
 from app.db.kv_repository import KvRepository
+from app.db.scheduled_repository import ScheduledRepository
 from app.db.temp_voices_repository import TempVoicesRepository
 from app.services.birthday_service import BirthdayService
 from app.services.donation_service import DonationService
 from app.services.kick_service import KickService
+from app.services.scheduler_service import ScheduledMessagesService
 from app.services.temp_voice_service import TempVoiceService
 from app.services.twitch_service import TwitchService
 
@@ -201,6 +203,67 @@ async def test_donations_repository(tmp_path):
         assert row["total"] == 1
     finally:
         await db.close()
+
+
+@pytest.mark.asyncio
+async def test_scheduled_messages_repository(tmp_path):
+    db = Database(str(tmp_path / "scheduled.db"))
+    await db.connect()
+    try:
+        repo = ScheduledRepository(db)
+        future = datetime.now(UTC) + timedelta(minutes=5)
+        sid = await repo.create(7, 11, 99, "привет", "", future)
+        row = await repo.get(sid)
+        assert row is not None and row["done"] == 0
+        assert await repo.upcoming(50)
+        assert [r["id"] for r in await repo.due_up_to(future + timedelta(seconds=1))] == [sid]
+        assert [r["id"] for r in await repo.due_up_to(future - timedelta(seconds=1))] == []
+        assert await repo.recent(50)
+        await repo.mark_done(sid)
+        assert (await repo.get(sid))["done"] == 1
+        assert await repo.delete(sid)
+        assert await repo.get(sid) is None
+    finally:
+        await db.close()
+
+
+@pytest.mark.asyncio
+async def test_scheduled_messages_service(tmp_path):
+    db = Database(str(tmp_path / "sched_service.db"))
+    await db.connect()
+    try:
+        repo = ScheduledRepository(db)
+        service = ScheduledMessagesService(repo)
+        future = datetime.now(UTC) + timedelta(minutes=10)
+
+        with pytest.raises(ValueError):
+            await service.create(7, 11, 99, datetime.now(UTC) - timedelta(minutes=1), content="в прошлом")
+
+        embed_schema = {
+            "title": "Заголовок",
+            "description": "Текст",
+            "color": "#FF8800",
+        }
+        sid = await service.create(7, 11, 99, future, content="привет", embed=embed_schema)
+        row = await service.get(sid)
+        assert row is not None and row["done"] == 0
+        assert await service.upcoming(50)
+        assert await service.recent(50)
+        assert len(await service.due(future + timedelta(seconds=1))) == 1
+
+        embed = service.build_embed(row)
+        assert embed.title == "Заголовок" and embed.description == "Текст"
+        assert await service.delete(sid)
+        assert await service.get(sid) is None
+    finally:
+        await db.close()
+
+
+def test_scheduler_cog_higher_than_panel():
+    from app.core.loader import COG_PROVIDERS
+
+    assert "scheduled" in COG_PROVIDERS
+    assert callable(COG_PROVIDERS["scheduled"])
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@ const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
-const TITLES = {overview: "Обзор", embed: "Эмбеды", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи"};
+const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", backup: "Бэкап"};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -153,11 +153,18 @@ function switchSection(name) {
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === "sec-" + name));
   $("section-title").textContent = TITLES[name] || name;
   if (name === "settings" && !settingsLoaded) loadSettings();
+  if (name === "test") loadTestChannels();
+  if (name === "embed") renderPreview();
   if (name === "logs") { loadLogs(); startLogsTimer(); }
   else stopLogsTimer();
   if (name === "files") loadFiles();
   if (name === "overview") startOverviewTimer();
   else stopOverviewTimer();
+  if (name === "server" && !srvLoaded) loadServer();
+  if (name === "moderation") loadModeration();
+  if (name === "giveaways") loadGiveaways();
+  if (name === "scheduler") loadScheduler();
+  if (name === "backup") loadBackup();
 }
 
 function resolveColor(str) {
@@ -173,6 +180,16 @@ function renderColor() {
   const c = resolveColor($("f_color").value);
   const el = document.getElementById("colsw");
   if (el) el.style.background = c === null ? "transparent" : "#" + c.toString(16).padStart(6, "0");
+  const picker = document.getElementById("f_color_picker");
+  if (picker) picker.value = c === null ? "#5865f2" : "#" + c.toString(16).padStart(6, "0");
+}
+function pickColor(hex) {
+  const c = resolveColor(hex);
+  if (c === null) return;
+  const text = document.getElementById("f_color");
+  if (text) text.value = "#" + c.toString(16).padStart(6, "0");
+  renderColor();
+  renderPreview();
 }
 
 /* --- обзор --- */
@@ -198,6 +215,7 @@ async function loadOverview() {
     $("panel-name").textContent = d.bot_name;
     document.title = "Панель — " + d.bot_name;
   }
+  loadMonitorSparks();
 }
 function startOverviewTimer() {
   if (overviewTimer) return;
@@ -602,6 +620,488 @@ async function sendTest() {
   $("test_result").textContent = r.status === 200 && r.data.ok ? "✅ Отправлено" : ("❌ " + (r.data.error || "Ошибка"));
 }
 
+/* --- мониторинг (мини-графики) --- */
+function drawSpark(id, series, color) {
+  const c = $(id);
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = (c.parentElement.clientWidth || 280) * dpr;
+  const h = 56 * dpr;
+  if (c.width !== w) c.width = w;
+  if (c.height !== h) c.height = h;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+  const vals = (series || []).map((p) => Number(p && p.v)).filter((v) => Number.isFinite(v));
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2 * dpr; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  if (vals.length === 0) {
+    ctx.font = (11 * dpr) + "px Segoe UI";
+    ctx.fillStyle = "rgba(152,160,179,.7)";
+    ctx.textAlign = "center";
+    ctx.fillText("нет данных", w / 2, h / 2);
+    return;
+  }
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if (max === min) { max = min + 1; min = min - 1; }
+  const pad = 6 * dpr;
+  const px = (i) => pad + (vals.length <= 1 ? 0 : i * (w - pad * 2) / (vals.length - 1));
+  const py = (v) => h - pad - (v - min) / (max - min) * (h - pad * 2);
+  ctx.beginPath();
+  vals.forEach((v, i) => (i === 0 ? ctx.moveTo(px(i), py(v)) : ctx.lineTo(px(i), py(v))));
+  ctx.stroke();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, color + "44"); grad.addColorStop(1, color + "00");
+  ctx.lineTo(px(vals.length - 1), h); ctx.lineTo(px(0), h); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+  const cur = vals[vals.length - 1];
+  ctx.beginPath(); ctx.arc(px(vals.length - 1), py(cur), 3 * dpr, 0, Math.PI * 2); ctx.fill();
+}
+async function loadMonitorSparks() {
+  const r = await api("/api/monitor");
+  const d = r.data || {};
+  drawSpark("spark_lat", d.latency || [], "#23a55a");
+  drawSpark("spark_mem", d.mem || [], "#f2780d");
+  drawSpark("spark_online", d.online || [], "#5865f2");
+  const last = $("mon_last");
+  if (last) last.textContent = r.status === 200 ? "· обновлено " + new Date().toLocaleTimeString("ru-RU") : "";
+}
+
+/* --- сервер --- */
+let srvLoaded = false;
+let srvCat = [];
+let srvMembersFull = [];
+let srvRoles = [];
+function fmtCount(n) { return n >= 1000 ? (n / 1000).toFixed(1).replace(".", ",") + "k" : String(n); }
+function relTime(iso) {
+  const d = new Date(iso); if (isNaN(d)) return iso;
+  const s = Math.round((d - Date.now()) / 1000), sign = s < 0 ? -1 : 1, a = Math.abs(s);
+  const txt = a < 60 ? a + " с" : a < 3600 ? Math.floor(a / 60) + " мин" : a < 86400 ? Math.floor(a / 3600) + " ч" : Math.floor(a / 86400) + " д";
+  return (sign < 0 ? "через " : a > 0 ? "" : "сейчас") + txt;
+}
+async function loadServer() {
+  const r = await api("/api/server");
+  if (r.status !== 200 || !r.data.ok) { $("srv_head").innerHTML = '<div class="muted">Не удалось загрузить сервер</div>'; return; }
+  srvLoaded = true;
+  const d = r.data.guild || {};
+  srvCat = r.data.categories || [];
+  srvRoles = r.data.roles || [];
+  $("srv_head").innerHTML =
+    '<div class="guild-hero">' +
+    (d.icon ? '<img src="' + escapeHtml(d.icon) + '" alt="">' : '<div class="brand-ic" style="width:64px;height:64px;line-height:64px;font-size:28px">' + escapeHtml((d.name || "?").charAt(0).toUpperCase()) + "</div>") +
+    "<div>" +
+    '<h4>' + escapeHtml(d.name || "—") + (d.level ? ' <span class="chip">' + escapeHtml(d.level) + "</span>" : "") + "</h4>" +
+    (d.description ? '<p>' + escapeHtml(d.description) + "</p>" : "") +
+    '<div class="row-actions" style="margin-top:6px">' +
+    '<span class="chip">Участников <b>' + fmtCount(d.members || 0) + "</b></span>" +
+    '<span class="chip">Онлайн <b>' + fmtCount(d.online || 0) + "</b></span>" +
+    '<span class="chip">Бустов <b>' + fmtCount(d.boosts || 0) + "</b></span>" +
+    '<span class="chip">Каналов <b>' + (d.channels || 0) + "</b></span>" +
+    '<span class="chip">Ролей <b>' + (d.roles || 0) + "</b></span>" +
+    (d.owner ? '<span class="chip">Владелец <b>' + escapeHtml(d.owner) + "</b></span>" : "") +
+    "</div>" +
+    '<div class="row-actions" style="margin-top:6px">' +
+    (d.created_at ? '<span class="chip">Создан ' + new Date(d.created_at).toLocaleDateString("ru-RU") + "</span>" : "") +
+    (d.me_permissions || []).map((p) => '<span class="chip">Бот: ' + escapeHtml(p) + "</span>").join("") +
+    "</div>" +
+    "</div></div>";
+  renderChannelsTree();
+  renderRoles();
+  fillRoleSelect();
+  loadServerMembers();
+}
+function renderChannelsTree() {
+  const box = $("srv_channels");
+  box.innerHTML = "";
+  if (!srvCat.length) { box.appendChild(tag("div", "muted", "Каналы недоступны")); return; }
+  srvCat.forEach((cat) => {
+    box.appendChild(tag("div", "cat-name", escapeHtml(cat.name || "Без категории")));
+    cat.channels.forEach((ch) => {
+      const isV = ch.type === "voice";
+      const row = tag("div", "channel-row");
+      row.title = "Клик — копировать ID";
+      row.onclick = () => copyText(ch.id);
+      row.innerHTML =
+        '<span class="ic">' + (isV ? "🔊" : "#") + "</span>" +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(ch.name) + "</span>" +
+        (ch.nsfw ? '<span class="chip">NSFW</span>' : "") +
+        (ch.slowmode ? '<span class="chip small">' + ch.slowmode + " с</span>" : "") +
+        (isV ? '<span class="chip small">' + (ch.voice_online || 0) + " 🎤</span>" : "");
+      box.appendChild(row);
+      if (isV && ch.voice_users && ch.voice_users.length) {
+        box.appendChild(tag("div", "vc-users", "🎤 " + ch.voice_users.map((u) => escapeHtml(u.display_name)).join(", ")));
+      }
+    });
+  });
+}
+function renderRoles() {
+  const box = $("srv_roles");
+  box.innerHTML = "";
+  if (!srvRoles.length) { box.appendChild(tag("div", "muted", "Роли недоступны")); return; }
+  srvRoles.forEach((role) => {
+    const line = tag("div", "listline");
+    line.title = "Клик — копировать ID";
+    line.onclick = () => copyText(role.id);
+    line.innerHTML =
+      '<span class="pill-role" style="background:' + escapeHtml(role.color) + "22;color:" + escapeHtml(role.color) + '">●</span>' +
+      '<span class="grow">' + escapeHtml(role.name) + (role.managed ? ' <span class="chip">интегрированная</span>' : "") + "</span>" +
+      (role.hoist ? '<span class="chip">в списке</span>' : "") +
+      '<span class="chip">' + fmtCount(role.member_count) + "</span>";
+    box.appendChild(line);
+  });
+}
+function fillRoleSelect() {
+  const sel = $("role_select");
+  sel.innerHTML = "";
+  srvRoles.forEach((role) => {
+    const o = document.createElement("option");
+    o.value = role.id; o.textContent = role.name;
+    sel.appendChild(o);
+  });
+}
+async function loadServerMembers() {
+  const r = await api("/api/server/members?q=");
+  const list = (r.data && r.data.members) || [];
+  srvMembersFull = list;
+  ["member_list", "member_list_mod"].forEach((id) => {
+    const dl = $(id);
+    if (!dl) return;
+    dl.innerHTML = "";
+    list.forEach((m) => {
+      const o = document.createElement("option");
+      o.value = m.is_bot ? m.name + " (бот) #" + m.id : m.display_name + " #" + m.id;
+      dl.appendChild(o);
+    });
+  });
+}
+async function roleAction(act) {
+  const member = $("role_member").value.trim();
+  const role = $("role_select").value;
+  $("role_result").textContent = "";
+  if (!member) return toast("Укажите участника", false);
+  if (!role) return toast("Укажите роль", false);
+  const r = await api("/api/server/members/roles", { member, role_id: role, action: act });
+  if (r.status === 200 && r.data.ok) {
+    $("role_result").textContent = (act === "add" ? "✅ Роль выдана" : "✅ Роль снята") + ": " + r.data.member_name + " → " + r.data.role_name;
+    loadServerMembers();
+    toast(r.data.applied ? "✅ Готово" : "ℹ️ Уже в таком состоянии", r.data.applied);
+  } else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- модерация --- */
+let allWarns = [];
+let modMember = null;
+async function loadModeration() {
+  loadServerMembers();
+  loadWarns();
+  const info = $("mod_member");
+  if (info) info.textContent = "Введите участника и нажмите «Найти».";
+  $("mod_actions").style.display = "none";
+}
+async function loadWarns() {
+  const r = await api("/api/moderation/warns");
+  allWarns = (r.data && r.data.warns) || [];
+  renderWarns();
+}
+function renderWarns() {
+  const box = $("warns_box");
+  const q = ($("warn_search").value || "").toLowerCase().trim();
+  box.innerHTML = "";
+  const list = q ? allWarns.filter((w) => (w.user_name || "").toLowerCase().includes(q) || (w.user_id || "").includes(q)) : allWarns;
+  $("warns_total").textContent = list.length ? "· всего: " + list.length : "";
+  if (!list.length) { box.appendChild(tag("div", "muted", "Предупреждений нет")); return; }
+  list.forEach((w) => {
+    const line = tag("div", "listline");
+    line.innerHTML =
+      '<span class="chip" style="background:rgba(242,63,67,.14);color:#f23f43">#' + w.id + "</span>" +
+      '<span class="grow"><b>' + escapeHtml(w.user_name || w.user_id) + '</b> <span class="sub">· модератор: ' + escapeHtml(w.moderator_name || w.moderator_id) + "</span></span>" +
+      '<span class="sub">' + new Date(w.created_at).toLocaleString("ru-RU") + "</span>" +
+      '<span class="sub" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + escapeHtml(w.reason) + "</span>";
+    const del = tag("button", "btn mini danger", "✖");
+    del.type = "button"; del.title = "Снять предупреждение";
+    del.onclick = async () => {
+      const rr = await api("/api/moderation/warns/" + w.id, null, "DELETE");
+      if (rr.status === 200 && rr.data.ok) { toast("✅ Предупреждение #" + w.id + " снято", true); loadWarns(); if (modMember) refreshModMember(); }
+      else toast("❌ Не удалось снять", false);
+    };
+    line.appendChild(del);
+    box.appendChild(line);
+  });
+}
+async function findMember(query) {
+  if (!query) return null;
+  const r = await api("/api/server/members?q=" + encodeURIComponent(query));
+  const list = (r.data && r.data.members) || [];
+  if (list.length === 1) return list[0];
+  const q = query.toLowerCase();
+  const exact = list.find((m) => m.display_name.toLowerCase() === q || m.name.toLowerCase() === q || m.id === query.replace(/[#\s]/g, ""));
+  return exact || (list.length ? list[0] : null);
+}
+async function loadModMember() {
+  const v = $("mod_target").value.trim();
+  if (!v) return toast("Введите участника", false);
+  const m = await findMember(v);
+  if (!m) { $("mod_member").textContent = "Участник не найден."; $("mod_actions").style.display = "none"; return; }
+  modMember = m;
+  $("mod_member").innerHTML = "";
+  const p = $("mod_member");
+  const line = tag("div", "listline");
+  line.innerHTML =
+    '<img class="av" src="' + escapeHtml(m.avatar) + '" alt="">' +
+    '<span class="grow"><b>' + escapeHtml(m.display_name) + '</b> <span class="sub">' + escapeHtml(m.name) + " # " + m.id + "</span></span>" +
+    '<span class="chip" style="color:' + escapeHtml(m.top_role_color) + '">' + escapeHtml(m.top_role) + "</span>" +
+    (m.is_bot ? '<span class="chip">бот</span>' : "") +
+    '<span class="chip">варнов: ' + (m.warnings || 0) + "</span>";
+  p.appendChild(line);
+  $("mod_actions").style.display = "";
+}
+async function refreshModMember() {
+  const v = $("mod_target").value.trim() || (modMember && modMember.id);
+  if (!v) return;
+  const m = await findMember(v);
+  if (m) { modMember = m; const el = $("mod_member"); el.innerHTML = ""; const line = tag("div", "listline"); line.innerHTML =
+    '<img class="av" src="' + escapeHtml(m.avatar) + '" alt="">' +
+    '<span class="grow"><b>' + escapeHtml(m.display_name) + '</b> <span class="sub">#' + m.id + "</span></span>" +
+    '<span class="chip">варнов: ' + (m.warnings || 0) + "</span>"; el.appendChild(line); }
+}
+function modReason() { return $("mod_reason").value.trim(); }
+async function modWarn() {
+  if (!modMember) return toast("Сначала найдите участника", false);
+  const r = await api("/api/moderation/warn", { member: modMember.id, reason: modReason() || "Без причины" });
+  if (r.status === 200 && r.data.ok) { toast("⚠ Варн выдан, всего: " + r.data.count, true); $("mod_reason").value = ""; loadWarns(); refreshModMember(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function modKick() {
+  if (!modMember) return toast("Сначала найдите участника", false);
+  if (!confirm("Кикнуть " + modMember.display_name + "?")) return;
+  const r = await api("/api/moderation/kick", { member: modMember.id, reason: modReason() });
+  if (r.status === 200 && r.data.ok) { toast("👢 Участник кикнут", true); $("mod_actions").style.display = "none"; modMember = null; $("mod_target").value = ""; }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function modBan() {
+  if (!modMember) return toast("Сначала найдите участника", false);
+  if (!confirm("Забанить " + modMember.display_name + "?")) return;
+  const r = await api("/api/moderation/ban", { member: modMember.id, reason: modReason(), delete_days: 0 });
+  if (r.status === 200 && r.data.ok) { toast("🔨 Участник забанен", true); $("mod_actions").style.display = "none"; modMember = null; $("mod_target").value = ""; }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function modTimeout() {
+  if (!modMember) return toast("Сначала найдите участника", false);
+  const minutes = parseInt($("mod_timeout_min").value, 10) || 10;
+  if (!confirm("Тайм-аут " + modMember.display_name + " на " + minutes + " мин?")) return;
+  const r = await api("/api/moderation/timeout", { member: modMember.id, duration_seconds: minutes * 60, reason: modReason() });
+  if (r.status === 200 && r.data.ok) toast("⏳ Тайм-аут до " + new Date(r.data.until).toLocaleTimeString("ru-RU"), true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function modClear() {
+  if (!modMember) return toast("Сначала найдите участника", false);
+  if (!confirm("Снять все предупреждения у " + modMember.display_name + "?")) return;
+  const r = await api("/api/moderation/clear", { member: modMember.id });
+  if (r.status === 200 && r.data.ok) { toast("🧹 Снято варнов: " + r.data.cleared, true); loadWarns(); refreshModMember(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function modUnban() {
+  const promptId = prompt("ID пользователя для разбана:");
+  if (!promptId) return;
+  const r = await api("/api/moderation/unban", { user_id: promptId.trim(), reason: "Разбан из панели" });
+  if (r.status === 200 && r.data.ok) toast("♻️ Разбанен: " + r.data.user_name, true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- розыгрыши --- */
+let gvData = null;
+async function loadGiveaways() {
+  const chSel = $("gv_channel");
+  if (chSel && !chSel.options.length) {
+    const ch = await api("/api/bot/channels");
+    const list = (ch.data && ch.data.channels) || [];
+    chSel.innerHTML = "";
+    list.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.id; o.textContent = (c.category ? c.category + " / " : "") + c.name;
+      chSel.appendChild(o);
+    });
+  }
+  const r = await api("/api/giveaways");
+  gvData = r.data || {};
+  renderGiveaways();
+}
+function gvLine(g, finished) {
+  const line = tag("div", "listline");
+  line.innerHTML =
+    '<span class="chip" style="background:rgba(35,165,90,.14);color:#23a55a">#' + g.id + "</span>" +
+    '<span class="grow"><b>' + escapeHtml(g.prize) + '</b> <span class="sub">· ' + escapeHtml(g.channel_name) + " · автор: " + escapeHtml(g.author_name) + "</span></span>" +
+    '<span class="chip">👥 ' + g.entries + (g.min_days ? " · 🕛 " + g.min_days + " дн" : "") + "</span>" +
+    '<span class="chip">🏆 ' + g.winners + "</span>" +
+    '<span class="chip">' + (finished ? "завершён" : "до " + relTime(g.ends_at)) + "</span>";
+  const acts = tag("div", "row-actions");
+  const jump = tag("button", "btn mini", "🔗");
+  jump.type = "button"; jump.title = "Скопировать ID сообщения: " + (g.message_id || "—");
+  jump.onclick = () => copyText(g.message_id || "—");
+  acts.appendChild(jump);
+  if (!finished) {
+    const end = tag("button", "btn mini", "⏹ Завершить");
+    end.type = "button";
+    end.onclick = async () => {
+      if (!confirm("Завершить розыгрыш «" + g.prize + "»?")) return;
+      const rr = await api("/api/giveaways/end", { message_id: g.message_id });
+      if (rr.status === 200 && rr.data.ok) toast("🎉 Завершён. Победители: " + rr.data.winners, true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadGiveaways();
+    };
+    acts.appendChild(end);
+  } else {
+    const rer = tag("button", "btn mini", "🔁 Переразыграть");
+    rer.type = "button";
+    rer.onclick = async () => {
+      if (!confirm("Переразыграть приз «" + g.prize + "»?")) return;
+      const rr = await api("/api/giveaways/reroll", { message_id: g.message_id });
+      if (rr.status === 200 && rr.data.ok) toast("🔁 Новые победители: " + rr.data.winners, true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadGiveaways();
+    };
+    acts.appendChild(rer);
+  }
+  line.appendChild(acts);
+  return line;
+}
+function renderGiveaways() {
+  const aBox = $("gv_active"), fBox = $("gv_finished");
+  aBox.innerHTML = "";
+  fBox.innerHTML = "";
+  const act = (gvData.active || []), fin = (gvData.finished || []);
+  if (!act.length) aBox.appendChild(tag("div", "muted", "Активных розыгрышей нет"));
+  act.forEach((g) => aBox.appendChild(gvLine(g, false)));
+  if (!fin.length) fBox.appendChild(tag("div", "muted", "Завершённых пока нет"));
+  fin.forEach((g) => fBox.appendChild(gvLine(g, true)));
+}
+async function createGiveaway() {
+  const channel_id = $("gv_channel").value;
+  const prize = $("gv_prize").value.trim();
+  const winners = parseInt($("gv_winners").value, 10) || 1;
+  const minutes = parseInt($("gv_minutes").value, 10) || 60;
+  const min_days = parseInt($("gv_mindays").value, 10) || 0;
+  if (!channel_id) return toast("Выберите канал", false);
+  if (!prize) return toast("Укажите приз", false);
+  const r = await api("/api/giveaways/create", { channel_id, prize, winners, duration_minutes: minutes, min_days });
+  if (r.status === 200 && r.data.ok) {
+    toast("🎯 Розыгрыш запущен (#" + r.data.id + ")", true);
+    $("gv_prize").value = "";
+    loadGiveaways();
+  } else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- планировщик --- */
+let schData = null;
+async function loadScheduler() {
+  const chSel = $("sch_channel");
+  if (chSel && !chSel.options.length) {
+    const ch = await api("/api/bot/channels");
+    const list = (ch.data && ch.data.channels) || [];
+    chSel.innerHTML = "";
+    list.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.id; o.textContent = (c.category ? c.category + " / " : "") + c.name;
+      chSel.appendChild(o);
+    });
+  }
+  const r = await api("/api/schedule");
+  schData = r.data || { upcoming: [], done: [] };
+  renderScheduled();
+}
+function schLine(s, doneFlag) {
+  const line = tag("div", "listline");
+  line.innerHTML =
+    '<span class="chip" style="background:rgba(35,165,90,.14);color:#23a55a">#' + s.id + "</span>" +
+    '<span class="grow"><b>' + escapeHtml(s.title || s.content || "Без заголовка") + '</b> <span class="sub">' + escapeHtml(s.channel_name) + " · " + escapeHtml(String(s.content || "").slice(0, 80)) + "</span></span>" +
+    '<span class="chip">' + new Date(s.send_at).toLocaleString("ru-RU") + "</span>";
+  if (!doneFlag) {
+    const del = tag("button", "btn mini danger", "✖");
+    del.type = "button"; del.title = "Отменить";
+    del.onclick = async () => {
+      if (!confirm("Отменить запланированное #" + s.id + "?")) return;
+      const rr = await api("/api/schedule/" + s.id, null, "DELETE");
+      if (rr.status === 200 && rr.data.ok) { toast("🗑 Отменено", true); loadScheduler(); }
+      else toast("❌ Не удалось отменить", false);
+    };
+    line.appendChild(del);
+  }
+  return line;
+}
+function renderScheduled() {
+  const uBox = $("sch_upcoming"), dBox = $("sch_done");
+  uBox.innerHTML = ""; dBox.innerHTML = "";
+  const up = schData.upcoming || [], dn = schData.done || [];
+  if (!up.length) uBox.appendChild(tag("div", "muted", "Ожидающих отправки нет"));
+  up.forEach((s) => uBox.appendChild(schLine(s, false)));
+  if (!dn.length) dBox.appendChild(tag("div", "muted", "Отправленных пока нет"));
+  dn.forEach((s) => dBox.appendChild(schLine(s, true)));
+}
+async function createScheduled() {
+  const channel_id = $("sch_channel").value;
+  const atRaw = $("sch_at").value;
+  const content = $("sch_content").value.trim();
+  const title = $("sch_title").value.trim();
+  const desc = $("sch_desc").value.trim();
+  const color = $("sch_color").value.trim();
+  if (!channel_id) return toast("Выберите канал", false);
+  if (!atRaw) return toast("Укажите дату и время", false);
+  if (!content && !title && !desc) return toast("Укажите текст или эмбед", false);
+  const when = new Date(atRaw);
+  if (isNaN(when)) return toast("Некорректная дата", false);
+  if (when <= Date.now()) return toast("Дата должна быть в будущем", false);
+  const embed = {};
+  if (title) embed.title = title;
+  if (desc) embed.description = desc;
+  if (color) embed.color = color;
+  const r = await api("/api/schedule", { channel_id, send_at: when.toISOString(), content, embed });
+  if (r.status === 200 && r.data.ok) {
+    toast("🗓 Запланировано на " + new Date(r.data.send_at).toLocaleString("ru-RU"), true);
+    ["sch_at", "sch_content", "sch_title", "sch_desc", "sch_color"].forEach((id) => { $(id).value = ""; });
+    loadScheduler();
+  } else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- бэкап --- */
+async function downloadBlob(url) {
+  try {
+    const r = await fetch(url, { headers: { "X-Panel-Token": TOKEN } });
+    if (r.status === 401) { if (PANEL_LOGIN) showLogin(); else if (TOKEN) location.reload(); return false; }
+    if (!r.ok) { toast("❌ Ошибка: " + r.status, false); return false; }
+    let filename = "backup";
+    const cd = r.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename="?([^";]+)"?/i);
+    if (m) filename = m[1];
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    return true;
+  } catch (e) { toast("❌ Не удалось скачать", false); return false; }
+}
+async function downloadBackup() {
+  $("backup_info").textContent = "Готовим бэкап…";
+  const ok = await downloadBlob("/api/backup");
+  $("backup_info").textContent = ok ? "✅ Бэкап скачан." : "Ошибка.";
+}
+async function downloadBackupDb() {
+  $("backup_info").textContent = "Готовим снапшот БД…";
+  const ok = await downloadBlob("/api/backup/db");
+  $("backup_info").textContent = ok ? "✅ Снапшот БД скачан." : "Ошибка.";
+}
+function loadBackup() {
+  const cfg = $("backup_config");
+  const modules = settingsData && settingsData.modules;
+  if (modules) {
+    cfg.innerHTML = '<div class="grid cols">' + Object.entries(modules).map(([k, mod]) =>
+      '<div class="module-card"><h5>' + escapeHtml(MODULE_LABELS[k] || k) + '<span class="mod-env">.env</span></h5>' +
+      '<div class="kv">Включён: <b>' + (mod && mod.enabled !== undefined ? (mod.enabled ? "да" : "нет") : "—") + "</b></div>" +
+      "</div>"
+    ).join("") + "</div>";
+  } else {
+    cfg.innerHTML = 'Модули загрузятся после открытия «Настройки». <button class="btn small op" type="button" onclick="switchSection(\'settings\')">Открыть</button>';
+  }
+}
+
 /* --- файлы --- */
 async function loadFiles() {
   const box = $("files_grid");
@@ -683,6 +1183,7 @@ function bootInit() {
   renderButtons();
   renderPreview();
   setMode("webhook");
+  loadTestChannels();
   loadOverview();
   startOverviewTimer();
   if (settingsData) renderSettings();

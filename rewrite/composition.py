@@ -40,6 +40,7 @@ def assemble(
     from app.db.polls_repository import PollsRepository
     from app.db.reaction_roles_repository import ReactionRolesRepository
     from app.db.reminders_repository import RemindersRepository
+    from app.db.scheduled_repository import ScheduledRepository
     from app.db.season_repository import SeasonRepository
     from app.db.settings_repository import SettingsRepository
     from app.db.temp_voices_repository import TempVoicesRepository
@@ -55,6 +56,7 @@ def assemble(
     from app.services.poll_service import PollService
     from app.services.reaction_roles_service import ReactionRolesService
     from app.services.reminder_service import ReminderService
+    from app.services.scheduler_service import ScheduledMessagesService
     from app.services.season_service import SeasonService
     from app.services.settings_service import SettingsService
     from app.services.temp_voice_service import TempVoiceService
@@ -75,6 +77,7 @@ def assemble(
     tempvoice = override_or(overrides, "tempvoice", TempVoiceService, TempVoicesRepository(db))
     birthdays = override_or(overrides, "birthdays", BirthdayService, BirthdaysRepository(db))
     seasons = override_or(overrides, "seasons", SeasonService, SeasonRepository(db))
+    scheduled = override_or(overrides, "scheduled", ScheduledMessagesService, ScheduledRepository(db))
 
     # --- Бот (нужен сервисам, которые пишут в Discord) ---
     if bot is None:
@@ -110,6 +113,7 @@ def assemble(
         tempvoice=tempvoice,
         birthdays=birthdays,
         seasons=seasons,
+        scheduled=scheduled,
     )
 
     # --- Прошиваем корень в бота (то же, что делал контейнер через supplied) ---

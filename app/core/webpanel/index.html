@@ -6,11 +6,11 @@
 <title>Панель управления</title>
 <style>
 :root{--accent:#5865f2;--accent-hover:rgba(88,101,242,.15);--shadow:0 6px 24px rgba(0,0,0,.18);--radius:12px}
-body[data-theme="dark"]{--bg:#0f1117;--bg2:#14171f;--card:#1a1e29;--card2:#212634;--border:#2a3040;--text:#e7e9f1;--muted:#98a0b3;--input:#12151d;--bar:#3a6ea5}
-body[data-theme="light"]{--bg:#eef1f6;--bg2:#f5f7fb;--card:#ffffff;--card2:#f2f4f9;--border:#dfe3ec;--text:#1b2030;--muted:#66708a;--input:#ffffff;--bar:#3a6ea5}
+body[data-theme="dark"]{--bg:#0d1017;--bg2:#12151f;--card:#171b28;--card2:#1e2333;--border:#2a3040;--text:#e7e9f1;--muted:#98a0b3;--input:#0f1219;--bar:#3a6ea5;--glow:rgba(88,101,242,.16)}
+body[data-theme="light"]{--bg:#eef1f6;--bg2:#f5f7fb;--card:#ffffff;--card2:#f2f4f9;--border:#dfe3ec;--text:#1b2030;--muted:#66708a;--input:#ffffff;--bar:#3a6ea5;--glow:rgba(88,101,242,.12)}
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:radial-gradient(1100px 700px at 75% -10%,var(--glow),var(--bg));background-attachment:fixed;color:var(--text);font-size:14px}
 button{font-family:inherit}
 #login{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:radial-gradient(1200px 600px at 50% -10%,var(--card2),var(--bg))}
 .login-card{width:min(360px,92vw);padding:30px 28px;text-align:center;border:1px solid var(--border);border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
@@ -24,9 +24,9 @@ button{font-family:inherit}
 .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:6px 10px 12px;border-bottom:1px solid var(--border)}
 .brand-ic{width:30px;height:30px;line-height:30px;text-align:center;font-size:15px;border-radius:9px;background:var(--accent);color:#fff}
 nav{display:flex;flex-direction:column;gap:4px}
-.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border:0;background:transparent;color:var(--muted);font-size:14px;border-radius:10px;text-align:left}
-.nav-item:hover{background:var(--accent-hover);color:var(--text)}
-.nav-item.active{background:var(--accent);color:#fff}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border:0;background:transparent;color:var(--muted);font-size:14px;border-radius:12px;text-align:left;transition:.18s}
+.nav-item:hover{background:var(--accent-hover);color:var(--text);transform:translateX(2px)}
+.nav-item.active{background:linear-gradient(135deg,var(--accent),#7c6cff);color:#fff;box-shadow:0 6px 18px rgba(88,101,242,.35)}
 .theme-block{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border)}
 .theme-block label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:8px 0 6px}
 .seg{display:flex;gap:6px}
@@ -38,7 +38,8 @@ nav{display:flex;flex-direction:column;gap:4px}
 .sidebar-foot{display:flex;align-items:center;gap:8px;padding:0 4px;font-size:12px;color:var(--muted)}
 .sidebar-foot .badge{font-size:11px}
 .main{flex:1;overflow:hidden;display:flex;flex-direction:column}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.04)}
+body[data-theme="light"] .topbar{background:rgba(245,247,251,.7)}
 .topbar h1{margin:0;font-size:19px}
 .pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:999px;background:var(--card)}
 .scroll{flex:1;overflow-y:auto;padding:20px 22px 40px}
@@ -134,6 +135,35 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .file-card .file-name{font-size:12px;font-weight:600;padding:8px 10px 2px;word-break:break-all}
 .file-card .file-size{font-size:11px;color:var(--muted);padding:0 10px 6px}
 .file-card .file-actions{display:flex;gap:6px;padding:0 10px 10px}
+.badge.ok{position:relative}
+.badge.ok::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#23a55a;margin-right:6px;vertical-align:1px;box-shadow:0 0 0 0 rgba(35,165,90,.5);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(35,165,90,0)}100%{box-shadow:0 0 0 0 rgba(35,165,90,0)}}
+.spark-canvas{width:100%;height:56px;display:block}
+.sparkbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.sparkbox .lbl{font-size:12px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:7px}
+.skeleton{position:relative;overflow:hidden;background:var(--card2);border-radius:8px;min-height:18px}
+.skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);animation:shimmer 1.4s infinite}
+@keyframes shimmer{100%{transform:translateX(100%)}}
+.hl-card{border-left:3px solid var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--border);background:var(--card2);color:var(--muted)}
+.chip b{color:var(--text);font-weight:700}
+.pill-role{display:inline-flex;align-items:center;gap:7px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--card)}
+.channel-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;cursor:pointer}
+.channel-row:hover{background:var(--card2)}
+.channel-row .ic{width:16px;text-align:center}
+.cat-name{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 6px 6px;font-weight:700}
+.vc-users{font-size:11px;color:var(--muted);padding:0 26px 6px}
+.listline{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--card2);margin-bottom:6px}
+.listline .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.listline .sub{font-size:11px;color:var(--muted)}
+.av{width:30px;height:30px;border-radius:50%;flex:0 0 auto;object-fit:cover;background:var(--input)}
+.meter{height:6px;border-radius:3px;background:var(--input);overflow:hidden}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7c6cff);border-radius:3px;transition:width .5s}
+.empty-s{margin:12px 0;color:var(--muted);font-size:13px}
+.guild-hero{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.guild-hero img{width:64px;height:64px;border-radius:16px}
+.guild-hero h4{margin:0 0 4px;font-size:17px}
+.guild-hero p{margin:0;font-size:13px;color:var(--muted)}
 </style>
 </head>
 <body data-theme="dark">
@@ -152,11 +182,16 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
     <div class="brand"><span class="brand-ic">🛠</span><span>Модуль админа</span></div>
     <nav>
       <button class="nav-item active" data-section="overview"><span>🏠</span><span>Обзор</span></button>
+      <button class="nav-item" data-section="server"><span>🖥</span><span>Сервер</span></button>
+      <button class="nav-item" data-section="moderation"><span>🛡</span><span>Модерация</span></button>
+      <button class="nav-item" data-section="giveaways"><span>🎁</span><span>Розыгрыши</span></button>
       <button class="nav-item" data-section="embed"><span>📝</span><span>Эмбеды</span></button>
+      <button class="nav-item" data-section="scheduler"><span>⏰</span><span>Планировщик</span></button>
       <button class="nav-item" data-section="settings"><span>⚙️</span><span>Настройки</span></button>
       <button class="nav-item" data-section="test"><span>🧪</span><span>Тест</span></button>
       <button class="nav-item" data-section="files"><span>🖼</span><span>Файлы</span></button>
       <button class="nav-item" data-section="logs"><span>📄</span><span>Логи</span></button>
+      <button class="nav-item" data-section="backup"><span>💾</span><span>Бэкап</span></button>
     </nav>
     <div class="theme-block">
       <label>Тема</label>
@@ -196,6 +231,14 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
           <div class="card stat"><div class="lbl">Каналы / роли</div><div class="val" id="ov_channels">—</div></div>
         </div>
         <div class="card" style="margin-top:12px">
+          <h3 class="sec">Мониторинг <span class="muted small" id="mon_last"></span></h3>
+          <div class="sparkbox">
+            <div><div class="lbl">Задержка, мс</div><canvas class="spark-canvas" id="spark_lat"></canvas></div>
+            <div><div class="lbl">Память, МБ</div><canvas class="spark-canvas" id="spark_mem"></canvas></div>
+            <div><div class="lbl">Онлайн на сервере</div><canvas class="spark-canvas" id="spark_online"></canvas></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
           <b id="ov_botname">Бот</b>
           <div class="muted" id="ov_about">Отправляйте эмбеды, настраивайте каналы и следите за состоянием бота прямо из админки.</div>
           <a class="quick-link" data-goto="embed">→ Открыть конструктор эмбедов</a>
@@ -205,6 +248,10 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 
       <section id="sec-embed" class="section">
         <div class="two">
+          <div id="block-preview" class="card" style="grid-column:1/-1">
+            <h3 class="sec">Предпросмотр</h3>
+            <div id="preview"></div>
+          </div>
           <div>
             <div class="card">
               <h3 class="sec">Основное</h3>
@@ -214,9 +261,10 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
               <input type="text" id="f_title" maxlength="256" placeholder="Заголовок" oninput="renderPreview()">
               <label class="field">Описание</label>
               <textarea id="f_desc" rows="4" maxlength="4096" placeholder="Описание" oninput="renderPreview()"></textarea>
-              <label class="field">Цвет</label>
+              <label class="field">Цвет полоски</label>
               <div class="row-inline">
                 <input type="text" id="f_color" style="flex:1;min-width:120px" placeholder="например #5865f2 или blurple" oninput="renderColor();renderPreview()">
+                <input type="color" id="f_color_picker" value="#5865f2" oninput="pickColor(this.value)" style="width:38px;height:38px;padding:2px;border:1px solid var(--border);background:var(--input);border-radius:8px;cursor:pointer">
                 <span id="colsw" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);display:inline-block"></span>
               </div>
               <div class="row-inline">
@@ -307,11 +355,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
             </div>
           </div>
 
-          <div id="block-preview" class="card" style="grid-column:1/-1">
-            <h3 class="sec">Предпросмотр</h3>
-            <div id="preview"></div>
           </div>
-        </div>
       </section>
 
       <section id="sec-settings" class="section">
@@ -389,6 +433,164 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
           </div>
           <div id="logs_box"><div class="muted small">Загрузка…</div></div>
           <div class="muted small" id="logs_last" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+    <section id="sec-server" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🖥 Сервер</h3>
+          <div id="srv_head"><div class="skeleton" style="height:64px"></div></div>
+        </div>
+        <div class="two" style="margin-top:12px">
+          <div class="card">
+            <h3 class="sec">Каналы <span class="muted small">· клик по строке копирует ID</span></h3>
+            <div id="srv_channels"></div>
+          </div>
+          <div class="card">
+            <h3 class="sec">Роли</h3>
+            <div id="srv_roles"></div>
+            <hr class="divider">
+            <h3 class="sec">Выдача ролей</h3>
+            <label class="field">Участник (имя или ID)</label>
+            <div class="row-inline">
+              <input type="text" id="role_member" list="member_list" placeholder="Начните писать…" style="flex:1;min-width:140px">
+              <datalist id="member_list"></datalist>
+              <button class="btn op small" type="button" onclick="loadServerMembers()">⟳</button>
+            </div>
+            <label class="field">Роль</label>
+            <select id="role_select"></select>
+            <div class="row-inline">
+              <button class="btn small primary" type="button" onclick="roleAction('add')">＋ Выдать</button>
+              <button class="btn small danger" type="button" onclick="roleAction('remove')">− Снять</button>
+            </div>
+            <div class="muted small" id="role_result" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-moderation" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🛡 Модерация</h3>
+          <label class="field">Участник (имя, ник или ID)</label>
+          <div class="row-inline">
+            <input type="text" id="mod_target" list="member_list_mod" placeholder="Например: admin или 123456789…" style="flex:1;min-width:180px">
+            <datalist id="member_list_mod"></datalist>
+            <button class="btn op small" type="button" onclick="loadModMember()">🔍 Найти</button>
+          </div>
+          <div id="mod_member" class="muted small" style="margin-top:8px">Введите участника и нажмите «Найти».</div>
+          <div id="mod_actions" style="display:none;margin-top:12px">
+            <label class="field">Причина</label>
+            <input type="text" id="mod_reason" placeholder="Причина (для варна / кика / бана)">
+            <div class="row-inline">
+              <label class="field" style="margin:8px 0 4px">Тайм-аут, минут</label>
+              <input type="number" id="mod_timeout_min" value="10" min="1" max="40320" step="1" style="width:150px">
+            </div>
+            <div class="row-actions">
+              <button class="btn small" type="button" onclick="modWarn()">⚠ Варн</button>
+              <button class="btn small" type="button" onclick="modKick()">👢 Кик</button>
+              <button class="btn small danger" type="button" onclick="modBan()">🔨 Бан</button>
+              <button class="btn small" type="button" onclick="modTimeout()">⏳ Тайм-аут</button>
+              <button class="btn small" type="button" onclick="modClear()">🧹 Снять варны</button>
+            </div>
+          </div>
+          <div class="row-inline" style="margin-top:10px">
+            <button class="btn small op" type="button" onclick="modUnban()">♻️ Разбан по ID</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Предупреждения <span class="muted small" id="warns_total"></span></h3>
+          <div class="row-inline" style="margin:0 0 10px">
+            <input type="text" id="warn_search" placeholder="Фильтр по участнику…" style="flex:1;min-width:160px" oninput="renderWarns()">
+            <button class="btn op small" type="button" onclick="loadWarns()">⟳</button>
+          </div>
+          <div id="warns_box"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-giveaways" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🎁 Новый розыгрыш</h3>
+          <div class="two">
+            <div>
+              <label class="field">Канал</label>
+              <select id="gv_channel"></select>
+              <label class="field">Приз</label>
+              <input type="text" id="gv_prize" maxlength="256" placeholder="Что разыгрываем?">
+            </div>
+            <div>
+              <div class="grid cols4">
+                <div><label class="field">Победителей</label><input type="number" id="gv_winners" value="1" min="1" max="20"></div>
+                <div><label class="field">Длительность, мин</label><input type="number" id="gv_minutes" value="60" min="1" max="43200"></div>
+                <div><label class="field">Мин. дней на сервере</label><input type="number" id="gv_mindays" value="0" min="0"></div>
+              </div>
+              <div class="row-inline" style="margin-top:24px">
+                <button class="btn success" type="button" onclick="createGiveaway()">🎯 Запустить</button>
+                <span class="muted small">Максимум — 30 дней, победителей до 20.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Активные розыгрыши</h3>
+          <div id="gv_active"><div class="muted">Загрузка…</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Завершённые</h3>
+          <div id="gv_finished"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-scheduler" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">⏰ Отложенное сообщение</h3>
+          <div class="three">
+            <div>
+              <label class="field">Канал</label>
+              <select id="sch_channel"></select>
+              <label class="field">Дата и время отправки</label>
+              <input type="datetime-local" id="sch_at">
+            </div>
+            <div>
+              <label class="field">Текст</label>
+              <textarea id="sch_content" rows="4" maxlength="2000" placeholder="Текст сообщения…"></textarea>
+            </div>
+            <div>
+              <label class="field">Заголовок эмбеда</label>
+              <input type="text" id="sch_title" maxlength="256">
+              <label class="field">Описание</label>
+              <textarea id="sch_desc" rows="2" maxlength="4000"></textarea>
+              <label class="field">Цвет</label>
+              <input type="text" id="sch_color" placeholder="#5865f2">
+            </div>
+          </div>
+          <div class="row-inline">
+            <button class="btn primary" type="button" onclick="createScheduled()">🗓 Запланировать</button>
+            <span class="muted small">Отправка — от имени бота в выбранный канал.</span>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Ожидают отправки</h3>
+          <div id="sch_upcoming"><div class="muted">Загрузка…</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Отправленные</h3>
+          <div id="sch_done"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-backup" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">💾 Бэкап и экспорт</h3>
+          <p class="muted small" style="margin:0 0 6px">Скачайте настройки, конфигурацию и данные бота одним файлом JSON либо снапшот всей базы данных (SQLite).</p>
+          <div class="row-actions" style="margin-top:10px">
+            <button class="btn primary" type="button" onclick="downloadBackup()">⬇ Бэкап JSON</button>
+            <button class="btn op" type="button" onclick="downloadBackupDb()">⬇ Снапшот БД (SQLite)</button>
+          </div>
+          <div class="muted small" id="backup_info" style="margin-top:10px"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Активные модули</h3>
+          <div id="backup_config" class="empty-s">Загрузка…</div>
         </div>
       </section>
 

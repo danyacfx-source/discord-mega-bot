@@ -66,6 +66,12 @@ class GiveawaysRepository(BaseRepository):
         )
         return [int(row["user_id"]) for row in rows]
 
+    async def recent_for_guild(self, guild_id: int, limit: int = 50) -> list[dict[str, Any]]:
+        rows = await self.db.fetchall(
+            "SELECT * FROM giveaways WHERE guild_id = ? ORDER BY id DESC LIMIT ?", (guild_id, limit)
+        )
+        return [dict(row) for row in rows]
+
 
 def _now_iso() -> str:
     from datetime import UTC, datetime

@@ -1,0 +1,92 @@
+const fs = require("fs");
+const vm = require("vm");
+
+const ids = ["ov_status","ov_uptime","ov_ping","ov_mem","ov_guild","ov_members","ov_online","ov_channels","ov_botname","ov_about","spark_lat","spark_mem","spark_online","mon_last","srv_channels","srv_roles","role_select","srv_members","role_member","role_result","mod_target","mod_member","mod_actions","mod_reason","mod_timeout_min","warns_total","warn_search","warns_box","gv_channel","gv_prize","gv_winners","gv_minutes","gv_mindays","gv_active","gv_finished","sch_channel","sch_at","sch_content","sch_title","sch_desc","sch_color","sch_upcoming","sch_done","backup_info","backup_config","settings-groups","files_grid","logs_box","toasts","sec-overview","sec-server","sec-moderation","sec-giveaways","sec-embed","sec-scheduler","sec-settings","sec-backup","test_result","test_content","test_channel","msg_id","f_content","f_title","f_desc","f_color","f_color_picker","f_author_name","f_author_icon","f_author_url","f_footer_text","f_footer_icon","f_image","f_thumb","btn_send","btn_edit","btn_clear","btn_load","colsw","preview","btn_editor","fields","upload_input","channels-grid"];
+
+function makeEl(name) {
+  const classSet = new Set();
+  return {
+    id: name, value: "", textContent: "", innerHTML: "", placeholder: "", type: "text", className: "", dataset: {},
+    checked: false, style: {}, files: [], src: "", onclick: null, onchange: null, oninput: null, onkeyup: null, title: "",
+    children: [],
+    classList: {
+      _set: classSet,
+      add(c) { classSet.add(c); }, remove(c) { classSet.delete(c); },
+      toggle(c, f) { if (f === undefined) { classSet.has(c) ? classSet.delete(c) : classSet.add(c); } else { f ? classSet.add(c) : classSet.delete(c); } },
+      contains(c) { return classSet.has(c); },
+    },
+    appendChild(c) { this.children.push(c); return c; },
+    append(...ns) { Array.prototype.forEach.call(ns, (n) => this.children.push(n)); },
+    addEventListener() {}, focus() {}, remove() {}, click() {},
+    get value() { return this._v ?? ""; }, set value(v) { this._v = v; },
+    get textContent() { return this._t ?? ""; }, set textContent(v) { this._t = String(v); },
+    get innerHTML() { return this._h ?? ""; }, set innerHTML(v) { this._h = String(v); },
+  };
+}
+
+const registry = {};
+ids.forEach((id) => (registry[id] = makeEl(id)));
+const elCounters = {};
+const documentStub = {
+  getElementById(id) { return registry[id] || null; },
+  querySelectorAll() { return []; },
+  createElement(tagName) { const n = "el_" + tagName + "_" + ((elCounters[tagName] = (elCounters[tagName] || 0) + 1)); return makeEl(n); },
+  createTextNode(t) { return { text: t }; },
+  body: { dataset: {}, style: { setProperty() {} }, appendChild() {}, append() {} },
+  title: "", hidden: false, addEventListener() {},
+};
+
+const storageData = new Map();
+const localStorageStub = {
+  getItem(k) { return storageData.has(k) ? storageData.get(k) : null; },
+  setItem(k, v) { storageData.set(k, String(v)); },
+  removeItem(k) { storageData.delete(k); },
+};
+
+const calls = [];
+const sandbox = {
+  document: documentStub,
+  localStorage: localStorageStub,
+  navigator: { clipboard: { writeText: async () => {} } },
+  fetch: async (url, opts) => {
+    calls.push({ url: String(url), method: (opts && opts.method) || "GET" });
+    return { status: 401, ok: false, json: async () => ({}) };
+  },
+  setInterval, clearInterval, setTimeout, clearTimeout,
+  console, confirm: () => true, prompt: () => "",
+  encodeURIComponent, decodeURIComponent,
+  tag: () => makeEl("tag" + Math.random()),
+  api: async (u) => ({ status: 200, data: {} }),
+  $: (id) => registry[id] || makeEl("detached_" + id),
+  escapeHtml: (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
+  relTime: () => "x",
+  bootInit: () => {},
+};
+sandbox.window = sandbox, (sandbox.window.self = sandbox);
+
+vm.createContext(sandbox-squared);
+
+const panelSrc = fs.readFileSync("C:/Users/Admin/Documents/Default Project/discord-mega-bot/app/core/webpanel/panel.js", "utf8");
+vm.runInContext(panelSrc, sandbox, { filename: "panel.js" });
+
+const defined = new Set();
+// собрать top-level function declarations
+const fnRe = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+let m;
+while ((m = fnRe.exec(panelSrc))) defined.add(m[1]);
+const varRe = /(?:let|var|const)\s+([\w$]+)\s*=/g;
+while ((m = varRe.exec(panelSrc))) defined.add(m[1]);
+
+// собрать вызовы functionName( из исходника и проверить наличие
+const callRe = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+const unknown = new Set();
+while ((m = callRe.exec(panelSrc))) {
+  const name = m[1];
+  if (["if","for","while","switch","catch","function","return","typeof","new","delete","void","in","of","do","else","case","break","continue","throw","yield","await","this","document","window","Math","JSON","Object","Array","String","Number","Boolean","RegExp","Date","Promise","console","localStorage","navigator","fetch","setInterval","clearInterval","setTimeout","clearTimeout","encodeURIComponent","decodeURIComponent","tag","api","toast","escapeHtml","relTime","copyText","relTime","escapeHtml","prompt","confirm","parseInt","parseFloat","isNaN","isFinite","encodeURIComponent","decodeURIComponent","requestAnimationFrame","URL","Blob","FileReader","FormData","location","alert","Date","Error","Set","Map","toast","bugtext"].includes(name)) continue;
+  if (typeof sandbox[name] === "function") continue哪有;
+  if (!defined.has(name)) unknown.add(name);
+}
+
+console.log("defined top-level:", defined.size);
+console.log("unknown called functions:", unknown.size ? Array.from(unknown).join(", ") : "none");
+process.exit(0);

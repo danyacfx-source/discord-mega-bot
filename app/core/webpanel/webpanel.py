@@ -1,6 +1,7 @@
 """Вебпанель конструктора эмбедов: браузерный редактор, отправка через бота и прокси вебхуков."""
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -8,7 +9,7 @@ import time
 import tracemalloc
 import uuid
 from collections import defaultdict, deque
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
@@ -17,6 +18,7 @@ import aiohttp
 import discord
 from aiohttp import web
 
+from app.core import embeds
 from app.core.webpanel.log_ring import RingBufferHandler
 
 if TYPE_CHECKING:
@@ -340,6 +342,9 @@ class WebPanel:
         self._runner: web.AppRunner | None = None
         self._http: aiohttp.ClientSession | None = None
         self._ring: RingBufferHandler | None = None
+        self._lat: deque[dict[str, Any]] = deque(maxlen=90)
+        self._mem: deque[dict[str, Any]] = deque(maxlen=90)
+        self._online: deque[dict[str, Any]] = deque(maxlen=90)
 
     # --- жизненный цикл ---
 
@@ -367,6 +372,27 @@ class WebPanel:
         app.router.add_post("/api/logout", self._authorized(self._api_logout))
         app.router.add_get("/api/status", self._authorized(self._api_status))
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
+        app.router.add_get("/api/monitor", self._authorized(self._api_monitor))
+        app.router.add_get("/api/server", self._authorized(self._api_server))
+        app.router.add_get("/api/server/members", self._authorized(self._api_server_members))
+        app.router.add_post("/api/server/members/roles", self._authorized(self._api_server_members_roles))
+        app.router.add_get("/api/moderation/warns", self._authorized(self._api_warns))
+        app.router.add_post("/api/moderation/warn", self._authorized(self._api_warn_add))
+        app.router.add_delete("/api/moderation/warns/{warn_id}", self._authorized(self._api_warn_delete))
+        app.router.add_post("/api/moderation/clear", self._authorized(self._api_warn_clear))
+        app.router.add_post("/api/moderation/kick", self._authorized(self._api_mod_kick))
+        app.router.add_post("/api/moderation/ban", self._authorized(self._api_mod_ban))
+        app.router.add_post("/api/moderation/unban", self._authorized(self._api_mod_unban))
+        app.router.add_post("/api/moderation/timeout", self._authorized(self._api_mod_timeout))
+        app.router.add_get("/api/giveaways", self._authorized(self._api_giveaways))
+        app.router.add_post("/api/giveaways/create", self._authorized(self._api_giveaway_create))
+        app.router.add_post("/api/giveaways/end", self._authorized(self._api_giveaway_end))
+        app.router.add_post("/api/giveaways/reroll", self._authorized(self._api_giveaway_reroll))
+        app.router.add_get("/api/schedule", self._authorized(self._api_schedule))
+        app.router.add_post("/api/schedule", self._authorized(self._api_schedule_create))
+        app.router.add_delete("/api/schedule/{schedule_id}", self._authorized(self._api_schedule_delete))
+        app.router.add_get("/api/backup", self._authorized(self._api_backup))
+        app.router.add_get("/api/backup/db", self._authorized(self._api_backup_db))
         app.router.add_get("/api/settings", self._authorized(self._api_settings_get))
         app.router.add_post("/api/settings", self._authorized(self._api_settings_post))
         app.router.add_post("/api/upload", self._authorized(self._api_upload))
@@ -754,7 +780,19 @@ class WebPanel:
                 "channels": len(guild.channels),
                 "roles": len(guild.roles),
             }
+        self._record_metrics(data)
         return self._json(data)
+
+    def _record_metrics(self, data: dict[str, Any]) -> None:
+        """Копит сэмплы для мини-графиков на дашборде (максимум 90 точек)."""
+        now = datetime.now(UTC).isoformat()
+        if "latency_ms" in data:
+            self._lat.append({"t": now, "v": data.get("latency_ms", 0)})
+        if "mem_mb" in data:
+            self._mem.append({"t": now, "v": data["mem_mb"]})
+        guild = data.get("guild") or {}
+        if guild.get("online") is not None:
+            self._online.append({"t": now, "v": guild.get("online", 0)})
 
     async def _api_settings_get(self, request: web.Request) -> web.Response:
         guild = self._primary_guild()
@@ -938,6 +976,750 @@ class WebPanel:
         except discord.HTTPException:
             return self._json({"ok": False, "error": "Сообщение не найдено"}, status=404)
         return self._json({"ok": True, "data": _message_to_client(message)})
+
+    # --- API: мониторинг, сервер, модерация, розыгрыши, планировщик, бэкап ---
+
+    async def _api_monitor(self, request: web.Request) -> web.Response:
+        sample = await self._live_sample()
+        self._record_metrics(sample)
+        return self._json(
+            {
+                "ok": True,
+                "latency": list(self._lat),
+                "mem": list(self._mem),
+                "online": list(self._online),
+                **sample,
+            }
+        )
+
+    async def _live_sample(self) -> dict[str, Any]:
+        """Снимает актуальный срез латентности/памяти/онлайна для мониторинга."""
+        bot = self.bot
+        sample: dict[str, Any] = {}
+        latency = bot.latency
+        sample["latency_ms"] = round(latency * 1000) if latency and latency > 0 else 0
+        if tracemalloc.is_tracing():
+            current, _peak = tracemalloc.get_traced_memory()
+            sample["mem_mb"] = round(current / 1024 / 1024, 1)
+        guild = self._primary_guild()
+        if guild is not None:
+            sample["guild"] = {
+                "online": sum(1 for member in guild.members if member.status is not discord.Status.offline)
+            }
+        return sample
+
+    def _resolve_member(self, guild: discord.Guild, value: Any) -> discord.Member | None:
+        if value in (None, ""):
+            return None
+        raw = str(value).strip()
+        match = re.match(r"^<@!?(\d+)>$", raw)
+        if match:
+            raw = match.group(1)
+        if raw.isdigit():
+            member = guild.get_member(int(raw))
+            if member is not None:
+                return member
+        name = raw.lstrip("@").lower()
+        candidates = [
+            m
+            for m in guild.members
+            if m.display_name.lower() == name or m.name.lower() == name or f"{m.name}#{m.discriminator}".lower() == name
+        ]
+        return candidates[0] if len(candidates) == 1 else None
+
+    def _resolve_role(self, guild: discord.Guild, value: Any) -> discord.Role | None:
+        if value in (None, ""):
+            return None
+        raw = str(value).strip()
+        match = re.match(r"^<@&(\d+)>$", raw)
+        if match:
+            raw = match.group(1)
+        if raw.isdigit():
+            role = guild.get_role(int(raw))
+            if role is not None:
+                return role
+        name = raw.lstrip("@").lower()
+        matching = [r for r in guild.roles if r.name.lower() == name]
+        return matching[0] if len(matching) == 1 else None
+
+    def _guard_mod_target(self, guild: discord.Guild, member: discord.Member) -> str | None:
+        from app.core.checks import can_moderate
+
+        me = guild.me
+        if me is None:
+            return "Бот недоступен на сервере"
+        if member.id == guild.owner_id:
+            return "Нельзя: владелец сервера"
+        if member.top_role.position >= me.top_role.position:
+            return "Бот не может модернировать: роли участника выше ролей бота"
+        if not can_moderate(me, member):
+            return "Бот не может модернировать этого участника"
+        return None
+
+    def _member_payload(self, guild: discord.Guild, member: discord.Member) -> dict[str, Any]:
+        return {
+            "id": str(member.id),
+            "name": member.name,
+            "display_name": member.display_name,
+            "tag": str(member),
+            "is_bot": member.bot,
+            "status": str(member.status) if member.status is not None else "unknown",
+            "top_role": member.top_role.name,
+            "top_role_color": f"#{member.top_role.color.value:06x}" if member.top_role and member.top_role.color.value else "#99aab5",
+            "avatar": member.display_avatar.url,
+            "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+            "warnings": 0,
+        }
+
+    async def _api_server(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        me = guild.me
+        categories: list[dict[str, Any]] = []
+        for category in sorted(guild.categories, key=lambda c: c.position):
+            channels: list[dict[str, Any]] = []
+            for channel in sorted(category.channels, key=lambda c: c.position):
+                if isinstance(channel, discord.VoiceChannel):
+                    voice_users = [m for m in channel.members if not m.bot]
+                    channels.append(
+                        {
+                            "id": str(channel.id),
+                            "name": channel.name,
+                            "type": "voice",
+                            "topic": "",
+                            "slowmode": 0,
+                            "nsfw": False,
+                            "voice_online": len(voice_users),
+                            "voice_users": [self._member_payload(guild, m) for m in voice_users[:30]],
+                        }
+                    )
+                elif isinstance(channel, discord.TextChannel):
+                    channels.append(
+                        {
+                            "id": str(channel.id),
+                            "name": channel.name,
+                            "type": channel.type.name,
+                            "topic": (channel.topic or "")[:200],
+                            "slowmode": channel.slowmode_delay,
+                            "nsfw": channel.nsfw,
+                            "voice_online": 0,
+                            "voice_users": [],
+                        }
+                    )
+            categories.append(
+                {
+                    "id": str(category.id),
+                    "name": category.name,
+                    "position": category.position,
+                    "channels": channels,
+                }
+            )
+        uncategorized: list[dict[str, Any]] = []
+        for channel in guild.channels:
+            if isinstance(channel, discord.TextChannel) and channel.category_id is None:
+                uncategorized.append(
+                    {
+                        "id": str(channel.id),
+                        "name": channel.name,
+                        "type": channel.type.name,
+                        "topic": (channel.topic or "")[:200],
+                        "slowmode": channel.slowmode_delay,
+                        "nsfw": channel.nsfw,
+                        "voice_online": 0,
+                        "voice_users": [],
+                    }
+                )
+        if uncategorized:
+            categories.append(
+                {"id": "", "name": "Без категории", "position": 9999, "channels": uncategorized}
+            )
+        roles = []
+        for role in reversed(guild.roles):
+            if role.is_default():
+                continue
+            roles.append(
+                {
+                    "id": str(role.id),
+                    "name": role.name,
+                    "color": f"#{role.color.value:06x}" if role.color.value else "#99aab5",
+                    "position": role.position,
+                    "member_count": len(role.members),
+                    "hoist": role.hoist,
+                    "mentionable": role.mentionable,
+                    "managed": role.managed,
+                    "bot_managed": role.is_bot_managed(),
+                }
+            )
+        online = sum(1 for m in guild.members if m.status is not discord.Status.offline)
+        return self._json(
+            {
+                "ok": True,
+                "guild": {
+                    "id": str(guild.id),
+                    "name": guild.name,
+                    "icon": guild.icon.url if guild.icon else None,
+                    "description": guild.description,
+                    "members": guild.member_count or len(guild.members),
+                    "online": online,
+                    "channels": len(guild.channels),
+                    "roles": len(guild.roles),
+                    "boosts": guild.premium_subscription_count or 0,
+                    "level": f"Уровень {guild.premium_tier}",
+                    "owner": guild.owner.display_name if guild.owner else None,
+                    "created_at": guild.created_at.isoformat(),
+                    "me_name": me.display_name if me else None,
+                    "me_permissions": self._bot_permission_summary(guild),
+                },
+                "categories": categories,
+                "roles": roles,
+            }
+        )
+
+    def _bot_permission_summary(self, guild: discord.Guild) -> list[str]:
+        if guild.me is None:
+            return []
+        perms = guild.me.guild_permissions
+        mapping = {
+            "kick_members": "Кик",
+            "ban_members": "Бан",
+            "moderate_members": "Тайм-ауты",
+            "manage_roles": "Роли",
+            "manage_channels": "Каналы",
+            "manage_messages": "Сообщения",
+            "manage_guild": "Управление сервером",
+            "administrator": "Администратор",
+        }
+        return [label for flag, label in mapping.items() if getattr(perms, flag, False)]
+
+    async def _api_server_members(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        query = (request.query.get("q") or "").strip().lower()
+        members = list(guild.members)
+        if query:
+            if query.isdigit():
+                member = guild.get_member(int(query))
+                members = [member] if member else []
+            else:
+                members = [
+                    m
+                    for m in members
+                    if query in m.name.lower() or query in m.display_name.lower() or query in str(m).lower()
+                ]
+        members.sort(key=lambda m: (m.bot, m.display_name.lower()))
+        service = self.bot.services.moderation  # type: ignore[union-attr]
+        payload = []
+        for member in members[:25]:
+            item = self._member_payload(guild, member)
+            item["warnings"] = await service.warn_count(guild.id, member.id)
+            payload.append(item)
+        return self._json({"ok": True, "total": len(payload), "members": payload})
+
+    async def _api_server_members_roles(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        member = self._resolve_member(guild, payload.get("member"))
+        role = self._resolve_role(guild, payload.get("role_id"))
+        if member is None or role is None:
+            return self._json({"ok": False, "error": "Участник или роль не найдены"}, status=400)
+        action = str(payload.get("action") or "add")
+        if guild.me is None or not guild.me.guild_permissions.manage_roles:
+            return self._json({"ok": False, "error": "У бота нет права manage_roles"}, status=400)
+        if not role.is_assignable():
+            return self._json({"ok": False, "error": "Роль нельзя выдавать (интегрированная или выше ролей бота)"}, status=400)
+        try:
+            if action == "remove" and role in member.roles:
+                await member.remove_roles(role, reason="Вебпанель: снятие роли")
+                applied = False
+            elif action == "remove":
+                applied = False
+            elif action == "add" and role not in member.roles:
+                await member.add_roles(role, reason="Вебпанель: выдача роли")
+                applied = True
+            else:
+                applied = role in member.roles
+        except discord.HTTPException as exc:
+            return self._json({"ok": False, "error": f"Discord: {exc.status} {exc.text}"[:200]}, status=400)
+        return self._json(
+            {
+                "ok": True,
+                "member_id": str(member.id),
+                "member_name": member.display_name,
+                "role_id": str(role.id),
+                "role_name": role.name,
+                "action": action,
+                "applied": applied,
+                "has_role": role in member.roles,
+            }
+        )
+
+    async def _api_warns(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.moderation  # type: ignore[union-attr]
+        user_value = request.query.get("user_id") or (request.query.get("q") or "")
+        warns = await service.all_warns(guild.id, 300)
+        if user_value:
+            member = self._resolve_member(guild, user_value)
+            if member is None:
+                return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+            warns = [w for w in warns if w["user_id"] == member.id]
+        enriched = [
+            {
+                "id": w["id"],
+                "user_id": str(w["user_id"]),
+                "user_name": self._member_name(guild, w["user_id"]),
+                "moderator_id": str(w["moderator_id"]),
+                "moderator_name": self._member_name(guild, w["moderator_id"]),
+                "reason": w["reason"],
+                "created_at": w["created_at"],
+            }
+            for w in warns
+        ]
+        return self._json({"ok": True, "total": len(enriched), "warns": enriched})
+
+    def _member_name(self, guild: discord.Guild, user_id: int) -> str:
+        member = guild.get_member(user_id)
+        if member is not None:
+            return member.display_name
+        if user_id == self.bot.user.id:  # type: ignore[union-attr]
+            return "Бот (панель)"
+        return str(user_id)
+
+    async def _api_warn_add(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        member = self._resolve_member(guild, payload.get("member"))
+        if member is None:
+            return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+        guard = self._guard_mod_target(guild, member)
+        if guard:
+            return self._json({"ok": False, "error": guard}, status=400)
+        reason = str(payload.get("reason") or "Без причины")[:500]
+        service = self.bot.services.moderation  # type: ignore[union-attr]
+        count = await service.warn(guild.id, member.id, self.bot.user.id, reason)  # type: ignore[union-attr]
+        if guild.me is not None:
+            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+                guild, "warn", member, guild.me, reason, description=f"{member.mention} получил предупреждение {count} (панель)"
+            )
+        return self._json({"ok": True, "count": count, "member": self._member_payload(guild, member)})
+
+    async def _api_warn_delete(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        warn_id = self._parse_id(request.match_info.get("warn_id"))
+        service = self.bot.services.moderation  # type: ignore[union-attr]
+        if warn_id is None or (warn := await service.get_warn(guild.id, warn_id)) is None:
+            return self._json({"ok": False, "error": "Предупреждение не найдено"}, status=404)
+        await service.remove_warn(guild.id, warn_id)
+        return self._json(
+            {
+                "ok": True,
+                "warn_id": warn_id,
+                "user_id": str(warn["user_id"]),
+                "action": "removed",
+                "next_count": await service.warn_count(guild.id, warn["user_id"]),
+            }
+        )
+
+    async def _api_warn_clear(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        member = self._resolve_member(guild, payload.get("member"))
+        if member is None:
+            return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+        service = self.bot.services.moderation  # type: ignore[union-attr]
+        cleared = await service.clear_warns(guild.id, member.id)
+        return self._json({"ok": True, "cleared": cleared, "member_id": str(member.id)})
+
+    async def _api_mod_kick(self, request: web.Request) -> web.Response:
+        return await self._mod_action(request, "kick")
+
+    async def _api_mod_ban(self, request: web.Request) -> web.Response:
+        return await self._mod_action(request, "ban", delete_days=True)
+
+    async def _api_mod_unban(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        if guild.me is None or not guild.me.guild_permissions.ban_members:
+            return self._json({"ok": False, "error": "У бота нет права ban_members"}, status=400)
+        user_id = self._parse_id(payload.get("user_id"))
+        if user_id is None:
+            return self._json({"ok": False, "error": "Неверный ID пользователя"}, status=400)
+        try:
+            ban_entry = await guild.fetch_ban(discord.Object(id=user_id))
+        except discord.NotFound:
+            return self._json({"ok": False, "error": "Пользователь не в бане"}, status=404)
+        reason = str(payload.get("reason") or "Разбан из вебпанели")
+        await guild.unban(ban_entry.user, reason=f"Вебпанель | {reason}")
+        if guild.me is not None:
+            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+                guild, "unban", ban_entry.user, guild.me, reason, description=f"{ban_entry.user} разбанен (панель)"
+            )
+        return self._json({"ok": True, "user_id": str(user_id), "user_name": str(ban_entry.user)})
+
+    async def _api_mod_timeout(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        if guild.me is None or not guild.me.guild_permissions.moderate_members:
+            return self._json({"ok": False, "error": "У бота нет права moderate_members"}, status=400)
+        member = self._resolve_member(guild, payload.get("member"))
+        if member is None:
+            return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+        guard = self._guard_mod_target(guild, member)
+        if guard:
+            return self._json({"ok": False, "error": guard}, status=400)
+        try:
+            seconds = int(payload.get("duration_seconds") or 600)
+        except (TypeError, ValueError):
+            seconds = 600
+        seconds = max(30, min(seconds, 28 * 86400))
+        reason = str(payload.get("reason") or "Тайм-аут из вебпанели")
+        end = datetime.now(UTC) + timedelta(seconds=seconds)
+        await member.timeout(end, reason=f"Вебпанель | {reason}")
+        if guild.me is not None:
+            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+                guild, "timeout", member, guild.me, reason,
+                description=f"{member.mention} получил тайм-аут {seconds // 60} мин (панель)",
+            )
+        return self._json(
+            {"ok": True, "member_id": str(member.id), "member_name": member.display_name, "until": end.isoformat()}
+        )
+
+    async def _mod_action(self, request: web.Request, action: str, *, delete_days: bool = False) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        if guild.me is None or not getattr(guild.me.guild_permissions, f"{action}_members"):
+            return self._json({"ok": False, "error": f"У бота нет права {action}_members"}, status=400)
+        member = self._resolve_member(guild, payload.get("member"))
+        if member is None:
+            return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+        guard = self._guard_mod_target(guild, member)
+        if guard:
+            return self._json({"ok": False, "error": guard}, status=400)
+        reason = str(payload.get("reason") or "")
+        fmt = "кикнут"
+        extra: dict[str, Any] = {}
+        if action == "kick":
+            await member.kick(reason=f"Вебпанель{': ' + reason if reason else ''}")
+        else:
+            fmt = "забанен"
+            delete_days_int = 0
+            if delete_days:
+                try:
+                    delete_days_int = max(0, min(int(payload.get("delete_days") or 0), 7))
+                except (TypeError, ValueError):
+                    delete_days_int = 0
+            await member.ban(reason=f"Вебпанель{': ' + reason if reason else ''}", delete_message_seconds=delete_days_int * 86400)
+            extra["delete_days"] = delete_days_int
+        if guild.me is not None:
+            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+                guild, action, member, guild.me, reason, description=f"{member.mention} {fmt} (панель)"
+            )
+        return self._json(
+            {"ok": True, "action": action, "member_id": str(member.id), "member_name": member.display_name, **extra}
+        )
+
+    async def _api_giveaways(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        rows = await service.recent_for_guild(guild.id, 60)
+        active, finished = [], []
+        for row in rows:
+            item = {
+                "id": row["id"],
+                "prize": row["prize"],
+                "winners": row["winners"],
+                "active": bool(row["active"]),
+                "message_id": str(row["message_id"]) if row.get("message_id") else None,
+                "ends_at": row["ends_at"],
+                "created_at": row["created_at"],
+                "author_name": self._member_name(guild, row["author_id"]),
+                "channel_name": self._channel_name(guild, row["channel_id"]),
+                "entries": len(await service.entries(row["id"])),
+                "min_days": row.get("min_days", 0),
+            }
+            (active if row["active"] else finished).append(item)
+        return self._json(
+            {
+                "ok": True,
+                "active_total": len(active),
+                "finished_total": len(finished),
+                "active": active,
+                "finished": finished,
+            }
+        )
+
+    def _channel_name(self, guild: discord.Guild, channel_id: int) -> str:
+        channel = guild.get_channel(channel_id)
+        if channel is None:
+            channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            return str(channel_id)
+        prefix = "🔊" if isinstance(channel, discord.VoiceChannel) else "#"
+        return f"{prefix} {channel.name}"
+
+    async def _api_giveaway_create(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        channel = self._resolve_channel(payload.get("channel_id") or "")
+        if channel is None or channel.guild.id != guild.id:
+            return self._json({"ok": False, "error": "Канал не найден на этом сервере"}, status=400)
+        prize = str(payload.get("prize") or "").strip()
+        if not prize:
+            return self._json({"ok": False, "error": "Укажите приз"}, status=400)
+        try:
+            winners = int(payload.get("winners") or 1)
+            minutes = int(payload.get("duration_minutes") or 60)
+        except (TypeError, ValueError):
+            return self._json({"ok": False, "error": "Количество победителей/длительность — числа"}, status=400)
+        if not (1 <= winners <= 20):
+            return self._json({"ok": False, "error": "Победителей: от 1 до 20"}, status=400)
+        if not (1 <= minutes <= 43200):
+            return self._json({"ok": False, "error": "Длительность: от 1 минуты до 30 дней"}, status=400)
+        try:
+            min_days = max(0, int(payload.get("min_days") or 0))
+        except (TypeError, ValueError):
+            min_days = 0
+        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        ends_at = datetime.now(UTC) + timedelta(minutes=minutes)
+        giveaway_id = await service.create(guild.id, channel.id, self.bot.user.id, prize[:256], winners, ends_at, min_days)  # type: ignore[union-attr]
+        giveaway = await service.get(giveaway_id)
+        assert giveaway is not None
+        embed = await service.embed(giveaway)
+        view = self._giveaway_view()
+        try:
+            message = await channel.send(embed=embed, view=view)
+        except discord.HTTPException as exc:
+            await service.finish(giveaway_id)
+            return self._json({"ok": False, "error": f"Не удалось отправить: {exc.status}"}, status=400)
+        await service.bind_message(giveaway_id, message.id)
+        self.bot.add_view(view, message_id=message.id)
+        return self._json(
+            {
+                "ok": True,
+                "id": giveaway_id,
+                "message_id": str(message.id),
+                "channel": channel.name,
+                "jump_url": message.jump_url,
+                "ends_at": ends_at.isoformat(),
+            }
+        )
+
+    def _giveaway_view(self) -> Any:
+        from app.core.views import GiveawayView
+
+        return GiveawayView()
+
+    async def _finish_giveaway(self, giveaway: dict[str, Any], *, reroll: bool = False) -> str:
+        """Завершает розыгрыш: розыгрыш победителей, анонс, обновление сообщения."""
+        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        entries = await service.entries(giveaway["id"])
+        winners = service.draw(entries, int(giveaway["winners"]))
+        await service.finish(giveaway["id"])
+        channel = self.bot.get_channel(giveaway["channel_id"])
+        if isinstance(channel, discord.TextChannel):
+            header = "Перерозыгрыш" if reroll else "Приз"
+            announce = embeds.success("🎉 Розыгрыш завершён", f"{header}: **{giveaway['prize']}**")
+            announce.add_field(
+                name="Победители",
+                value=", ".join(f"<@{uid}>" for uid in winners) if winners else "Недостаточно участников",
+                inline=False,
+            )
+            try:
+                await channel.send(embed=announce)
+            except discord.HTTPException:
+                pass
+            if giveaway.get("message_id"):
+                try:
+                    message = await channel.fetch_message(int(giveaway["message_id"]))
+                    embed = await service.embed(giveaway)
+                    embed.set_footer(text="Розыгрыш завершён")
+                    await message.edit(embed=embed, view=None)
+                except discord.HTTPException:
+                    pass
+        return ", ".join(f"<@{uid}>" for uid in winners) if winners else "нет победителей"
+
+    async def _api_giveaway_end(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        payload = await self._read_json(request)
+        message_id = self._parse_id(payload.get("message_id"))
+        if guild is None or message_id is None:
+            return self._json({"ok": False, "error": "Сервер или ID сообщения неверны"}, status=400)
+        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        giveaway = await service.get_by_message(message_id)
+        if giveaway is None or giveaway["guild_id"] != guild.id:
+            return self._json({"ok": False, "error": "Розыгрыш не найден"}, status=404)
+        if not giveaway["active"]:
+            return self._json({"ok": False, "error": "Розыгрыш уже завершён"}, status=400)
+        winners = await self._finish_giveaway(giveaway)
+        return self._json({"ok": True, "winners": winners, "message_id": str(message_id)})
+
+    async def _api_giveaway_reroll(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        payload = await self._read_json(request)
+        message_id = self._parse_id(payload.get("message_id"))
+        if guild is None or message_id is None:
+            return self._json({"ok": False, "error": "Сервер или ID сообщения неверны"}, status=400)
+        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        giveaway = await service.get_by_message(message_id)
+        if giveaway is None or giveaway["guild_id"] != guild.id:
+            return self._json({"ok": False, "error": "Розыгрыш не найден"}, status=404)
+        winners = await self._finish_giveaway(giveaway, reroll=True)
+        return self._json({"ok": True, "winners": winners, "message_id": str(message_id)})
+
+    async def _api_schedule(self, request: web.Request) -> web.Response:
+        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        rows = await service.recent(200)
+        guild = self._primary_guild()
+        upcoming, done = [], []
+        for row in rows:
+            embed_schema = {}
+            try:
+                embed_schema = json.loads(row.get("embed_json") or "{}") or {}
+            except (TypeError, ValueError):
+                embed_schema = {}
+            item = {
+                "id": row["id"],
+                "guild_id": str(row["guild_id"]),
+                "channel_id": str(row["channel_id"]),
+                "channel_name": self._channel_name(self._primary_guild() or guild, row["channel_id"]),
+                "content": (row["content"] or "")[:120],
+                "title": (embed_schema.get("title") or "")[:120],
+                "send_at": row["send_at"],
+                "created_at": row["created_at"],
+                "done": bool(row["done"]),
+            }
+            (done if row["done"] else upcoming).append(item)
+        upcoming.sort(key=lambda item: item["send_at"])
+        # Актуальный канал ищем по всем гильдиям бота, не только primary.
+        for item in upcoming:
+            ch = self.bot.get_channel(int(item["channel_id"]))
+            if ch is not None:
+                item["channel_name"] = f"{'🔊' if isinstance(ch, discord.VoiceChannel) else '#'} {ch.name}"
+        return self._json({"ok": True, "upcoming": upcoming, "done": done})
+
+    async def _api_schedule_create(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        channel = self._resolve_channel(payload.get("channel_id") or "")
+        if channel is None or not isinstance(channel, discord.TextChannel):
+            return self._json({"ok": False, "error": "Канал не найден"}, status=400)
+        send_at = None
+        raw_at = str(payload.get("send_at") or "")
+        if raw_at:
+            try:
+                send_at = datetime.fromisoformat(raw_at.replace("Z", "+00:00"))
+            except ValueError:
+                return self._json({"ok": False, "error": "Некорректная дата отправки"}, status=400)
+        if send_at is None:
+            return self._json({"ok": False, "error": "Укажите дату отправки"}, status=400)
+        content = str(payload.get("content") or "").strip()
+        embed = payload.get("embed")
+        embed = embed if isinstance(embed, dict) else {}
+        if not content and not (embed.get("title") or embed.get("description")):
+            return self._json({"ok": False, "error": "Укажите текст или эмбед"}, status=400)
+        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        try:
+            scheduled_id = await service.create(
+                channel.guild.id, channel.id, self.bot.user.id, send_at, content=content[:2000], embed=embed  # type: ignore[union-attr]
+            )
+        except ValueError as exc:
+            return self._json({"ok": False, "error": str(exc)}, status=400)
+        return self._json({"ok": True, "id": scheduled_id, "channel": channel.name, "send_at": send_at.isoformat()})
+
+    async def _api_schedule_delete(self, request: web.Request) -> web.Response:
+        message_id = self._parse_id(request.match_info.get("schedule_id"))
+        if message_id is None:
+            return self._json({"ok": False, "error": "Неверный ID"}, status=400)
+        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        deleted = await service.delete(message_id)
+        if not deleted:
+            return self._json({"ok": False, "error": "Запись не найдена"}, status=404)
+        return self._json({"ok": True, "id": message_id})
+
+    async def _api_backup(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        settings_service = self.bot.services.settings  # type: ignore[union-attr]
+        settings = await settings_service.get(guild.id)
+        moderation = self.bot.services.moderation  # type: ignore[union-attr]
+        giveaways = self.bot.services.giveaways  # type: ignore[union-attr]
+        scheduled = self.bot.services.scheduled  # type: ignore[union-attr]
+        data = {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "bot": {
+                "name": self.bot.user.name if self.bot.user else None,  # type: ignore[union-attr]
+                "guild_id": str(guild.id),
+                "guild_name": guild.name,
+            },
+            "modules": self._modules_status(),
+            "settings": dict(settings),
+            "blocked_words": await settings_service.blocked_words(guild.id),
+            "warns": await moderation.all_warns(guild.id, 2000),
+            "giveaways": await giveaways.recent_for_guild(guild.id, 200),
+            "scheduled": await scheduled.recent(200),
+        }
+        return self._attachment(
+            json_data=data, filename=f"backup-{guild.name}-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.json"
+        )
+
+    async def _api_backup_db(self, request: web.Request) -> web.Response:
+        db_path = Path(self.bot.config.db_path)
+        if not db_path.is_file():
+            return self._json({"ok": False, "error": "Файл БД не найден"}, status=404)
+        import aiosqlite
+
+        snapshot_path = db_path.with_suffix(f".snapshot-{int(time.time())}.db")
+        try:
+            conn = await aiosqlite.connect(str(db_path))
+            try:
+                await conn.execute(f"VACUUM INTO '{str(snapshot_path).replace(chr(39), chr(39) + chr(39))}'")
+            finally:
+                await conn.close()
+            if not snapshot_path.is_file():
+                return self._json({"ok": False, "error": "Не удалось создать снапшот"}, status=500)
+            body = snapshot_path.read_bytes()
+            snapshot_path.unlink(missing_ok=True)
+            return web.Response(
+                body=body,
+                content_type="application/octet-stream",
+                headers={
+                    "Content-Disposition": f'attachment; filename="db-snapshot-{datetime.now(UTC).strftime("%Y%m%d-%H%M%S")}.db"'
+                },
+            )
+        except Exception as exc:
+            snapshot_path.unlink(missing_ok=True)
+            return self._json({"ok": False, "error": f"Ошибка снапшота: {exc}"[:200]}, status=500)
+
+    def _attachment(self, *, data: bytes | None = None, json_data: dict[str, Any] | None = None, filename: str) -> web.Response:
+        if json_data is not None:
+            data = json.dumps(json_data, ensure_ascii=False, indent=2).encode("utf-8")
+        return web.Response(
+            body=data,
+            content_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
+        )
 
     # --- API: прокси вебхуков ---
 

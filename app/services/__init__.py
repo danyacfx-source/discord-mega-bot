@@ -20,6 +20,7 @@ from app.services.music_service import MusicService
 from app.services.poll_service import PollService
 from app.services.reaction_roles_service import ReactionRolesService
 from app.services.reminder_service import ReminderService
+from app.services.scheduler_service import ScheduledMessagesService
 from app.services.season_service import SeasonService
 from app.services.settings_service import SettingsService
 from app.services.temp_voice_service import TempVoiceService
@@ -44,3 +45,4 @@ class Services:
     tempvoice: TempVoiceService
     birthdays: BirthdayService
     seasons: SeasonService
+    scheduled: ScheduledMessagesService

@@ -39,3 +39,18 @@ class WarnsRepository(BaseRepository):
     async def delete(self, guild_id: int, warn_id: int) -> bool:
         cursor = await self.db.execute("DELETE FROM warns WHERE id = ? AND guild_id = ?", (warn_id, guild_id))
         return cursor.rowcount > 0
+
+    async def get(self, guild_id: int, warn_id: int) -> dict | None:
+        row = await self.db.fetchone(
+            "SELECT id, user_id, moderator_id, reason, created_at FROM warns WHERE id = ? AND guild_id = ?",
+            (warn_id, guild_id),
+        )
+        return dict(row) if row else None
+
+    async def list_for_guild(self, guild_id: int, limit: int = 300) -> list[dict]:
+        rows = await self.db.fetchall(
+            "SELECT id, user_id, moderator_id, reason, created_at FROM warns WHERE guild_id = ? "
+            "ORDER BY id DESC LIMIT ?",
+            (guild_id, limit),
+        )
+        return [dict(row) for row in rows]

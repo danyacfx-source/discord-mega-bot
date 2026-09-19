@@ -137,6 +137,18 @@ CREATE TABLE IF NOT EXISTS season_points (
     points     INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, guild_id)
 );
+
+CREATE TABLE IF NOT EXISTS scheduled_messages (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    guild_id     INTEGER NOT NULL,
+    channel_id   INTEGER NOT NULL,
+    author_id    INTEGER NOT NULL,
+    content      TEXT    NOT NULL DEFAULT '',
+    embed_json   TEXT    NOT NULL DEFAULT '{}',
+    send_at      TEXT    NOT NULL,
+    created_at   TEXT    NOT NULL,
+    done         INTEGER NOT NULL DEFAULT 0
+);
 """
 
 

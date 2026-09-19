@@ -46,6 +46,12 @@ class ModerationService:
     async def remove_warn(self, guild_id: int, warn_id: int) -> bool:
         return await self._warns.delete(guild_id, warn_id)
 
+    async def get_warn(self, guild_id: int, warn_id: int) -> dict | None:
+        return await self._warns.get(guild_id, warn_id)
+
+    async def all_warns(self, guild_id: int, limit: int = 300) -> list[dict]:
+        return await self._warns.list_for_guild(guild_id, limit)
+
     @staticmethod
     def parse_duration(value: str) -> int | None:
         return parse_duration(value)
