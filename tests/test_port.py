@@ -812,6 +812,12 @@ async def test_webpanel_api_logs_filters(tmp_path):
                 assert len(audit_body["logs"]) == 1
                 assert audit_body["logs"][0]["cat"] == "member"
 
+                sys_resp = await client.get("/api/logs?audit=0", headers=headers)
+                sys_body = await sys_resp.json()
+                assert sys_body["count"] >= 1
+                assert all(e["audit"] == "0" for e in sys_body["logs"])
+                assert any("технический warning" in e["msg"] for e in sys_body["logs"])
+
                 cat_resp = await client.get("/api/logs?cat=sys", headers=headers)
                 cat_body = await cat_resp.json()
                 assert all(e["cat"] == "sys" for e in cat_body["logs"])

@@ -40,11 +40,21 @@ class RingBufferHandler(logging.Handler):
         except Exception:
             pass
 
-    def snapshot(self, limit: int | None = None, *, level: str = "", cat: str = "", audit_only: bool = False) -> list[dict[str, str]]:
+    def snapshot(
+        self,
+        limit: int | None = None,
+        *,
+        level: str = "",
+        cat: str = "",
+        audit: str = "",
+    ) -> list[dict[str, str]]:
+        """audit="1" — только события Discord, audit="0" — только технические, "" — все."""
         with self._lock:
             items = list(self._records)
-        if audit_only:
+        if audit == "1":
             items = [e for e in items if e.get("audit") == "1"]
+        elif audit == "0":
+            items = [e for e in items if e.get("audit") == "0"]
         if cat:
             items = [e for e in items if e.get("cat") == cat]
         if level:

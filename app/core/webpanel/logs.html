@@ -77,12 +77,6 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
   <select id="f_cat">
     <option value="">Категория: все</option>
     <option value="sys">Технические</option>
-    <option value="bot">Бот</option>
-    <option value="member">Участники</option>
-    <option value="message">Сообщения</option>
-    <option value="voice">Голосовые</option>
-    <option value="mod">Модерация</option>
-    <option value="general">Общее</option>
   </select>
   <select id="f_level">
     <option value="">Уровень: все</option>
@@ -90,7 +84,6 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
     <option value="WARNING">WARNING</option>
     <option value="ERROR">ERROR</option>
   </select>
-  <button id="f_audit">Только Discord</button>
   <label style="color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px">
     <input type="checkbox" id="f_auto" checked> Автообновление
   </label>
@@ -164,10 +157,9 @@ async function refresh() {
   if (!TOKEN) return;
   const cat = encodeURIComponent($("f_cat").value);
   const level = encodeURIComponent($("f_level").value);
-  const audit = $("f_audit").classList.contains("active") ? "&audit=1" : "";
   const n = "300";
   try {
-    const d = await api(`/api/logs?n=${n}&cat=${cat}&level=${level}${audit}`);
+    const d = await api(`/api/logs?n=${n}&cat=${cat}&level=${level}&audit=0`);
     const list = $("list");
     $("count_badge").textContent = (d.count ?? 0) + " записей";
     if (!d.logs || !d.logs.length) {
@@ -194,7 +186,6 @@ async function refresh() {
 $("btn_refresh").onclick = refresh;
 $("f_cat").onchange = refresh;
 $("f_level").onchange = refresh;
-$("f_audit").onclick = (e) => { e.target.classList.toggle("active"); refresh(); };
 let paused = false;
 $("btn_pause").onclick = (e) => {
   paused = !paused;

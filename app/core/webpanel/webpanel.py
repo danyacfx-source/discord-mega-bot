@@ -1824,9 +1824,10 @@ class WebPanel:
             limit = 200
         level = request.query.get("level", "")
         cat = request.query.get("cat", "")
-        audit_only = request.query.get("audit", "").lower() in ("1", "true", "yes")
+        audit_raw = request.query.get("audit", "").lower()
+        audit = "1" if audit_raw in ("1", "true", "yes") else ("0" if audit_raw in ("0", "false", "no") else "")
         entries = (
-            self._ring.snapshot(limit, level=level, cat=cat, audit_only=audit_only)
+            self._ring.snapshot(limit, level=level, cat=cat, audit=audit)
             if self._ring is not None
             else []
         )
