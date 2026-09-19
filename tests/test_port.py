@@ -5,6 +5,7 @@ import os
 import tempfile
 from datetime import UTC, datetime, timedelta
 
+import discord
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -369,6 +370,74 @@ def _panel_bot(tmp_path, **kwargs) -> MegaBot:
         **{key: value[key] for key in value},
     )
     return MegaBot(config)
+
+
+def _fake_send_capture(target: list) -> discord.TextChannel:
+    """Фейк-канал, проходящий isinstance(discord.TextChannel) и поймавший вызов send().
+
+    TextChannel имеет __slots__ без __dict__, поэтому метод send нельзя подменить
+    у экземпляра — берём ПОДКЛАСС с переопределённым классовым send().
+    """
+
+    class _CaptureChannel(discord.TextChannel):
+        def __init__(self) -> None:
+            self.id = 555
+            self.name = "интеграционные-тесты"
+
+        async def send(self, *args, **kwargs):  # type: ignore[method-assign,override]
+            target.append((args, kwargs))
+            return discord.Object(id=424242)  # реальный send() вернул бы Message с .id
+
+    return _CaptureChannel()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_bot_send_clicks_fake_channel(tmp_path):
+    """КЛИК по кнопке отправки: POST /api/bot/send -> _api_bot_send -> channel.send()."""
+    calls: list = []
+
+    bot = _panel_bot(tmp_path)
+    channel = _fake_send_capture(calls)
+    bot.get_channel = lambda cid: channel if int(cid or 0) == 555 else None
+
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.post(
+                "/api/bot/send",
+                json={"channel_id": "555", "content": "привет из теста"},
+                headers=headers,
+            )
+            assert resp.status == 200
+            body = await resp.json()
+            assert body.get("ok") is True
+            assert body.get("message_id") == "424242"
+
+    assert len(calls) == 1, "channel.send() должен быть вызван ровно один раз"
+    _, kwargs = calls[0]
+    assert kwargs.get("content") == "привет из теста"
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_bot_send_unknown_channel_400(tmp_path):
+    """Чужой/несуществующий канал -> 400 «Канал не найден»."""
+    bot = _panel_bot(tmp_path)
+    bot.get_channel = lambda cid: None
+
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.post(
+                "/api/bot/send",
+                json={"channel_id": "999", "content": "х"},
+                headers=headers,
+            )
+            assert resp.status == 400
+            body = await resp.json()
+            assert body.get("ok") is False
+            assert "Канал" in body.get("error", "")
 
 
 @pytest.mark.asyncio
