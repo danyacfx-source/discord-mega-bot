@@ -17,22 +17,60 @@ import aiohttp
 import discord
 from aiohttp import web
 
+from app.core.webpanel.log_ring import RingBufferHandler
+
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
 
 logger = logging.getLogger("bot.webpanel")
 
 _INDEX_PATH = Path(__file__).parent / "index.html"
+_SCRIPT_PATH = Path(__file__).parent / "panel.js"
 _WEBHOOK_RE = re.compile(r"^https://(?:discord\.com|discordapp\.com)/api/webhooks/(\d+)/([A-Za-z0-9_\-]+)$")
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
 _MAX_EMBEDS = 10
 _LOGIN_WINDOW = 60.0
 _LOGIN_LIMIT = 5
 _SESSION_TTL = 24 * 3600
+_SESSION_MAX = 2000
+_RATE_LIMIT_MAX = 600
+_RATE_LIMIT_WINDOW = 60.0
 _TOKEN_FILE = ".panel-token"
 _UPLOAD_DIRNAME = "uploads"
 _UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+_UPLOAD_NAME_RE = re.compile(r"^[0-9a-fA-F]{32}\.(?:png|jpg|jpeg|gif|webp)$")
+_MAGIC: dict[str, tuple[bytes, ...]] = {
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+    ".webp": (b"RIFF",),
+}
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: blob: https: http:; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+_LOG_RING_SIZE = 500
+_MAX_COMPONENT_ROWS = 5
+_MAX_COMPONENT_PER_ROW = 5
+_MAX_BUTTON_LABEL = 80
+_BUTTON_STYLES = {1, 2, 3, 4, 5}
+_BUTTON_STYLE_BY_INT = {
+    1: discord.ButtonStyle.primary,
+    2: discord.ButtonStyle.secondary,
+    3: discord.ButtonStyle.success,
+    4: discord.ButtonStyle.danger,
+    5: discord.ButtonStyle.link,
+}
 _SETTING_COLUMNS = (
     "welcome_channel_id",
     "farewell_channel_id",
@@ -103,6 +141,92 @@ def _trim_embeds(raw: Any) -> list[dict[str, Any]]:
     return trimmed
 
 
+def _trim_components(raw: Any) -> list[dict[str, Any]]:
+    """Нормализует кнопки (components) до формата Discord webhook. Возвращает список ActionRow."""
+    if not isinstance(raw, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for row in (raw or [])[:_MAX_COMPONENT_ROWS]:
+        if not isinstance(row, list):
+            continue
+        buttons: list[dict[str, Any]] = []
+        for item in (row or [])[:_MAX_COMPONENT_PER_ROW]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                style = int(item.get("style") or 1)
+            except (TypeError, ValueError):
+                style = 1
+            if style not in _BUTTON_STYLES:
+                style = 1
+            label = str(item.get("label") or "")[:_MAX_BUTTON_LABEL]
+            if not label:
+                continue
+            url = str(item.get("url") or "")[:2048]
+            if style == 5:
+                if not url.startswith(("https://", "http://")):
+                    continue
+            else:
+                url = ""
+            buttons.append({"type": 2, "label": label, "style": style, "url": url})
+        if buttons:
+            rows.append({"type": 1, "components": buttons})
+    return rows
+
+
+def _view_from_components(raw: Any) -> discord.ui.View | None:
+    """Собирает View для отправки через бота. ``None`` — кнопки не трогаем."""
+    if raw is None:
+        return None
+    view = discord.ui.View()
+    for row in _trim_components(raw):
+        for component in row.get("components", [])[:_MAX_COMPONENT_PER_ROW]:
+            style = _BUTTON_STYLE_BY_INT.get(component["style"], discord.ButtonStyle.secondary)
+            view.add_item(
+                discord.ui.Button(label=component["label"], style=style, url=component.get("url") or None)
+            )
+    return view
+
+
+def _components_from_message(message: discord.Message) -> list[list[dict[str, Any]]]:
+    rows: list[list[dict[str, Any]]] = []
+    for message_view in getattr(message, "components", []) or []:
+        row: list[dict[str, Any]] = []
+        for component in getattr(message_view, "children", []) or []:
+            if isinstance(component, discord.Button):
+                row.append(
+                    {
+                        "label": component.label or "",
+                        "style": str(component.style.value if component.style else 1),
+                        "url": str(getattr(component, "url", "") or ""),
+                    }
+                )
+        if row:
+            rows.append(row)
+    return rows
+
+
+def _components_from_raw(raw: Any) -> list[list[dict[str, Any]]]:
+    rows: list[list[dict[str, Any]]] = []
+    for action in (raw or [])[:_MAX_COMPONENT_ROWS]:
+        if not isinstance(action, dict):
+            continue
+        row: list[dict[str, Any]] = []
+        for component in (action.get("components") or [])[:_MAX_COMPONENT_PER_ROW]:
+            if not isinstance(component, dict) or component.get("type") != 2:
+                continue
+            row.append(
+                {
+                    "label": str(component.get("label") or ""),
+                    "style": str(component.get("style") or 1),
+                    "url": str(component.get("url") or ""),
+                }
+            )
+        if row:
+            rows.append(row)
+    return rows
+
+
 def _embed_from_dict(data: dict[str, Any]) -> discord.Embed:
     embed = discord.Embed()
     if data.get("title"):
@@ -168,6 +292,7 @@ def _message_to_client(message: discord.Message) -> dict[str, Any]:
     return {
         "content": message.content or "",
         "embeds": [_embed_to_client(embed) for embed in message.embeds[:_MAX_EMBEDS]],
+        "components": _components_from_message(message),
     }
 
 
@@ -175,6 +300,7 @@ def _raw_to_client(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "content": raw.get("content") or "",
         "embeds": [_raw_embed_to_client(embed) for embed in (raw.get("embeds") or [])[:_MAX_EMBEDS]],
+        "components": _components_from_raw(raw.get("components")),
     }
 
 
@@ -206,11 +332,14 @@ class WebPanel:
         self.public_url = config.panel_public_url
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
+        self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
         self._static_token: str | None = None if self.password else self._load_static_token()
         self._sessions: dict[str, float] = {}
+        self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
         self._runner: web.AppRunner | None = None
         self._http: aiohttp.ClientSession | None = None
+        self._ring: RingBufferHandler | None = None
 
     # --- жизненный цикл ---
 
@@ -221,20 +350,28 @@ class WebPanel:
             return path.read_text(encoding="utf-8").strip()
         token = secrets.token_urlsafe(32)
         path.write_text(token, encoding="utf-8")
+        try:
+            path.chmod(0o600)
+        except (OSError, NotImplementedError):
+            pass
         return token
 
     def _create_app(self) -> web.Application:
-        app = web.Application()
+        app = web.Application(middlewares=[self._security_middleware])
         app.router.add_get("/", self._redirect_index)
         app.router.add_get("/admin", self._serve_index)
         app.router.add_get("/admin/", self._serve_index)
         app.router.add_get("/admin/embed-constructor", self._serve_index)
+        app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
+        app.router.add_post("/api/logout", self._authorized(self._api_logout))
         app.router.add_get("/api/status", self._authorized(self._api_status))
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
         app.router.add_get("/api/settings", self._authorized(self._api_settings_get))
         app.router.add_post("/api/settings", self._authorized(self._api_settings_post))
         app.router.add_post("/api/upload", self._authorized(self._api_upload))
+        app.router.add_get("/api/uploads", self._authorized(self._api_uploads_list))
+        app.router.add_delete("/api/uploads/{name}", self._authorized(self._api_uploads_delete))
         self._uploads_dir.mkdir(parents=True, exist_ok=True)
         app.router.add_static("/uploads", str(self._uploads_dir), show_index=False)
         app.router.add_get("/api/bot/channels", self._authorized(self._api_bot_channels))
@@ -244,35 +381,86 @@ class WebPanel:
         app.router.add_post("/api/webhook/send", self._authorized(self._api_webhook_send))
         app.router.add_post("/api/webhook/edit", self._authorized(self._api_webhook_edit))
         app.router.add_post("/api/webhook/fetch", self._authorized(self._api_webhook_fetch))
+        app.router.add_get("/api/logs", self._authorized(self._api_logs))
         return app
 
     async def start(self) -> None:
         if self._runner is not None:
             return
-        self._http = aiohttp.ClientSession()
+        self._http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5))
+        if self.password is None and self.host not in _LOCAL_HOSTS:
+            logger.warning(
+                "Вебпанель без PANEL_PASSWORD слушает %s:%d — страница доступна по статическому токену. "
+                "В открытых сетях задайте PANEL_PASSWORD.",
+                self.host,
+                self.port,
+            )
         runner = web.AppRunner(self._create_app())
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
         self._runner = runner
+        self._ring = RingBufferHandler(_LOG_RING_SIZE)
+        logging.getLogger().addHandler(self._ring)
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
 
     async def stop(self) -> None:
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
+        if self._ring is not None:
+            logging.getLogger().removeHandler(self._ring)
+            self._ring = None
         if self._http is not None:
             await self._http.close()
             self._http = None
 
-    # --- авторизация и origin ---
+    # --- авторизация, origin и безопасность ---
+
+    @web.middleware
+    async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
+        try:
+            response = await handler(request)
+        except web.HTTPException as exc:
+            response = exc
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "Referrer-Policy": "no-referrer",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=(), usb=(), payment=()",
+            "Cross-Origin-Opener-Policy": "same-origin",
+            "Content-Security-Policy": _CSP,
+            "Cache-Control": "no-store",
+        }
+        proto = request.headers.get("X-Forwarded-Proto") or request.scheme
+        if proto == "https":
+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers.update(headers)
+        return response
 
     def _authorized(self, handler):
         async def wrapped(request: web.Request) -> web.Response:
-            if not self._allowed_origin(request) or not self._check_token(request):
+            if not self._rate_ok(request) or not self._allowed_origin(request) or not self._check_token(request):
                 return self._json({"ok": False, "error": "Unauthorized"}, status=401)
             return await handler(request)
 
         return wrapped
+
+    def _rate_key(self, request: web.Request) -> str:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip() or (request.remote or "?")
+        return request.remote or "?"
+
+    def _rate_ok(self, request: web.Request) -> bool:
+        key = self._rate_key(request)
+        now = time.time()
+        hits = self._rate_hits[key]
+        while hits and hits[0] < now - _RATE_LIMIT_WINDOW:
+            hits.popleft()
+        if len(hits) >= _RATE_LIMIT_MAX:
+            return False
+        hits.append(now)
+        return True
 
     def _allowed_origin(self, request: web.Request) -> bool:
         origin = request.headers.get("Origin") or request.headers.get("Referer")
@@ -300,10 +488,24 @@ class WebPanel:
         if not token:
             return False
         if self.password is None:
-            return bool(self._static_token) and token == self._static_token
+            return bool(self._static_token) and secrets.compare_digest(token, self._static_token)
         now = time.time()
-        self._sessions = {saved: expires for saved, expires in self._sessions.items() if expires > now}
-        return token in self._sessions
+        active: dict[str, float] = {}
+        matches = False
+        for saved, expires in self._sessions.items():
+            if expires > now:
+                active[saved] = expires
+                if secrets.compare_digest(token, saved):
+                    matches = True
+        self._sessions = active
+        if len(self._sessions) > _SESSION_MAX:
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1])[:_SESSION_MAX])
+        return matches
+
+    async def _api_logout(self, request: web.Request) -> web.Response:
+        token = request.headers.get("X-Panel-Token", "")
+        self._sessions.pop(token, None)
+        return self._json({"ok": True})
 
     @staticmethod
     def _json(data: dict[str, Any], status: int = 200) -> web.Response:
@@ -317,10 +519,18 @@ class WebPanel:
     async def _serve_index(self, request: web.Request) -> web.Response:
         html = self._index_html
         if self.password:
-            html = html.replace("__PANEL_TOKEN__", "").replace("__PANEL_LOGIN__", "true")
+            html = html.replace("__PANEL_TOKEN__", "")
         else:
-            html = html.replace("__PANEL_TOKEN__", self._static_token or "").replace("__PANEL_LOGIN__", "false")
+            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
         return web.Response(text=html, content_type="text/html", charset="utf-8")
+
+    async def _serve_script(self, request: web.Request) -> web.Response:
+        body = self._index_js
+        if self.password:
+            body = body.replace("__PANEL_TOKEN__", "").replace("__PANEL_LOGIN__", "1")
+        else:
+            body = body.replace("__PANEL_TOKEN__", self._static_token or "").replace("__PANEL_LOGIN__", "0")
+        return web.Response(text=body, content_type="text/javascript", charset="utf-8")
 
     # --- API: login / status / channels ---
 
@@ -338,11 +548,13 @@ class WebPanel:
             payload = await request.json()
         except Exception:
             return self._json({"ok": False, "error": "Некорректный JSON"}, status=400)
-        if payload.get("password") != self.password:
+        if not (secrets.compare_digest(str(payload.get("password") or ""), self.password)):
             attempts.append(now)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
         token = secrets.token_urlsafe(32)
         self._sessions[token] = now + _SESSION_TTL
+        if len(self._sessions) > _SESSION_MAX:
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1])[:_SESSION_MAX])
         return self._json({"ok": True, "token": token})
 
     async def _api_status(self, request: web.Request) -> web.Response:
@@ -399,6 +611,124 @@ class WebPanel:
         options.sort(key=lambda item: item["name"])
         return options
 
+    def _role_options(self) -> list[dict[str, Any]]:
+        guild = self._primary_guild()
+        if guild is None:
+            return []
+        roles = []
+        for role in guild.roles:
+            if role.is_default():
+                continue
+            roles.append({"id": str(role.id), "name": role.name})
+        roles.sort(key=lambda item: item["name"])
+        return roles
+
+    def _effective_log_channels(self, settings: dict[str, Any]) -> dict[str, str | None]:
+        config = self.bot.config
+        return {
+            "log": settings.get("log_channel_id"),
+            "member": settings.get("member_log_channel_id") or config.member_log_channel_id,
+            "message": settings.get("message_log_channel_id") or config.message_log_channel_id,
+            "voice": settings.get("voice_log_channel_id") or config.voice_log_channel_id,
+            "mod": settings.get("mod_log_channel_id") or config.mod_log_channel_id,
+            "bot": settings.get("bot_log_channel_id") or config.bot_log_channel_id,
+        }
+
+    def _modules_status(self) -> dict[str, Any]:
+        """Витрина модулей, настраиваемых через .env (только для чтения)."""
+        config = self.bot.config
+        return {
+            "welcome": {
+                "enabled": config.welcome_enabled,
+                "send_dm": config.welcome_send_dm,
+                "channel": config.welcome_channel_id,
+                "channel_enabled": config.welcome_channel_enabled,
+                "leave_channel": config.welcome_leave_channel_id,
+                "leave_enabled": config.welcome_leave_channel_enabled,
+            },
+            "role_menu": {
+                "enabled": config.role_menu_enabled,
+                "channel": config.role_menu_channel_id,
+                "message": config.role_menu_message,
+                "roles": list(config.role_menu_roles),
+                "max_values": config.role_menu_max_values,
+            },
+            "birthdays": {
+                "channel": config.birthday_channel_id,
+                "hour": config.birthday_announce_hour,
+                "ping_role": config.birthday_ping_role_id,
+            },
+            "temp_voices": {
+                "triggers": list(config.temp_voice_trigger_ids),
+                "category": config.temp_voice_category_id,
+            },
+            "donations": {
+                "notify_channel": config.donation_notify_channel_id,
+                "button_channel": config.donate_button_channel_id,
+                "role_id": config.donation_role_id,
+                "role_name": config.donation_role_name,
+                "bonuses": list(config.donate_bonuses),
+                "url": config.donate_url,
+            },
+            "overlay": {
+                "host": config.overlay_host,
+                "port": config.overlay_port,
+                "goal_enabled": config.overlay_donation_goal_enabled,
+                "goal_target": config.overlay_donation_goal_target,
+                "goal_current": config.overlay_donation_goal_current,
+                "currency": config.overlay_donation_goal_currency,
+                "label": config.overlay_donation_goal_label,
+            },
+            "logs": {
+                "ignore_channels": list(config.logs_ignore_channel_ids),
+                "ignore_categories": list(config.logs_ignore_category_ids),
+            },
+            "kick": {
+                "slug": config.kick_channel_slug,
+                "notify_channel": config.kick_notify_channel_id,
+                "mod_channel": config.kick_mod_channel_id,
+                "ping_role": config.kick_ping_role_id,
+            },
+            "twitch": {
+                "channels": list(config.twitch_channels),
+                "notify_channel": config.twitch_notify_channel_id,
+                "ping_role": config.twitch_ping_role_id,
+            },
+            "automod": {
+                "block_links": config.automod_block_links,
+                "caps_threshold": config.automod_caps_threshold,
+                "max_messages": config.automod_max_messages_in_window,
+                "timeout_seconds": config.automod_timeout_seconds,
+                "ban_after": config.automod_ban_after_timeouts,
+                "banned_words": config.automod_banned_words or "",
+            },
+            "ai_chat": {
+                "enabled": config.ai_enabled,
+                "model": config.ai_model,
+                "channels": list(config.ai_channels),
+                "has_key": bool(config.ai_api_key),
+                "proxy": bool(config.ai_proxy),
+            },
+            "server_stats": {
+                "enabled": config.server_stats_enabled,
+                "category": config.server_stats_category_name,
+                "update_seconds": config.server_stats_update_seconds,
+            },
+            "seasons": {
+                "enabled": config.season_enabled,
+                "announce_channel": config.season_announce_channel_id,
+                "reward_roles": list(config.season_reward_roles),
+            },
+            "rules_gate": {
+                "message": config.rules_message_id,
+                "role": config.rules_role_id,
+            },
+            "ram_report": {
+                "channel": config.ram_report_channel_id,
+                "interval": config.ram_report_interval_minutes,
+            },
+        }
+
     async def _api_overview(self, request: web.Request) -> web.Response:
         bot = self.bot
         online = bot.is_ready() and bot.user is not None
@@ -443,6 +773,9 @@ class WebPanel:
                 "blocked_words": await service.blocked_words(guild.id),
                 "channels": self._channel_options(),
                 "categories": self._category_options(),
+                "roles": self._role_options(),
+                "modules": self._modules_status(),
+                "effective_logs": self._effective_log_channels(settings),
             }
         )
 
@@ -497,11 +830,51 @@ class WebPanel:
             return self._json({"ok": False, "error": "Пустой файл"}, status=400)
         if len(data) > _MAX_UPLOAD_BYTES:
             return self._json({"ok": False, "error": "Файл больше 8 МБ"}, status=400)
+        signatures = _MAGIC.get(ext, ())
+        if not signatures or not any(data[: len(sig)] == sig for sig in signatures):
+            return self._json({"ok": False, "error": "Содержимое не соответствует типу файла"}, status=400)
+        if ext == ".webp" and data[8:12] != b"WEBP":
+            return self._json({"ok": False, "error": "Содержимое не соответствует типу файла"}, status=400)
         self._uploads_dir.mkdir(parents=True, exist_ok=True)
         name = uuid.uuid4().hex + ext
         (self._uploads_dir / name).write_bytes(data)
         base = self._public_base(request)
         return self._json({"ok": True, "name": name, "url": f"/uploads/{name}", "absolute_url": f"{base}/uploads/{name}"})
+
+    async def _api_uploads_list(self, request: web.Request) -> web.Response:
+        files: list[dict[str, Any]] = []
+        if self._uploads_dir.is_dir():
+            for path in sorted(self._uploads_dir.iterdir(), key=lambda p: p.stat().st_mtime if p.is_file() else 0, reverse=True):
+                if not path.is_file() or _UPLOAD_NAME_RE.match(path.name) is None:
+                    continue
+                size = path.stat().st_size
+                files.append(
+                    {
+                        "name": path.name,
+                        "url": f"/uploads/{path.name}",
+                        "size": self._human_size(size),
+                        "bytes": size,
+                    }
+                )
+        return self._json({"ok": True, "count": len(files), "files": files})
+
+    async def _api_uploads_delete(self, request: web.Request) -> web.Response:
+        name = request.match_info.get("name", "")
+        if _UPLOAD_NAME_RE.match(name) is None:
+            return self._json({"ok": False, "error": "Некорректное имя файла"}, status=400)
+        path = self._uploads_dir / name
+        if not path.is_file():
+            return self._json({"ok": False, "error": "Файл не найден"}, status=404)
+        path.unlink(missing_ok=True)
+        return self._json({"ok": True})
+
+    @staticmethod
+    def _human_size(size: int) -> str:
+        if size < 1024:
+            return f"{size} Б"
+        if size < 1024 * 1024:
+            return f"{size / 1024:.1f} КБ"
+        return f"{size / 1024 / 1024:.1f} МБ"
 
     @staticmethod
     def _public_base(request: web.Request) -> str:
@@ -526,6 +899,7 @@ class WebPanel:
             message = await channel.send(
                 content=str(payload.get("content") or "")[:2000] or None,
                 embeds=[_embed_from_dict(item) for item in (payload.get("embeds") or [])[:_MAX_EMBEDS] if isinstance(item, dict)],
+                view=_view_from_components(payload.get("components")),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except (discord.HTTPException, discord.Forbidden) as exc:
@@ -546,6 +920,7 @@ class WebPanel:
             await message.edit(
                 content=str(payload.get("content") or "")[:2000] or None,
                 embeds=[_embed_from_dict(item) for item in (payload.get("embeds") or [])[:_MAX_EMBEDS] if isinstance(item, dict)],
+                view=_view_from_components(payload.get("components")),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         except (discord.HTTPException, discord.Forbidden) as exc:
@@ -587,18 +962,24 @@ class WebPanel:
         return payload if isinstance(payload, dict) else {}
 
     def _webhook_body(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return {
+        body: dict[str, Any] = {
             "content": str(payload.get("content") or "")[:2000] or "",
             "embeds": _trim_embeds(payload.get("embeds")),
             "allowed_mentions": {"parse": []},
         }
+        components = _trim_components(payload.get("components"))
+        if components:
+            body["components"] = components
+        return body
 
     async def _api_webhook_send(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
         base = self._webhook_base(payload.get("webhook_url"))
         if base is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL"}, status=400)
-        async with self._require_http().post(f"{base}?wait=true", json=self._webhook_body(payload)) as response:
+        async with self._require_http().post(
+            f"{base}?wait=true", json=self._webhook_body(payload), allow_redirects=False
+        ) as response:
             data = await response.json()
             if response.status >= 400:
                 return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
@@ -610,7 +991,9 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
-        async with self._require_http().patch(f"{base}/messages/{message_id}", json=self._webhook_body(payload)) as response:
+        async with self._require_http().patch(
+            f"{base}/messages/{message_id}", json=self._webhook_body(payload), allow_redirects=False
+        ) as response:
             data = await response.json()
             if response.status >= 400:
                 return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
@@ -622,13 +1005,22 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
-        async with self._require_http().get(f"{base}/messages/{message_id}") as response:
+        async with self._require_http().get(f"{base}/messages/{message_id}", allow_redirects=False) as response:
             data = await response.json()
             if response.status >= 400:
                 return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
             return self._json({"ok": True, "data": _raw_to_client(data)})
 
+    async def _api_logs(self, request: web.Request) -> web.Response:
+        limit = request.query.get("n", "200")
+        try:
+            limit = max(1, min(int(limit), 500))
+        except (TypeError, ValueError):
+            limit = 200
+        entries = self._ring.snapshot(limit) if self._ring is not None else []
+        return self._json({"ok": True, "count": len(entries), "logs": entries})
+
     def _require_http(self) -> aiohttp.ClientSession:
         if self._http is None:
-            self._http = aiohttp.ClientSession()
+            self._http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5))
         return self._http

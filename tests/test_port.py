@@ -11,7 +11,14 @@ from aiohttp.test_utils import TestClient, TestServer
 from app.config import Config
 from app.core.bot import MegaBot
 from app.core.overlay import Overlay
-from app.core.webpanel.webpanel import WebPanel, _embed_from_dict, _trim_embeds
+from app.core.webpanel.webpanel import (
+    _LOGIN_LIMIT,
+    WebPanel,
+    _components_from_raw,
+    _embed_from_dict,
+    _trim_components,
+    _trim_embeds,
+)
 from app.db.birthdays_repository import BirthdaysRepository
 from app.db.database import Database
 from app.db.donations_repository import DonationsRepository
@@ -327,11 +334,11 @@ async def test_webpanel_auth_and_status(tmp_path):
         async with TestClient(server) as client:
             page = await client.get("/admin/embed-constructor")
             assert page.status == 200
-            assert "Админка" in await page.text()
+            assert "Панель управления" in await page.text()
 
             admin_page = await client.get("/admin")
             assert admin_page.status == 200
-            assert "Админка" in await admin_page.text()
+            assert "Панель управления" in await admin_page.text()
 
             rejected = await client.get("/api/status")
             assert rejected.status == 401
@@ -367,6 +374,64 @@ async def test_webpanel_auth_and_status(tmp_path):
             bad_url = await client.post("/api/webhook/send", headers=headers, json={"webhook_url": "https://example.com/1/2"})
             assert bad_url.status == 400
             assert (await bad_url.json())["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_webpanel_components_trim():
+    assert _trim_components(None) == []
+    assert _trim_components({"label": "x"}) == []
+    rows = _trim_components(
+        [
+            [
+                {"label": "Вход", "style": 3},
+                {"label": "Правила", "style": 5, "url": "https://example.com"},
+                {"label": "Плохая ссылка", "style": 5, "url": "ftp://bad"},
+                {"label": "", "style": 1},
+                {"label": "Лишняя", "style": 1},
+                {"label": "Шестая", "style": 1},
+            ],
+            [{"label": "Без URL", "style": 2, "url": "https://no"}],
+        ]
+    )
+    assert len(rows) == 2
+    assert rows[0]["type"] == 1 and len(rows[0]["components"]) == 3
+    styles = {c["style"] for c in rows[0]["components"]}
+    assert styles == {3, 5, 1}
+    assert {c["style"] for c in rows[1]["components"]} == {2}
+    assert {c["url"] for c in rows[1]["components"]} == {""}
+
+    raw = [
+        {"type": 1, "components": [{"type": 2, "label": "Кнопка", "style": 4, "url": ""}, {"type": 3, "label": "селект"}]},
+        {"type": 1, "components": []},
+    ]
+    parsed = _components_from_raw(raw)
+    assert parsed == [[{"label": "Кнопка", "style": "4", "url": ""}]]
+
+
+@pytest.mark.asyncio
+async def test_webpanel_logs_endpoint(tmp_path):
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.get("/api/logs?n=50", headers=headers)
+            assert resp.status == 200
+            body = await resp.json()
+            assert body["ok"] is True and body["logs"] == []
+
+
+@pytest.mark.asyncio
+async def test_webpanel_modules_status(tmp_path):
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    modules = panel._modules_status()
+    assert "welcome" in modules and "role_menu" in modules and "temp_voices" in modules
+    assert isinstance(modules["donations"]["bonuses"], list)
+    assert modules["welcome"]["channel_enabled"] is False
+    eff = panel._effective_log_channels({"member_log_channel_id": 123})
+    assert eff["log"] is None and eff["member"] == 123
+    assert list(panel._role_options()) == []
 
 
 @pytest.mark.asyncio
@@ -417,6 +482,134 @@ async def test_webpanel_upload(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_security_headers(tmp_path):
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            page = await client.get("/admin")
+            assert page.status == 200
+            assert page.headers.get("X-Content-Type-Options") == "nosniff"
+            assert page.headers.get("X-Frame-Options") == "DENY"
+            assert page.headers.get("Referrer-Policy") == "no-referrer"
+            assert page.headers.get("Cache-Control") == "no-store"
+            csp = page.headers.get("Content-Security-Policy", "")
+            assert "default-src 'self'" in csp
+            assert "script-src 'self'" in csp
+            assert "frame-ancestors 'none'" in csp
+            assert "style-src 'self' 'unsafe-inline'" in csp
+
+            js = await client.get("/panel.js")
+            assert js.status == 200
+            assert "text/javascript" in js.headers.get("Content-Type", "")
+            assert "X-Frame-Options" in js.headers
+
+
+@pytest.mark.asyncio
+async def test_webpanel_panel_js_injection(tmp_path):
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            js = await client.get("/panel.js")
+            body = await js.text()
+            assert "__PANEL_LOGIN__" not in body and "__PANEL_TOKEN__" not in body
+            assert (panel._static_token or "") in body
+            assert '"0" === "1"' in body
+
+    secured = _panel_bot(tmp_path, panel_password="hunter2")
+    panel2 = WebPanel(secured)
+    async with TestServer(panel2._create_app()) as server:
+        async with TestClient(server) as client:
+            js = await client.get("/panel.js")
+            body = await js.text()
+            assert "__PANEL_LOGIN__" not in body and "__PANEL_TOKEN__" not in body
+            assert '"1" === "1"' in body
+
+
+@pytest.mark.asyncio
+async def test_webpanel_upload_magic_mismatch(tmp_path):
+    import aiohttp
+
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            fd = aiohttp.FormData()
+            fd.add_field("file", b"etot file ne png", filename="fake.png", content_type="image/png")
+            resp = await client.post("/api/upload", data=fd, headers=headers)
+            assert resp.status == 400
+
+            ok = aiohttp.FormData()
+            ok.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="real.png", content_type="image/png")
+            good = await client.post("/api/upload", data=ok, headers=headers)
+            assert good.status == 200
+
+
+@pytest.mark.asyncio
+async def test_webpanel_logout_revokes_session(tmp_path):
+    bot = _panel_bot(tmp_path, panel_password="hunter2")
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            login = await client.post("/api/login", json={"password": "hunter2"})
+            token = (await login.json())["token"]
+            headers = {"X-Panel-Token": token}
+            before = await client.get("/api/status", headers=headers)
+            assert before.status == 200
+
+            out = await client.post("/api/logout", headers=headers)
+            assert out.status == 200
+
+            after = await client.get("/api/status", headers=headers)
+            assert after.status == 401
+
+
+@pytest.mark.asyncio
+async def test_webpanel_login_rate_limit(tmp_path):
+    bot = _panel_bot(tmp_path, panel_password="hunter2")
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for _ in range(_LOGIN_LIMIT):
+                resp = await client.post("/api/login", json={"password": "wrong"})
+                assert resp.status == 401
+            limited = await client.post("/api/login", json={"password": "hunter2"})
+            assert limited.status == 429
+
+
+@pytest.mark.asyncio
+async def test_webpanel_uploads_list_and_delete(tmp_path):
+    import aiohttp
+
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            list_resp = await client.get("/api/uploads", headers=headers)
+            assert (await list_resp.json())["files"] == []
+
+            fd = aiohttp.FormData()
+            fd.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="del.png", content_type="image/png")
+            up = await client.post("/api/upload", data=fd, headers=headers)
+            name = (await up.json())["name"]
+
+            listed = await client.get("/api/uploads", headers=headers)
+            names = [f["name"] for f in (await listed.json())["files"]]
+            assert name in names
+
+            deleted = await client.delete("/api/uploads/" + name, headers=headers)
+            assert (await deleted.json())["ok"] is True
+
+            listed2 = await client.get("/api/uploads", headers=headers)
+            assert name not in [f["name"] for f in (await listed2.json())["files"]]
+            missing = await client.delete("/api/uploads/" + name, headers=headers)
+            assert missing.status == 404
+
+
+@pytest.mark.asyncio
 async def test_overlay_server(tmp_path):
     bot = _panel_bot(tmp_path, overlay_token="overlay-secret-token-32chars")
     overlay = Overlay(bot)
@@ -433,6 +626,12 @@ async def test_overlay_server(tmp_path):
             ok_page = await client.get("/overlay?token=overlay-secret-token-32chars")
             assert ok_page.status == 200
             assert "Overlay" in await ok_page.text()
+            assert ok_page.headers.get("X-Content-Type-Options") == "nosniff"
+            assert ok_page.headers.get("X-Frame-Options") == "SAMEORIGIN"
+            assert ok_page.headers.get("Referrer-Policy") == "no-referrer"
+            assert ok_page.headers.get("Cache-Control") == "no-store"
+            csp = ok_page.headers.get("Content-Security-Policy", "")
+            assert "default-src 'self'" in csp and "object-src 'none'" in csp
 
             api = await client.get("/overlay/api")
             assert api.status == 401
@@ -442,6 +641,7 @@ async def test_overlay_server(tmp_path):
             data = await api_ok.json()
             assert data["stream"] is None and data["channels"] == {}
             assert data["donation_goal"] == {"enabled": False}
+            assert api_ok.headers.get("Cache-Control") == "no-store"
 
 
 @pytest.mark.asyncio

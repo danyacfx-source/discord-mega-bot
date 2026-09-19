@@ -15,6 +15,11 @@ logger = logging.getLogger("bot.overlay")
 
 _PAGE_FILE = Path(__file__).resolve().parent / "page.html"
 
+_CSP = (
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+)
+
 
 def _read_page() -> str:
     return _PAGE_FILE.read_text(encoding="utf-8")
@@ -56,6 +61,10 @@ class Overlay:
         try:
             token_file.parent.mkdir(parents=True, exist_ok=True)
             token_file.write_text(generated + "\n", encoding="utf-8")
+            try:
+                token_file.chmod(0o600)
+            except (OSError, NotImplementedError):
+                pass
             logger.warning(
                 "Сгенерирован и сохранён OVERLAY_TOKEN в %s — установите OVERLAY_TOKEN в .env для постоянства",
                 token_file,
@@ -67,8 +76,26 @@ class Overlay:
         return generated
 
     # ------------------------------------------------------------------ HTTP
+    @web.middleware
+    async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
+        try:
+            response = await handler(request)
+        except web.HTTPException as exc:
+            response = exc
+        headers = {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "SAMEORIGIN",
+            "Referrer-Policy": "no-referrer",
+            "Permissions-Policy": "geolocation=(), microphone=(), camera=(), usb=()",
+            "Cross-Origin-Opener-Policy": "same-origin",
+            "Content-Security-Policy": _CSP,
+            "Cache-Control": "no-store",
+        }
+        response.headers.update(headers)
+        return response
+
     def _create_app(self) -> web.Application:
-        app = web.Application()
+        app = web.Application(middlewares=[self._security_middleware])
         app.router.add_get("/overlay", self._page_handler)
         app.router.add_get("/overlay/api", self._api_handler)
         app.router.add_get("/overlay/health", self._health_handler)

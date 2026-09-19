@@ -173,10 +173,10 @@ class GreetingsCog(MegaCog, name="Greetings"):
     async def _channel(
         self, guild: discord.Guild, config_id: int | None, db_key: str
     ) -> discord.TextChannel | None:
-        channel_id = config_id
+        settings = await self.settings.get(guild.id)
+        channel_id = settings[db_key]
         if channel_id is None:
-            settings = await self.settings.get(guild.id)
-            channel_id = settings[db_key]
+            channel_id = config_id
         if not channel_id:
             return None
         channel = guild.get_channel(channel_id)

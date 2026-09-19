@@ -1,738 +1,402 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Админка</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Панель управления</title>
 <style>
-  :root {
-    --bg: #1e1f22; --bg2: #2b2d31; --card: #313338; --border: #3f4147;
-    --text: #dbdee1; --muted: #949ba4; --accent: #5865f2; --ok: #23a55a;
-    --err: #f23f43; --bar: #5865f2;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 "Segoe UI", Roboto, Arial, sans-serif; }
-  header { padding: 14px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; }
-  .badge { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
-  .badge.ok { background: rgba(35,165,90,.15); color: var(--ok); }
-  .badge.off { background: rgba(242,63,67,.15); color: var(--err); }
-  .app { display: flex; min-height: calc(100vh - 57px); }
-  .nav { width: 220px; flex: 0 0 220px; background: var(--bg2); border-right: 1px solid var(--border);
-    padding: 12px; display: flex; flex-direction: column; gap: 4px; }
-  .nav button { text-align: left; background: transparent; border: 0; color: var(--muted);
-    padding: 10px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 600; }
-  .nav button:hover { background: var(--card); color: var(--text); }
-  .nav button.active { background: var(--accent); color: #fff; }
-  .main { flex: 1; min-width: 0; }
-  .page-section { display: none; }
-  .page-section.active { display: block; }
-  .pad { padding: 16px 20px; }
-  .sec-title { margin: 0 0 12px; font-size: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-  .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
-  .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-  .stat-value { font-size: 18px; font-weight: 700; margin-top: 4px; word-break: break-word; }
-  .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; }
-  .wrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(340px, 460px); gap: 16px; padding: 16px 20px; }
-  .col, .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-  .panel h2 { font-size: 15px; margin: 0 0 12px; }
-  label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-  input[type=text], input[type=url], input[type=password], textarea, select {
-    width: 100%; background: var(--card); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px; font: inherit; }
-  textarea { resize: vertical; min-height: 64px; }
-  .row { display: flex; gap: 10px; }
-  .row > div { flex: 1; min-width: 0; }
-  .inp-group { display: flex; gap: 6px; }
-  .inp-group input { flex: 1; min-width: 0; }
-  .inp-group .btn { flex: 0 0 auto; padding: 9px 12px; }
-  .checks { display: flex; gap: 18px; align-items: center; margin-top: 10px; }
-  .checks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 13px; }
-  .btn { border: 0; border-radius: 6px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; color: #fff; }
-  .btn.primary { background: var(--accent); }
-  .btn.success { background: var(--ok); }
-  .btn.danger { background: var(--err); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .mode-switch { display: flex; gap: 8px; margin-top: 12px; }
-  .mode-switch .btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); }
-  .mode-switch .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .field-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 8px; background: var(--card); }
-  .field-item .row { align-items: center; }
-  .field-item .inlinebox { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-  .field-item .inlinebox input { width: auto; }
-  .mini { font-size: 11px; color: var(--muted); }
-  .actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
-  .actions .btn { flex: 1; min-width: 120px; }
-  .color-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); vertical-align: middle; margin-right: 6px; }
-  .empty { border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); padding: 40px 20px; text-align: center; }
-  .embed-card { background: var(--card); border-radius: 8px; padding: 12px 16px; border-left: 4px solid var(--bar); margin-top: 12px; }
-  .embed-title { font-weight: 700; margin-bottom: 4px; }
-  .embed-desc { white-space: pre-wrap; }
-  .embed-thumb { float: right; margin: 4px 0 4px 12px; border-radius: 6px; width: 72px; height: 72px; object-fit: cover; }
-  .embed-image { max-width: 100%; margin-top: 10px; border-radius: 6px; display: block; }
-  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; margin-top: 10px; }
-  .fields.two { grid-template-columns: repeat(2, 1fr); }
-  .fields .fname { font-weight: 600; font-size: 13px; }
-  .fields .fvalue { white-space: pre-wrap; }
-  .embed-footer { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--muted); font-size: 12px; }
-  .embed-footer img { width: 18px; height: 18px; border-radius: 50%; }
-  .embed-ts { margin-top: 8px; color: var(--muted); font-size: 12px; }
-  .content-preview { white-space: pre-wrap; }
-  #toast { position: fixed; right: 20px; bottom: 20px; max-width: 420px; padding: 10px 14px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); display: none; white-space: pre-wrap; z-index: 20; }
-  #toast.ok { border-color: var(--ok); }
-  #toast.err { border-color: var(--err); }
-  #login { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 10; }
-  #login > div { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; min-width: 300px; }
-  #login h2 { margin: 0 0 4px; }
-  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
-  @media (max-width: 700px) {
-    .app { flex-direction: column; }
-    .nav { width: auto; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; }
-    .nav button { flex: 1 1 auto; text-align: center; }
-  }
+:root{--accent:#5865f2;--accent-hover:rgba(88,101,242,.15);--shadow:0 6px 24px rgba(0,0,0,.18);--radius:12px}
+body[data-theme="dark"]{--bg:#0f1117;--bg2:#14171f;--card:#1a1e29;--card2:#212634;--border:#2a3040;--text:#e7e9f1;--muted:#98a0b3;--input:#12151d;--bar:#3a6ea5}
+body[data-theme="light"]{--bg:#eef1f6;--bg2:#f5f7fb;--card:#ffffff;--card2:#f2f4f9;--border:#dfe3ec;--text:#1b2030;--muted:#66708a;--input:#ffffff;--bar:#3a6ea5}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+button{font-family:inherit}
+#login{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:radial-gradient(1200px 600px at 50% -10%,var(--card2),var(--bg))}
+.login-card{width:min(360px,92vw);padding:30px 28px;text-align:center;border:1px solid var(--border);border-radius:16px;background:var(--card);box-shadow:var(--shadow)}
+.login-logo{width:56px;height:56px;margin:0 auto 14px;font-size:26px;line-height:56px;border-radius:14px;background:var(--accent);color:#fff;box-shadow:0 8px 24px rgba(88,101,242,.5)}
+.login-card h2{margin:0 0 6px;font-size:20px}
+.login-sub{margin:0 0 20px;color:var(--muted)}
+.login-card input{width:100%;padding:11px 14px;margin-bottom:14px;font-size:15px;border:1px solid var(--border);border-radius:10px;background:var(--input);color:var(--text);outline:none}
+.login-card input:focus{border-color:var(--accent)}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;flex:0 0 220px;display:flex;flex-direction:column;gap:8px;padding:14px 12px;background:var(--bg2);border-right:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;padding:6px 10px 12px;border-bottom:1px solid var(--border)}
+.brand-ic{width:30px;height:30px;line-height:30px;text-align:center;font-size:15px;border-radius:9px;background:var(--accent);color:#fff}
+nav{display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border:0;background:transparent;color:var(--muted);font-size:14px;border-radius:10px;text-align:left}
+.nav-item:hover{background:var(--accent-hover);color:var(--text)}
+.nav-item.active{background:var(--accent);color:#fff}
+.theme-block{margin-top:auto;padding:12px 10px;border-top:1px solid var(--border)}
+.theme-block label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:8px 0 6px}
+.seg{display:flex;gap:6px}
+.seg-btn{flex:1;padding:6px 0;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--input);color:var(--muted);font-size:13px}
+.seg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.accents{display:flex;gap:6px;flex-wrap:wrap}
+.accent-dot{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.accent-dot.active{border-color:var(--text);box-shadow:0 0 0 3px var(--accent-hover)}
+.sidebar-foot{display:flex;align-items:center;gap:8px;padding:0 4px;font-size:12px;color:var(--muted)}
+.sidebar-foot .badge{font-size:11px}
+.main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--bg2)}
+.topbar h1{margin:0;font-size:19px}
+.pill{font-size:12px;color:var(--muted);border:1px solid var(--border);padding:4px 10px;border-radius:999px;background:var(--card)}
+.scroll{flex:1;overflow-y:auto;padding:20px 22px 40px}
+.section{display:none}
+.section.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.grid{display:grid;gap:12px}
+.cols{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.cols4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.stat .val{font-size:21px;font-weight:700;margin-top:4px}
+.stat .lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.divider{height:1px;background:var(--border);border:0;margin:16px 0}
+h3.sec{margin:0 0 12px;font-size:15px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.three{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+@media(max-width:900px){.two{grid-template-columns:1fr}.sidebar{width:64px;flex:0 0 64px}.brand span:last-child,.nav-item span:last-child{display:none}.nav-item{justify-content:center}.theme-block label,.seg{display:none}}
+label.field{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 5px}
+input[type=text],input[type=password],input[type=url],select,textarea{width:100%;padding:9px 11px;font-size:14px;color:var(--text);border:1px solid var(--border);border-radius:9px;background:var(--input);outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+textarea{resize:vertical}
+select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398a0b3' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center}
+.row-inline{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--border);background:var(--card2);color:var(--text);padding:8px 14px;border-radius:9px;cursor:pointer;font-size:13px;font-weight:600;transition:.15s}
+.btn:hover{filter:brightness(1.06)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.success{background:#23a55a;border-color:#23a55a;color:#fff}
+.btn.danger{background:#f23f43;border-color:#f23f43;color:#fff}
+.btn.op{background:var(--card);border-color:var(--border)}
+.btn.small{padding:5px 10px;font-size:12px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.active{outline:2px solid var(--accent);outline-offset:1px}
+.switch{position:relative;width:36px;height:20px;flex:0 0 auto;display:inline-block}
+.switch input{opacity:0;width:0;height:0}
+.switch .slider{position:absolute;inset:0;background:var(--border);border-radius:20px;transition:.2s;cursor:pointer}
+.switch .slider:before{content:"";position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked+.slider{background:var(--accent)}
+.switch input:checked+.slider:before{transform:translateX(16px)}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.badge.ok{background:rgba(35,165,90,.16);color:#23a55a}
+.badge.off{background:rgba(242,63,67,.16);color:#f23f43}
+.pill-env{font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:1px 7px;vertical-align:middle}
+#preview{max-width:520px}
+.content-preview{font-size:15px;margin-bottom:8px}
+.embed-card{border:1px solid var(--border);border-left:4px solid var(--bar);border-radius:4px;background:var(--card);padding:14px 16px;max-width:100%}
+.embed-author{font-size:13px;color:var(--muted);margin-bottom:5px}
+.embed-title{font-size:16px;font-weight:700;margin-bottom:6px}
+.embed-desc{font-size:14px;white-space:pre-wrap;margin-bottom:8px}
+.embed-image{width:100%;border-radius:4px;margin-top:10px}
+.embed-thumb{float:right;max-width:80px;max-height:80px;border-radius:4px;margin-left:10px}
+.fields{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px}
+.fields .fname{font-size:13px;font-weight:700;margin-bottom:2px}
+.fields .fvalue{font-size:13px;white-space:pre-wrap}
+.fields.two .fname,.fields.two .fvalue{width:48%}
+.embed-footer{font-size:12px;color:var(--muted);margin-top:6px}
+.embed-ts{font-size:12px;color:var(--muted);margin-top:6px}
+.empty{color:var(--muted);font-size:13px;padding:12px}
+.field-item{border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--card2);margin-top:8px}
+.field-item .row{display:grid;grid-template-columns:1.4fr 1.8fr auto auto;gap:8px;align-items:end}
+.mini{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+.inlinebox{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px;color:var(--muted)}
+@media(max-width:900px){.field-item .row{grid-template-columns:1fr 1fr}}
+.btn-row{border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--card2);margin-top:8px;display:grid;grid-template-columns:1.6fr .9fr 1.6fr auto;gap:8px;align-items:end}
+@media(max-width:900px){.btn-row{grid-template-columns:1fr 1fr}}
+.set-group{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:14px 16px}
+.set-group h4{margin:0 0 4px;font-size:14px}
+.set-group .sub{font-size:12px;color:var(--muted);margin-bottom:6px}
+.module-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:12px 14px}
+.module-card h5{margin:0 0 8px;font-size:13px;display:flex;align-items:center;gap:8px}
+.module-card .kv{font-size:12px;color:var(--muted);margin-bottom:3px}
+.module-card .kv b{color:var(--text);font-weight:600}
+.mod-env{font-size:10px;color:var(--muted);margin-left:auto;border:1px solid var(--border);border-radius:999px;padding:1px 7px}
+#logs_box{font-family:Consolas,monospace;font-size:12px;line-height:1.55;overflow:auto;max-height:60vh}
+.log-line{display:flex;gap:10px;padding:3px 6px;border-radius:6px}
+.log-line:hover{background:var(--card2)}
+.log-t{color:var(--muted);flex:0 0 130px}
+.log-lvl{flex:0 0 64px;font-weight:700}
+.log-lvl.info{color:#23a55a}
+.log-lvl.warn{color:#f0b232}
+.log-lvl.err{color:#f23f43}
+.log-msg{white-space:pre-wrap;word-break:break-word}
+#toasts{position:fixed;bottom:18px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:200}
+.toast{padding:10px 14px;border-radius:10px;background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);font-size:13px;animation:pop .18s ease}
+.toast.ok{border-color:#23a55a}
+.toast.bad{border-color:#f23f43}
+@keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+.quick-link{color:var(--accent);cursor:pointer;font-size:13px;margin-top:10px;display:inline-block}
+.quick-link:hover{text-decoration:underline}
+.btn.mini{padding:4px 9px;font-size:12px}
+.file-card{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);overflow:hidden}
+.file-card .file-thumb{width:100%;height:110px;object-fit:cover;display:block;background:var(--input)}
+.file-card .file-name{font-size:12px;font-weight:600;padding:8px 10px 2px;word-break:break-all}
+.file-card .file-size{font-size:11px;color:var(--muted);padding:0 10px 6px}
+.file-card .file-actions{display:flex;gap:6px;padding:0 10px 10px}
 </style>
 </head>
-<body>
-<header>
-  <h1>🛠 Админка — <span id="panel-name">…</span></h1>
-  <span id="status" class="badge off">бот: …</span>
-  <span id="guildname" class="mini"></span>
-</header>
-
-<div class="app">
-  <aside class="nav">
-    <button class="active" data-sec="overview" onclick="switchSection('overview')">📊 Обзор</button>
-    <button data-sec="settings" onclick="switchSection('settings')">⚙️ Настройки</button>
-    <button data-sec="embed" onclick="switchSection('embed')">🎨 Эмбеды</button>
-  </aside>
-
-  <main class="main">
-    <section id="sec-overview" class="page-section active">
-      <div class="pad">
-        <h2 class="sec-title">Обзор</h2>
-        <div class="grid">
-          <div class="stat"><div class="stat-label">Статус</div><div class="stat-value" id="ov_status">…</div></div>
-          <div class="stat"><div class="stat-label">Аптайм</div><div class="stat-value" id="ov_uptime">…</div></div>
-          <div class="stat"><div class="stat-label">Память</div><div class="stat-value" id="ov_mem">…</div></div>
-          <div class="stat"><div class="stat-label">Пинг</div><div class="stat-value" id="ov_ping">…</div></div>
-          <div class="stat"><div class="stat-label">Сервер</div><div class="stat-value" id="ov_guild">…</div></div>
-          <div class="stat"><div class="stat-label">Участники</div><div class="stat-value" id="ov_members">…</div></div>
-          <div class="stat"><div class="stat-label">Каналы</div><div class="stat-value" id="ov_channels">…</div></div>
-          <div class="stat"><div class="stat-label">Роли</div><div class="stat-value" id="ov_roles">…</div></div>
-        </div>
-        <div class="actions"><button class="btn primary" onclick="loadOverview()">🔄 Обновить</button></div>
-      </div>
-    </section>
-
-    <section id="sec-settings" class="page-section">
-      <div class="pad">
-        <div class="panel">
-          <h2>Настройки сервера</h2>
-          <div class="settings-grid" id="settings_fields"></div>
-          <div class="checks">
-            <label><input id="set_automod_enabled" type="checkbox" /> Автомодерация</label>
-          </div>
-          <label>Запрещённые слова (по одному в строке)</label>
-          <textarea id="set_blocked_words" rows="5" placeholder="badword&#10;другое-слово"></textarea>
-          <div class="actions">
-            <button class="btn success" id="btn_save_settings" onclick="saveSettings()">💾 Сохранить</button>
-            <button class="btn" onclick="loadSettings()">↻ Обновить</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="sec-embed" class="page-section">
-      <div class="wrap">
-        <div class="col">
-          <div class="mode-switch">
-            <button class="btn active" id="mode-webhook" onclick="setMode('webhook')">Через вебхук</button>
-            <button class="btn" id="mode-bot" onclick="setMode('bot')">Через бота</button>
-          </div>
-
-          <div id="block-webhook">
-            <label>Webhook URL</label>
-            <input id="wh_url" type="url" placeholder="https://discord.com/api/webhooks/..." />
-          </div>
-          <div id="block-bot" style="display:none">
-            <label>Канал</label>
-            <select id="sel_channel"><option value="">— загрузка —</option></select>
-          </div>
-          <label>ID сообщения (загрузка / редактирование)</label>
-          <input id="msg_id" type="text" placeholder="например 1543587270718787677" />
-
-          <label>Текст сообщения (необязательно)</label>
-          <textarea id="f_content" rows="2" oninput="renderPreview()"></textarea>
-
-          <div class="row">
-            <div>
-              <label>Заголовок эмбеда</label>
-              <input id="f_title" type="text" maxlength="256" oninput="renderPreview()" />
-            </div>
-            <div>
-              <label>Цвет</label>
-              <input id="f_color" type="text" placeholder="#ff0000, red, 3498DB" oninput="renderColor(); renderPreview()" />
-            </div>
-          </div>
-
-          <label>Описание</label>
-          <textarea id="f_desc" rows="4" maxlength="4000" oninput="renderPreview()"></textarea>
-
-          <div class="checks">
-            <label><input id="f_ts" type="checkbox" onchange="renderPreview()" /> Время</label>
-          </div>
-
-          <div class="row">
-            <div>
-              <label>Автор: имя</label>
-              <input id="f_author_name" type="text" maxlength="256" oninput="renderPreview()" />
-            </div>
-            <div>
-              <label>Автор: иконка (URL)</label>
-              <input id="f_author_icon" type="url" oninput="renderPreview()" />
-            </div>
-            <div>
-              <label>Автор: ссылка (URL)</label>
-              <input id="f_author_url" type="url" oninput="renderPreview()" />
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label>Футер: текст</label>
-              <input id="f_footer_text" type="text" maxlength="2048" oninput="renderPreview()" />
-            </div>
-            <div>
-              <label>Футер: иконка (URL)</label>
-              <input id="f_footer_icon" type="url" oninput="renderPreview()" />
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label>Миниатюра</label>
-              <div class="inp-group">
-                <input id="f_thumb" type="url" placeholder="URL или Загрузить" oninput="renderPreview()" />
-                <button class="btn" type="button" onclick="pickFile('thumb')">Загрузить</button>
-              </div>
-            </div>
-            <div>
-              <label>Изображение</label>
-              <div class="inp-group">
-                <input id="f_image" type="url" placeholder="URL или Загрузить" oninput="renderPreview()" />
-                <button class="btn" type="button" onclick="pickFile('image')">Загрузить</button>
-              </div>
-            </div>
-          </div>
-
-          <label>Поля</label>
-          <div id="fields"></div>
-          <button class="btn" id="add_field" onclick="addField()">+ добавить поле</button>
-
-          <div class="actions">
-            <button class="btn" id="btn_load" onclick="loadMsg()">⬇ Загрузить</button>
-            <button class="btn success" id="btn_send" onclick="sendMsg()">🚀 Отправить</button>
-            <button class="btn primary" id="btn_edit" onclick="editMsg()">✏️ Редактировать</button>
-          </div>
-          <p class="mini">Отправка через вебхук идёт через прокси, как и у бота.</p>
-        </div>
-
-        <div class="panel">
-          <h2>Предпросмотр</h2>
-          <div id="preview"><div class="empty">Эмбед пока пуст. Заполните поля слева.</div></div>
-        </div>
-      </div>
-    </section>
-  </main>
-</div>
-
-<div id="toast"></div>
-
+<body data-theme="dark">
 <div id="login">
-  <div>
-    <h2>🔒 Панель</h2>
-    <p class="mini">Введите пароль панели</p>
-    <input id="login_pw" type="password" placeholder="Пароль" />
-    <button class="btn success" id="btn_login" style="width:100%;margin-top:12px">Войти</button>
+  <div class="login-card">
+    <div class="login-logo">🛠</div>
+    <h2>Панель управления</h2>
+    <p class="login-sub">Введите пароль, чтобы продолжить</p>
+    <input id="login_pw" type="password" placeholder="Пароль" autocomplete="current-password">
+    <button id="btn_login" class="btn primary" type="button">Войти</button>
   </div>
 </div>
 
-<script>
-let TOKEN = "__PANEL_TOKEN__";
-const PANEL_LOGIN = __PANEL_LOGIN__;
-const COLORS = {
-  red: 0xE74C3C, orange: 0xE67E22, yellow: 0xF1C40F, green: 0x2ECC71,
-  teal: 0x1ABC9C, blue: 0x3498DB, darkblue: 0x206694, purple: 0x9B59B6,
-  pink: 0xE91E63, white: 0xFFFFFF, gray: 0x95A5A6, dark: 0x2C2F33,
-};
-const SETTINGS_FIELDS = [
-  ["welcome_channel_id", "Канал приветствий", "channel"],
-  ["farewell_channel_id", "Канал прощаний", "channel"],
-  ["log_channel_id", "Общий канал логов", "channel"],
-  ["ticket_category_id", "Категория тикетов", "category"],
-  ["bot_log_channel_id", "Лог: бот (запуск)", "channel"],
-  ["member_log_channel_id", "Лог: участники", "channel"],
-  ["message_log_channel_id", "Лог: сообщения", "channel"],
-  ["voice_log_channel_id", "Лог: голосовые", "channel"],
-  ["mod_log_channel_id", "Лог: модерация", "channel"],
-  ["donation_channel_id", "Канал донатов", "channel"],
-];
-let mode = "webhook";
-let fields = [];
-let settingsLoaded = false;
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-ic">🛠</span><span>Модуль админа</span></div>
+    <nav>
+      <button class="nav-item active" data-section="overview"><span>🏠</span><span>Обзор</span></button>
+      <button class="nav-item" data-section="embed"><span>📝</span><span>Эмбеды</span></button>
+      <button class="nav-item" data-section="settings"><span>⚙️</span><span>Настройки</span></button>
+      <button class="nav-item" data-section="test"><span>🧪</span><span>Тест</span></button>
+      <button class="nav-item" data-section="files"><span>🖼</span><span>Файлы</span></button>
+      <button class="nav-item" data-section="logs"><span>📄</span><span>Логи</span></button>
+    </nav>
+    <div class="theme-block">
+      <label>Тема</label>
+      <div class="seg">
+        <button class="seg-btn" data-theme="dark" type="button">🌙</button>
+        <button class="seg-btn" data-theme="light" type="button">☀️</button>
+      </div>
+      <label>Акцент</label>
+      <div class="accents" id="accents"></div>
+    </div>
+    <div class="sidebar-foot">
+      <span id="status" class="badge off">…</span>
+      <span id="guildname" class="muted"></span>
+      <button id="btn_logout" class="btn small op" type="button" onclick="logout()" style="margin-left:auto">Выйти</button>
+    </div>
+  </aside>
 
-const $ = (id) => document.getElementById(id);
-const hex6 = /^#?([0-9a-fA-F]{6})$/;
+  <main class="main">
+    <header class="topbar">
+      <h1 id="section-title">Обзор</h1>
+      <span class="pill" id="panel-name">…</span>
+    </header>
+    <div class="scroll">
 
-function toast(msg, ok) {
-  const t = $("toast");
-  t.textContent = msg;
-  t.className = ok ? "ok" : "err";
-  t.style.display = "block";
-  clearTimeout(t._h);
-  t._h = setTimeout(() => { t.style.display = "none"; }, ok ? 4000 : 8000);
-}
+      <section id="sec-overview" class="section active">
+        <h3 class="sec">Состояние бота</h3>
+        <div class="grid cols4">
+          <div class="card stat"><div class="lbl">Статус</div><div class="val"><span id="ov_status" class="badge off">Офлайн</span></div></div>
+          <div class="card stat"><div class="lbl">Аптайм</div><div class="val" id="ov_uptime">—</div></div>
+          <div class="card stat"><div class="lbl">Задержка</div><div class="val" id="ov_ping">—</div></div>
+          <div class="card stat"><div class="lbl">Память</div><div class="val" id="ov_mem">—</div></div>
+        </div>
+        <div class="grid cols4" style="margin-top:12px">
+          <div class="card stat"><div class="lbl">Сервер</div><div class="val" id="ov_guild">—</div></div>
+          <div class="card stat"><div class="lbl">Участников</div><div class="val" id="ov_members">—</div></div>
+          <div class="card stat"><div class="lbl">Онлайн</div><div class="val" id="ov_online">—</div></div>
+          <div class="card stat"><div class="lbl">Каналы / роли</div><div class="val" id="ov_channels">—</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <b id="ov_botname">Бот</b>
+          <div class="muted" id="ov_about">Отправляйте эмбеды, настраивайте каналы и следите за состоянием бота прямо из админки.</div>
+          <a class="quick-link" data-goto="embed">→ Открыть конструктор эмбедов</a>
+          <br><a class="quick-link" data-goto="settings">→ Перейти к настройкам</a>
+        </div>
+      </section>
 
-async function doLogin() {
-  const pw = $("login_pw").value;
-  if (!pw) return false;
-  const r = await fetch("/api/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password: pw }),
-  });
-  let d = null;
-  try { d = await r.json(); } catch (e) {}
-  if (r.ok && d && d.token) { TOKEN = d.token; return true; }
-  return false;
-}
+      <section id="sec-embed" class="section">
+        <div class="two">
+          <div>
+            <div class="card">
+              <h3 class="sec">Основное</h3>
+              <label class="field" for="f_content">Содержимое (текст выше эмбеда)</label>
+              <input type="text" id="f_content" maxlength="2000" placeholder="Текст…" oninput="renderPreview()">
+              <label class="field">Заголовок</label>
+              <input type="text" id="f_title" maxlength="256" placeholder="Заголовок" oninput="renderPreview()">
+              <label class="field">Описание</label>
+              <textarea id="f_desc" rows="4" maxlength="4096" placeholder="Описание" oninput="renderPreview()"></textarea>
+              <label class="field">Цвет</label>
+              <div class="row-inline">
+                <input type="text" id="f_color" style="flex:1;min-width:120px" placeholder="например #5865f2 или blurple" oninput="renderColor();renderPreview()">
+                <span id="colsw" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);display:inline-block"></span>
+              </div>
+              <div class="row-inline">
+                <label class="toggle-holder" style="margin:0;font-size:13px">
+                  <span class="switch"><input type="checkbox" id="f_ts" onchange="renderPreview()"><span class="slider"></span></span>
+                  <span>Время отправки</span>
+                </label>
+              </div>
+            </div>
 
-async function api(path, payload) {
-  if (!TOKEN) {
-    if (!await doLogin()) { toast("Нужен пароль панели", false); throw new Error("noauth"); }
-  }
-  const r = await fetch(path, {
-    method: payload ? "POST" : "GET",
-    headers: { "Content-Type": "application/json", "X-Panel-Token": TOKEN },
-    body: payload ? JSON.stringify(payload) : undefined,
-  });
-  let data = null;
-  try { data = await r.json(); } catch (e) {}
-  return { status: r.status, data };
-}
+            <div class="card" style="margin-top:12px">
+              <h3 class="sec">Автор</h3>
+              <label class="field">Имя</label>
+              <input type="text" id="f_author_name" maxlength="256" oninput="renderPreview()">
+              <label class="field">Иконка (URL)</label>
+              <input type="url" id="f_author_icon" oninput="renderPreview()">
+              <label class="field">Ссылка</label>
+              <input type="url" id="f_author_url" oninput="renderPreview()">
+            </div>
 
-async function uploadFile(file) {
-  if (!TOKEN) {
-    if (!await doLogin()) { toast("Нужен пароль панели", false); return null; }
-  }
-  const fd = new FormData();
-  fd.append("file", file);
-  const r = await fetch("/api/upload", {
-    method: "POST",
-    headers: { "X-Panel-Token": TOKEN },
-    body: fd,
-  });
-  let d = null;
-  try { d = await r.json(); } catch (e) {}
-  if (!r.ok || !d || !d.ok) {
-    toast("Ошибка загрузки: " + ((d && d.error) || r.status), false);
-    return null;
-  }
-  return d.absolute_url;
-}
+            <div class="card" style="margin-top:12px">
+              <h3 class="sec">Подвал</h3>
+              <label class="field">Текст</label>
+              <input type="text" id="f_footer_text" maxlength="2048" oninput="renderPreview()">
+              <label class="field">Иконка (URL)</label>
+              <input type="url" id="f_footer_icon" oninput="renderPreview()">
+            </div>
 
-function pickFile(kind) {
-  const inp = document.createElement("input");
-  inp.type = "file";
-  inp.accept = "image/png,image/jpeg,image/gif,image/webp";
-  inp.onchange = async () => {
-    const file = inp.files && inp.files[0];
-    if (!file) return;
-    const url = await uploadFile(file);
-    if (!url) return;
-    (kind === "image" ? $("f_image") : $("f_thumb")).value = url;
-    renderPreview();
-    toast("Картинка загружена", true);
-  };
-  inp.click();
-}
+            <div class="card" style="margin-top:12px">
+              <h3 class="sec">Картинки</h3>
+              <label class="field">Изображение</label>
+              <div class="row-inline">
+                <input type="url" id="f_image" oninput="renderPreview()">
+                <button class="btn small op" type="button" onclick="document.getElementById('file_image').click()">⬆ Загрузить</button>
+                <input type="file" id="file_image" accept="image/*" style="display:none" onchange="if(this.files[0])uploadFile(this.files[0],'f_image');this.value=''">
+              </div>
+              <label class="field">Миниатюра</label>
+              <div class="row-inline">
+                <input type="url" id="f_thumb" oninput="renderPreview()">
+                <button class="btn small op" type="button" onclick="document.getElementById('file_thumb').click()">⬆ Загрузить</button>
+                <input type="file" id="file_thumb" accept="image/*" style="display:none" onchange="if(this.files[0])uploadFile(this.files[0],'f_thumb');this.value=''">
+              </div>
+            </div>
+          </div>
 
-/* --- навигация --- */
+          <div>
+            <div class="card">
+              <h3 class="sec">Поля (до 25)</h3>
+              <div id="fields"></div>
+              <button class="btn op small" type="button" style="margin-top:10px" onclick="addField()">＋ Добавить поле</button>
+            </div>
 
-function switchSection(name) {
-  document.querySelectorAll(".page-section").forEach((s) => s.classList.toggle("active", s.id === "sec-" + name));
-  document.querySelectorAll(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.sec === name));
-  if (name === "overview") loadOverview();
-  if (name === "settings" && !settingsLoaded) loadSettings();
-}
+            <div class="card" style="margin-top:12px">
+              <h3 class="sec">Кнопки (до 5×5)</h3>
+              <p class="muted small" style="margin:0 0 8px">Стиль «Ссылка» → URL, остальные стили — декоративные.</p>
+              <div id="btn_editor"></div>
+              <div class="row-inline">
+                <button class="btn op small" type="button" onclick="addButton()">＋ Добавить кнопку</button>
+                <button class="btn op small" type="button" onclick="addButtonRow()">＋ Новая строка</button>
+              </div>
+            </div>
 
-/* --- обзор --- */
+            <div class="card" style="margin-top:12px">
+              <h3 class="sec">Отправка</h3>
+              <div class="row-inline">
+                <button id="mode-webhook" class="btn active" type="button" onclick="setMode('webhook')">Webhook</button>
+                <button id="mode-bot" class="btn" type="button" onclick="setMode('bot')">Через бота</button>
+              </div>
+              <div id="block-webhook">
+                <label class="field">Webhook URL</label>
+                <input type="url" id="wh_url" placeholder="https://discord.com/api/webhooks/…">
+              </div>
+              <div id="block-bot" style="display:none">
+                <label class="field">Канал</label>
+                <div class="row-inline">
+                  <select id="sel_channel" style="flex:1"></select>
+                  <button class="btn op small" type="button" onclick="refreshChannels()">⟳</button>
+                </div>
+              </div>
+              <label class="field">ID сообщения для изменения / загрузки</label>
+              <input type="text" id="msg_id" placeholder="1234567890123456789">
+              <div class="row-inline">
+                <button id="btn_send" class="btn primary" type="button" onclick="sendMsg()">➤ Отправить</button>
+                <button id="btn_edit" class="btn op" type="button" onclick="editMsg()">✎ Изменить</button>
+                <button id="btn_load" class="btn op" type="button" onclick="loadMsg()">⇣ Загрузить</button>
+                <button id="btn_clear" class="btn op" type="button" onclick="clearBuilder()">🧹 Очистить</button>
+              </div>
+            </div>
+          </div>
 
-async function loadOverview() {
-  const r = await api("/api/overview");
-  const d = r.data;
-  if (!d || !d.ok) { toast("❌ Не удалось получить обзор", false); return; }
-  const pname = d.bot_name || (d.guild && d.guild.name) || "";
-  $("panel-name").textContent = pname || "панель";
-  document.title = "Админка" + (pname ? " — " + pname : "");
-  $("ov_status").textContent = d.bot_online ? ("онлайн: " + (d.bot_name || "—")) : "офлайн";
-  $("ov_uptime").textContent = d.uptime || "—";
-  $("ov_mem").textContent = d.mem_mb != null ? (d.mem_mb + " МБ · пик " + d.mem_peak_mb + " МБ") : "—";
-  $("ov_ping").textContent = d.latency_ms ? (d.latency_ms + " мс") : "—";
-  const g = d.guild;
-  $("ov_guild").textContent = g ? g.name : "—";
-  $("ov_members").textContent = g ? (g.online + " / " + g.members) : "—";
-  $("ov_channels").textContent = g ? g.channels : "—";
-  $("ov_roles").textContent = g ? g.roles : "—";
-}
+          <div id="block-preview" class="card" style="grid-column:1/-1">
+            <h3 class="sec">Предпросмотр</h3>
+            <div id="preview"></div>
+          </div>
+        </div>
+      </section>
 
-/* --- настройки --- */
+      <section id="sec-settings" class="section">
+        <h3 class="sec">Каналы сервера</h3>
+        <div class="row-inline" style="margin:0 0 12px">
+          <button class="btn op small" type="button" onclick="loadSettings()">⟳ Обновить список</button>
+          <span class="muted small">Данные бота; сохраняются по кнопке «💾 Сохранить» ниже.</span>
+        </div>
+        <div id="settings-groups" class="grid cols"></div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Эффективные каналы логирования</h3>
+          <div class="muted small" style="margin-bottom:8px">Фактические каналы с учётом fallback из <code>.env</code> (если в БД не задано).</div>
+          <div id="effective-logs"></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">🛡 Автомод</h3>
+          <div class="row-inline">
+            <label class="toggle-holder" style="margin:0">
+              <span class="switch"><input type="checkbox" id="set_automod_enabled"><span class="slider"></span></span>
+              <span>Включить фильтр запрещённых слов</span>
+            </label>
+          </div>
+          <label class="field">Запрещённые слова (по одному на строку)</label>
+          <textarea id="set_blocked_words" rows="5" placeholder="слово1&#10;слово2"></textarea>
+          <div class="row-inline">
+            <button id="btn_save_settings" class="btn success" type="button" onclick="saveSettings()">💾 Сохранить</button>
+          </div>
+        </div>
+        <h3 class="sec" style="margin-top:20px">Модули — из <code>.env</code> <span class="pill-env">только чтение</span></h3>
+        <div id="modules-grid" class="grid cols"></div>
+      </section>
 
-function buildSettingsForm() {
-  const box = $("settings_fields");
-  box.innerHTML = "";
-  for (const [column, label] of SETTINGS_FIELDS) {
-    const div = document.createElement("div");
-    const l = document.createElement("label");
-    l.textContent = label;
-    const sel = document.createElement("select");
-    sel.id = "set_" + column;
-    div.appendChild(l);
-    div.appendChild(sel);
-    box.appendChild(div);
-  }
-}
+      <section id="sec-test" class="section">
+        <div class="card">
+          <h3 class="sec">🧪 Тестовая отправка</h3>
+          <label class="field">Канал</label>
+          <div class="row-inline">
+            <select id="test_channel" style="flex:1"></select>
+            <button class="btn op small" type="button" onclick="loadTestChannels()">⟳</button>
+          </div>
+          <label class="field">Сообщение</label>
+          <textarea id="test_content" rows="4" placeholder="Текст тестового сообщения…"></textarea>
+          <div class="row-inline">
+            <button class="btn primary" type="button" onclick="sendTest()">➤ Отправить тест</button>
+          </div>
+          <div class="muted small" id="test_result" style="margin-top:10px">Сообщение отправляется от имени бота в выбранный канал.</div>
+        </div>
+      </section>
 
-function fillSelect(id, items, selected) {
-  const sel = $(id);
-  sel.innerHTML = "";
-  const empty = document.createElement("option");
-  empty.value = ""; empty.textContent = "— не задано —";
-  sel.appendChild(empty);
-  for (const it of items || []) {
-    const o = document.createElement("option");
-    o.value = it.id;
-    o.textContent = it.category ? it.category + " / " + it.name : it.name;
-    sel.appendChild(o);
-  }
-  sel.value = selected || "";
-}
+      <section id="sec-files" class="section">
+        <div class="card">
+          <h3 class="sec">🖼 Загруженные изображения</h3>
+          <div class="muted small" style="margin-bottom:10px">Изображения, загруженные для эмбедов. Кнопка «📋 URL» копирует прямую ссылку.</div>
+          <div id="files_grid" class="grid cols4"></div>
+        </div>
+      </section>
 
-async function loadSettings() {
-  const r = await api("/api/settings");
-  const d = r.data;
-  if (!d || !d.ok) { toast("❌ " + ((d && d.error) || "Не удалось загрузить настройки"), false); return; }
-  for (const [column, , kind] of SETTINGS_FIELDS) {
-    fillSelect("set_" + column, kind === "category" ? d.categories : d.channels, d.settings[column] || "");
-  }
-  $("set_automod_enabled").checked = Boolean(d.automod_enabled);
-  $("set_blocked_words").value = (d.blocked_words || []).join("\n");
-  settingsLoaded = true;
-}
+      <section id="sec-logs" class="section">
+        <div class="card">
+          <div class="row-inline" style="justify-content:space-between">
+            <h3 class="sec" style="margin:0">📄 Логи бота</h3>
+            <div class="row-inline" style="margin:0">
+              <select id="log_level" style="width:auto" onchange="loadLogs()">
+                <option value="">Все уровни</option>
+                <option value="INFO">INFO</option>
+                <option value="WARNING">WARNING</option>
+                <option value="ERROR">ERROR</option>
+              </select>
+              <label class="toggle-holder" style="margin:0;font-size:13px">
+                <span class="switch"><input type="checkbox" id="log_auto"><span class="slider"></span></span>
+                <span>Авто</span>
+              </label>
+              <button class="btn op small" type="button" onclick="loadLogs()">⟳ Обновить</button>
+            </div>
+          </div>
+          <div id="logs_box"><div class="muted small">Загрузка…</div></div>
+          <div class="muted small" id="logs_last" style="margin-top:8px"></div>
+        </div>
+      </section>
 
-async function saveSettings() {
-  const btn = $("btn_save_settings");
-  btn.disabled = true;
-  try {
-    const payload = {
-      automod_enabled: $("set_automod_enabled").checked,
-      blocked_words: $("set_blocked_words").value.split(/\r?\n/).filter((w) => w.trim()),
-    };
-    for (const [column] of SETTINGS_FIELDS) payload[column] = $("set_" + column).value;
-    const r = await api("/api/settings", payload);
-    if (r.data && r.data.ok) toast("✅ Настройки сохранены", true);
-    else toast("❌ " + ((r.data && r.data.error) || r.status), false);
-  } finally {
-    btn.disabled = false;
-  }
-}
+    </div>
+  </main>
+</div>
 
-/* --- каналы --- */
-
-async function refreshChannels() {
-  const r = await api("/api/bot/channels");
-  const sel = $("sel_channel");
-  sel.innerHTML = "";
-  if (r.data && r.data.channels) {
-    for (const c of r.data.channels) {
-      const o = document.createElement("option");
-      o.value = c.id;
-      o.textContent = (c.category ? c.category + " / " : "") + c.name + (c.nsfw ? " 🔞" : "");
-      sel.appendChild(o);
-    }
-  } else {
-    const o = document.createElement("option");
-    o.value = ""; o.textContent = "— каналы недоступны —";
-    sel.appendChild(o);
-  }
-}
-
-function resolveColor(str) {
-  if (!str) return null;
-  const s = str.trim().toLowerCase();
-  if (COLORS[s] !== undefined) return COLORS[s];
-  const m = hex6.exec(s);
-  if (m) return parseInt(m[1], 16);
-  return null;
-}
-
-function renderColor() {
-  const c = resolveColor($("f_color").value);
-  const el = document.getElementById("colsw");
-  if (el) el.style.background = c === null ? "transparent" : "#" + c.toString(16).padStart(6, "0");
-}
-
-function setMode(m) {
-  mode = m;
-  $("mode-webhook").className = "btn" + (m === "webhook" ? " active" : "");
-  $("mode-bot").className = "btn" + (m === "bot" ? " active" : "");
-  $("block-webhook").style.display = m === "webhook" ? "" : "none";
-  $("block-bot").style.display = m === "bot" ? "" : "none";
-  if (m === "bot") refreshChannels();
-}
-
-function targetInfo() {
-  if (mode === "webhook") return { webhook_url: $("wh_url").value.trim() };
-  return { channel_id: $("sel_channel").value };
-}
-
-function buildEmbed() {
-  const e = {};
-  const t = $("f_title").value.trim();
-  const d = $("f_desc").value.trim();
-  if (t) e.title = t;
-  if (d) e.description = d;
-  const color = resolveColor($("f_color").value);
-  if (color !== null) e.color = color;
-  const an = $("f_author_name").value.trim();
-  if (an) {
-    e.author = { name: an };
-    if ($("f_author_icon").value.trim()) e.author.icon_url = $("f_author_icon").value.trim();
-    if ($("f_author_url").value.trim()) e.author.url = $("f_author_url").value.trim();
-  }
-  const ft = $("f_footer_text").value.trim();
-  if (ft) {
-    e.footer = { text: ft };
-    if ($("f_footer_icon").value.trim()) e.footer.icon_url = $("f_footer_icon").value.trim();
-  }
-  if ($("f_thumb").value.trim()) e.thumbnail = { url: $("f_thumb").value.trim() };
-  if ($("f_image").value.trim()) e.image = { url: $("f_image").value.trim() };
-  if ($("f_ts").checked) e.timestamp = new Date().toISOString();
-  const fl = fields.filter((f) => f.name.trim());
-  if (fl.length && fl.length <= 25) e.fields = fl.map((f) => ({ name: f.name, value: f.value, inline: f.inline }));
-  return e;
-}
-
-function tag(t, cls, html) {
-  const el = document.createElement(t);
-  if (cls) el.className = cls;
-  if (html !== undefined) el.innerHTML = html;
-  return el;
-}
-
-function renderPreview() {
-  const pv = $("preview");
-  const content = $("f_content").value;
-  const e = buildEmbed();
-  const has = content.trim() || Object.keys(e).length;
-  if (!has) {
-    pv.innerHTML = '<div class="empty">Эмбед пока пуст. Заполните поля слева.</div>';
-    return;
-  }
-  pv.innerHTML = "";
-  if (content.trim()) pv.appendChild(tag("div", "content-preview", escapeHtml(content)));
-  if (!Object.keys(e).length) return;
-  const card = tag("div", "embed-card");
-  card.style.borderLeftColor = e.color === undefined ? "var(--bar)" : "#" + e.color.toString(16).padStart(6, "0");
-  if (e.thumbnail) {
-    const img = tag("img", "embed-thumb", "");
-    img.src = e.thumbnail.url;
-    card.appendChild(img);
-  }
-  if (e.author) {
-    const a = tag("div", "embed-author");
-    if (e.author.icon_url) {
-      const ai = tag("img", "", "");
-      ai.src = e.author.icon_url; ai.style.cssText = "width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;";
-      a.appendChild(ai);
-    }
-    a.appendChild(document.createTextNode(e.author.name));
-    if (e.author.url) { a.style.color = "#00a8fc"; }
-    card.appendChild(a);
-  }
-  if (e.title) card.appendChild(tag("div", "embed-title", escapeHtml(e.title)));
-  if (e.description) card.appendChild(tag("div", "embed-desc", escapeHtml(e.description)));
-  if (e.fields) {
-    const g = tag("div", "fields" + (e.fields.every((f) => f.inline) ? "" : " two"));
-    for (const f of e.fields) {
-      const cell = tag("div", "");
-      cell.appendChild(tag("div", "fname", escapeHtml(f.name)));
-      cell.appendChild(tag("div", "fvalue", escapeHtml(f.value || "·")));
-      g.appendChild(cell);
-    }
-    card.appendChild(g);
-  }
-  if (e.footer) {
-    const f = tag("div", "embed-footer");
-    if (e.footer.icon_url) { const fi = tag("img", "", ""); fi.src = e.footer.icon_url; f.appendChild(fi); }
-    f.appendChild(document.createTextNode(e.footer.text));
-    card.appendChild(f);
-  } else if (e.timestamp) {
-    card.appendChild(tag("div", "embed-ts", new Date(e.timestamp).toLocaleString("ru-RU")));
-  }
-  if (e.image) { const im = tag("img", "embed-image", ""); im.src = e.image.url; card.appendChild(im); }
-  pv.appendChild(card);
-}
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function addField(name = "", value = "", inline = true) {
-  if (fields.length >= 25) { toast("Максимум 25 полей", false); return; }
-  fields.push({ name, value, inline });
-  renderFields();
-}
-
-function renderFields() {
-  const box = $("fields");
-  box.innerHTML = "";
-  fields.forEach((f, i) => {
-    const item = tag("div", "field-item");
-    const row = tag("div", "row");
-    const nameDiv = tag("div", "");
-    nameDiv.appendChild(tag("div", "mini", "НАЗВАНИЕ"));
-    const ni = document.createElement("input");
-    ni.type = "text"; ni.maxLength = 256; ni.placeholder = "Название";
-    ni.value = f.name;
-    ni.oninput = () => { fields[i].name = ni.value; renderPreview(); };
-    nameDiv.appendChild(ni);
-    const valDiv = tag("div", "");
-    valDiv.appendChild(tag("div", "mini", "ЗНАЧЕНИЕ"));
-    const vi = document.createElement("input");
-    vi.type = "text"; vi.maxLength = 1024; vi.placeholder = "Значение";
-    vi.value = f.value;
-    vi.oninput = () => { fields[i].value = vi.value; renderPreview(); };
-    valDiv.appendChild(vi);
-    const ib = tag("div", "inlinebox");
-    const chk = document.createElement("input");
-    chk.type = "checkbox"; chk.checked = f.inline;
-    chk.onchange = () => { fields[i].inline = chk.checked; renderPreview(); };
-    ib.appendChild(chk); ib.appendChild(document.createTextNode("в строке"));
-    const del = document.createElement("button");
-    del.className = "btn danger"; del.textContent = "✕";
-    del.onclick = () => { fields.splice(i, 1); renderFields(); renderPreview(); };
-    row.appendChild(nameDiv); row.appendChild(valDiv); row.appendChild(ib); row.appendChild(del);
-    item.appendChild(row);
-    box.appendChild(item);
-  });
-}
-
-function buildPayload() {
-  const emb = buildEmbed();
-  const embeds = Object.keys(emb).length ? [emb] : [];
-  const p = { content: $("f_content").value || "", embeds };
-  const t = targetInfo();
-  return Object.assign(t, p);
-}
-
-async function sendMsg() {
-  const p = buildPayload();
-  if (mode === "webhook") {
-    if (!p.webhook_url) return toast("Введите Webhook URL", false);
-    const r = await api("/api/webhook/send", p);
-    if (r.data && r.data.ok) toast("✅ Отправлено" + (r.data.data && r.data.data.id ? " (id " + r.data.data.id + ")" : ""), true);
-    else toast("❌ " + ((r.data && (r.data.error || JSON.stringify(r.data.data))) || r.status), false);
-  } else {
-    if (!p.channel_id) return toast("Выберите канал", false);
-    const r = await api("/api/bot/send", p);
-    if (r.data && r.data.ok) { toast("✅ Отправлено (id " + r.data.message_id + ")", true); $("msg_id").value = r.data.message_id; }
-    else toast("❌ " + ((r.data && r.data.error) || r.status), false);
-  }
-}
-
-async function editMsg() {
-  const p = buildPayload();
-  p.message_id = $("msg_id").value.trim();
-  if (!p.message_id) return toast("Укажите ID сообщения", false);
-  if (mode === "webhook") {
-    if (!p.webhook_url) return toast("Введите Webhook URL", false);
-    const r = await api("/api/webhook/edit", p);
-    if (r.data && r.data.ok) toast("✅ Сообщение обновлено", true);
-    else toast("❌ " + ((r.data && (r.data.error || JSON.stringify(r.data.data))) || r.status), false);
-  } else {
-    if (!p.channel_id) return toast("Выберите канал", false);
-    const r = await api("/api/bot/edit", p);
-    if (r.data && r.data.ok) toast("✅ Сообщение обновлено", true);
-    else toast("❌ " + ((r.data && r.data.error) || r.status), false);
-  }
-}
-
-async function loadMsg() {
-  const mid = $("msg_id").value.trim();
-  if (!mid) return toast("Укажите ID сообщения", false);
-  let r;
-  if (mode === "webhook") {
-    if (!$("wh_url").value.trim()) return toast("Введите Webhook URL", false);
-    r = await api("/api/webhook/fetch", { webhook_url: $("wh_url").value.trim(), message_id: mid });
-  } else {
-    if (!$("sel_channel").value) return toast("Выберите канал", false);
-    r = await api("/api/bot/fetch", { channel_id: $("sel_channel").value, message_id: mid });
-  }
-  const data = r.data && r.data.ok ? r.data.data : null;
-  if (!data) return toast("❌ Не удалось загрузить: " + ((r.data && (r.data.error || JSON.stringify(r.data.data))) || r.status), false);
-  $("f_content").value = data.content || "";
-  const e = (data.embeds && data.embeds[0]) || {};
-  $("f_title").value = e.title || "";
-  $("f_desc").value = e.description || "";
-  $("f_color").value = e.color === undefined || e.color === null ? "" : "#" + e.color.toString(16).padStart(6, "0");
-  $("f_ts").checked = Boolean(e.timestamp);
-  $("f_author_name").value = (e.author && e.author.name) || "";
-  $("f_author_icon").value = (e.author && e.author.icon_url) || "";
-  $("f_author_url").value = (e.author && e.author.url) || "";
-  $("f_footer_text").value = (e.footer && e.footer.text) || "";
-  $("f_footer_icon").value = (e.footer && e.footer.icon_url) || "";
-  $("f_thumb").value = (e.thumbnail && e.thumbnail.url) || "";
-  $("f_image").value = (e.image && e.image.url) || "";
-  fields = (e.fields || []).map((f) => ({ name: f.name, value: f.value || "", inline: Boolean(f.inline) }));
-  renderFields();
-  renderColor();
-  renderPreview();
-  toast("✅ Сообщение загружено", true);
-}
-
-(async function init() {
-  $("btn_login").onclick = async () => {
-    if (await doLogin()) { $("login").style.display = "none"; await bootInit(); }
-    else toast("Неверный пароль", false);
-  };
-  $("login_pw").addEventListener("keydown", (e) => { if (e.key === "Enter") $("btn_login").click(); });
-
-  if (PANEL_LOGIN) { $("login").style.display = "flex"; $("login_pw").focus(); return; }
-  await bootInit();
-})();
-
-async function bootInit() {
-  buildSettingsForm();
-  addField();
-  renderFields();
-  const s = await api("/api/status");
-  const st = $("status");
-  if (s.data && s.data.bot_online) {
-    st.textContent = "бот онлайн: " + s.data.bot_name;
-    st.className = "badge ok";
-    $("guildname").textContent = "сервер: " + (s.data.guild_name || "—");
-  } else {
-    st.textContent = "бот офлайн";
-    st.className = "badge off";
-  }
-  refreshChannels();
-  renderPreview();
-  loadOverview();
-}
-</script>
+<div id="toasts"></div>
+<script src="/panel.js"></script>
 </body>
 </html>
