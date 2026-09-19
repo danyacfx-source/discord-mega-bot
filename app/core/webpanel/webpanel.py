@@ -30,6 +30,7 @@ logger = logging.getLogger("bot.webpanel")
 _INDEX_PATH = Path(__file__).parent / "index.html"
 _SCRIPT_PATH = Path(__file__).parent / "panel.js"
 _LOGS_PAGE_PATH = Path(__file__).parent / "logs.html"
+_AUDIT_PAGE_PATH = Path(__file__).parent / "audit.html"
 _WEBHOOK_RE = re.compile(r"^https://(?:discord\.com|discordapp\.com)/api/webhooks/(\d+)/([A-Za-z0-9_\-]+)$")
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
 _MAX_EMBEDS = 10
@@ -338,6 +339,7 @@ class WebPanel:
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
         self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
+        self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
         self._static_token: str | None = None if self.password else self._load_static_token()
         self._sessions: dict[str, float] = {}
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
@@ -371,6 +373,7 @@ class WebPanel:
         app.router.add_get("/admin/", self._serve_index)
         app.router.add_get("/admin/embed-constructor", self._serve_index)
         app.router.add_get("/logs", self._serve_logs_page)
+        app.router.add_get("/audit", self._serve_audit_page)
         app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
         app.router.add_post("/api/logout", self._authorized(self._api_logout))
@@ -556,6 +559,14 @@ class WebPanel:
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
         html = self._logs_html or "<h1>/logs</h1><p>Файл logs.html не найден.</p>"
+        if self.password:
+            html = html.replace("__PANEL_TOKEN__", "")
+        else:
+            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
+        return web.Response(text=html, content_type="text/html", charset="utf-8")
+
+    async def _serve_audit_page(self, request: web.Request) -> web.Response:
+        html = self._audit_html or "<h1>/audit</h1><p>Файл audit.html не найден.</p>"
         if self.password:
             html = html.replace("__PANEL_TOKEN__", "")
         else:

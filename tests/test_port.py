@@ -729,8 +729,22 @@ async def test_webpanel_logs_page(tmp_path):
             page = await client.get("/logs")
             assert page.status == 200
             text = await page.text()
-            assert "Логи бота" in text
+            assert "Технические логи" in text
             assert "__PANEL_TOKEN__" not in text or panel._static_token in text
+
+
+@pytest.mark.asyncio
+async def test_webpanel_audit_page(tmp_path):
+    """Страница /audit отдаёт HTML с лентами Discord-событий."""
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            page = await client.get("/audit")
+            assert page.status == 200
+            text = await page.text()
+            assert "Логи Discord" in text
+            assert "audit=1" in text
 
 
 @pytest.mark.asyncio

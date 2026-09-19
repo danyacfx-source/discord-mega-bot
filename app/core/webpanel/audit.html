@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZAVOD · Логи</title>
+<title>ZAVOD · Логи Discord</title>
 <style>
 :root{--bg:#0d0e12;--panel:#13141a;--panel2:#181a22;--border:#24262f;--text:#e7e9ee;--muted:#8b8f9c;
 --accent:#ff3d2e;--ok:#3ddc84;--warn:#f5b942;--err:#ff5f57;--info:#4dd0e1;
 --mono:'JetBrains Mono',Consolas,monospace}
 *{box-sizing:border-box}
-body{margin:0;background:radial-gradient(1200px 500px at 50% -200px,#242025 0,var(--bg) 60%);color:var(--text);
+body{margin:0;background:radial-gradient(1200px 500px at 50% -200px,#241a20 0,var(--bg) 60%);color:var(--text);
 font-family:'Onest',system-ui,sans-serif;min-height:100vh}
 header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);
 background:rgba(13,14,18,.85);position:sticky;top:0;backdrop-filter:blur(8px);z-index:10}
@@ -17,6 +17,8 @@ header .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);d
 place-items:center;font-weight:900;font-size:15px;color:#fff}
 header h1{font-size:16px;margin:0}
 header .sub{color:var(--muted);font-size:12px;margin-left:2px}
+.chip{display:inline-block;margin-left:10px;padding:3px 9px;border-radius:999px;font-size:11px;
+background:rgba(255,61,46,.12);border:1px solid rgba(255,61,46,.4);color:#ff8a80}
 .navlink{margin-left:auto;color:var(--muted);font-size:12px;text-decoration:none;border:1px solid var(--border);
 padding:6px 12px;border-radius:8px}
 .navlink:hover{color:var(--accent);border-color:var(--accent)}
@@ -26,7 +28,6 @@ select,input[type=text],button{background:var(--panel2);color:var(--text);border
 border-radius:8px;padding:7px 11px;font-size:13px;font-family:inherit}
 button{cursor:pointer;transition:.15s}
 button:hover{border-color:var(--accent);color:var(--accent)}
-button.active{background:var(--accent);border-color:var(--accent);color:#fff}
 #login{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;
 background:rgba(10,11,14,.92)}
 .login-card{width:min(340px,92vw);padding:28px 26px;border:1px solid var(--border);border-radius:16px;
@@ -40,14 +41,15 @@ border-radius:9px;background:var(--panel2);color:var(--text)}
 .row{display:flex;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;
 margin-bottom:7px;background:var(--panel);font-family:var(--mono);font-size:12.5px;line-height:1.45}
 .row .t{color:var(--muted);flex-shrink:0;white-space:nowrap}
-.row .lvl{font-weight:700;flex-shrink:0;text-transform:uppercase;font-size:10.5px;letter-spacing:.5px;margin-top:1px}
 .row .cat{flex-shrink:0;padding:0 7px;border-radius:6px;font-size:10.5px;line-height:18px;height:18px;
-background:var(--panel2);border:1px solid var(--border);color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.lvl-INFO{color:var(--info)}.lvl-WARNING{color:var(--warn)}
-.lvl-ERROR,.lvl-CRITICAL{color:var(--err)}.lvl-DEBUG{color:var(--muted)}
+background:var(--panel2);border:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
+.cat-bot{color:#7986cb;border-color:#3f4a80;background:#1c2033}
+.cat-member{color:#4dd0e1;border-color:#1e5a66;background:#122a30}
+.cat-message{color:#f5b942;border-color:#6b5420;background:#2a2412}
+.cat-voice{color:#ba68c8;border-color:#5d2c6b;background:#251331}
+.cat-mod{color:#ef5350;border-color:#70302e;background:#2a1413}
+.cat-general{color:#9ccc65;border-color:#4a5e2c;background:#1c2512}
 .row .msg{color:var(--text);word-break:break-word;flex:1}
-.row.audit{border-color:#2e2a33;background:#17131a}
-.row.audit .msg{color:#f2e9ff}
 .empty{color:var(--muted);text-align:center;padding:40px 0;font-size:13px}
 footer{color:var(--muted);font-size:11px;padding:0 20px 30px;text-align:center}
 .badge{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;
@@ -57,7 +59,7 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
 <body>
 <div id="login">
   <div class="login-card">
-    <h2>Вход в логи</h2>
+    <h2>Вход в логи Discord</h2>
     <p>Панель защищена паролем. Введите его, чтобы просматривать логи.</p>
     <input id="login_pw" type="password" placeholder="Пароль" autocomplete="current-password">
     <div class="err" id="login_err"></div>
@@ -67,16 +69,15 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
 
 <header>
   <div class="logo">Z</div>
-  <h1>Технические логи</h1>
-  <span class="sub">работа бота и ошибки</span>
-  <span class="badge" id="count_badge">…</span>
-  <a class="navlink" href="/audit">Логи Discord →</a>
+  <h1>Логи Discord</h1>
+  <span class="sub">события сервера</span>
+  <span class="chip" id="count_badge">…</span>
+  <a class="navlink" href="/logs">Технические логи →</a>
 </header>
 
 <div class="toolbar">
   <select id="f_cat">
     <option value="">Категория: все</option>
-    <option value="sys">Технические</option>
     <option value="bot">Бот</option>
     <option value="member">Участники</option>
     <option value="message">Сообщения</option>
@@ -84,13 +85,6 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
     <option value="mod">Модерация</option>
     <option value="general">Общее</option>
   </select>
-  <select id="f_level">
-    <option value="">Уровень: все</option>
-    <option value="INFO">INFO</option>
-    <option value="WARNING">WARNING</option>
-    <option value="ERROR">ERROR</option>
-  </select>
-  <button id="f_audit">Только Discord</button>
   <label style="color:var(--muted);font-size:12px;display:flex;align-items:center;gap:6px">
     <input type="checkbox" id="f_auto" checked> Автообновление
   </label>
@@ -102,7 +96,7 @@ background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
 </div>
 
 <div class="list" id="list"></div>
-<footer>Все логи бота. События Discord вынесены на отдельную страницу /audit. · /logs</footer>
+<footer>Только события Discord: вход/выход участников, удаления/правки сообщений, голосовые, модерация, запуски бота. · /audit</footer>
 
 <script>
 let TOKEN = "__PANEL_TOKEN__" || localStorage.getItem("panel-token") || "";
@@ -153,7 +147,7 @@ $("btn_logout").onclick = () => {
   showLogin();
 };
 
-const catLabels = { bot: "БОТ", member: "УЧАСТНИК", message: "СООБЩЕНИЕ", voice: "ГОЛОС", mod: "МОДЕРАЦИЯ", general: "ОБЩЕЕ", sys: "ТЕХ" };
+const catLabels = { bot: "БОТ", member: "УЧАСТНИК", message: "СООБЩЕНИЕ", voice: "ГОЛОС", mod: "МОДЕРАЦИЯ", general: "ОБЩЕЕ" };
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
@@ -163,23 +157,19 @@ function esc(s) {
 async function refresh() {
   if (!TOKEN) return;
   const cat = encodeURIComponent($("f_cat").value);
-  const level = encodeURIComponent($("f_level").value);
-  const audit = $("f_audit").classList.contains("active") ? "&audit=1" : "";
-  const n = "300";
+  const n = "500";
   try {
-    const d = await api(`/api/logs?n=${n}&cat=${cat}&level=${level}${audit}`);
+    const d = await api(`/api/logs?n=${n}&cat=${cat}&audit=1`);
     const list = $("list");
-    $("count_badge").textContent = (d.count ?? 0) + " записей";
+    $("count_badge").textContent = (d.count ?? 0) + " событий";
     if (!d.logs || !d.logs.length) {
-      list.innerHTML = '<div class="empty">Записей по выбранным фильтрам нет.</div>';
+      list.innerHTML = '<div class="empty">Событий Discord по выбранной категории нет.</div>';
     } else {
       list.innerHTML = d.logs.map((e) => {
-        const cls = e.audit === "1" ? "row audit" : "row";
         const cat = catLabels[e.cat] || esc(e.cat || "");
-        return `<div class="${cls}">
+        return `<div class="row">
           <span class="t">${esc(e.t)}</span>
-          <span class="lvl lvl-${esc(e.level)}">${esc(e.level)}</span>
-          <span class="cat">${cat}</span>
+          <span class="cat cat-${esc(e.cat)}">${cat}</span>
           <span class="msg">${esc(e.msg)}</span>
         </div>`;
       }).join("");
@@ -193,8 +183,6 @@ async function refresh() {
 
 $("btn_refresh").onclick = refresh;
 $("f_cat").onchange = refresh;
-$("f_level").onchange = refresh;
-$("f_audit").onclick = (e) => { e.target.classList.toggle("active"); refresh(); };
 let paused = false;
 $("btn_pause").onclick = (e) => {
   paused = !paused;
@@ -202,7 +190,7 @@ $("btn_pause").onclick = (e) => {
   e.target.classList.toggle("active", paused);
   if (!paused) refresh();
 };
-$("f_auto").onchange = () => { if (document.getElementById("f_auto").checked) refresh(); };
+$("f_auto").onchange = () => { if ($("f_auto").checked) refresh(); };
 
 setInterval(() => {
   if (!paused && $("f_auto").checked) refresh();
