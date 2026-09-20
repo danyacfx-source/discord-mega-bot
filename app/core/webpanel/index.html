@@ -103,8 +103,14 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .mini{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
 .inlinebox{display:flex;align-items:center;gap:5px;white-space:nowrap;font-size:12px;color:var(--muted)}
 @media(max-width:900px){.field-item .row{grid-template-columns:1fr 1fr}}
-.btn-row{border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--card2);margin-top:8px;display:grid;grid-template-columns:1.6fr .9fr 1.6fr auto;gap:8px;align-items:end}
+.btn-row{display:grid;grid-template-columns:1.6fr .9fr 1.6fr auto;gap:8px;align-items:end;border:1px solid var(--border);border-radius:9px;padding:8px 10px;background:var(--card2)}
 @media(max-width:900px){.btn-row{grid-template-columns:1fr 1fr}}
+.embed-cat{border:1px solid var(--border);border-radius:9px;background:var(--card2);padding:10px 12px;margin-top:6px}
+.embed-cat h4{margin:0 0 6px;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+.embed-cat-head{display:flex;align-items:center;gap:6px}
+.embed-cat .row-dyn{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
+@media(max-width:900px){.embed-cat .row-dyn{grid-template-columns:1fr}}
+.embed-cat .row-dyn3{grid-template-columns:1.4fr 1.8fr auto}
 .set-group{border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:14px 16px}
 .set-group h4{margin:0 0 4px;font-size:14px}
 .set-group .sub{font-size:12px;color:var(--muted);margin-bottom:6px}
@@ -257,69 +263,18 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
           </div>
           <div>
             <div class="card">
-              <h3 class="sec">Основное</h3>
-              <label class="field" for="f_content">Содержимое (текст выше эмбеда)</label>
+              <h3 class="sec">Содержимое (текст выше эмбедов)</h3>
               <input type="text" id="f_content" maxlength="2000" placeholder="Текст…" oninput="renderPreview()">
-              <label class="field">Заголовок</label>
-              <input type="text" id="f_title" maxlength="256" placeholder="Заголовок" oninput="renderPreview()">
-              <label class="field">Описание</label>
-              <textarea id="f_desc" rows="4" maxlength="4096" placeholder="Описание" oninput="renderPreview()"></textarea>
-              <label class="field">Цвет полоски</label>
-              <div class="row-inline">
-                <input type="text" id="f_color" style="flex:1;min-width:120px" placeholder="например #5865f2 или blurple" oninput="renderColor();renderPreview()">
-                <input type="color" id="f_color_picker" value="#5865f2" oninput="pickColor(this.value)" style="width:38px;height:38px;padding:2px;border:1px solid var(--border);background:var(--input);border-radius:8px;cursor:pointer">
-                <span id="colsw" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);display:inline-block"></span>
-              </div>
-              <div class="row-inline">
-                <label class="toggle-holder" style="margin:0;font-size:13px">
-                  <span class="switch"><input type="checkbox" id="f_ts" onchange="renderPreview()"><span class="slider"></span></span>
-                  <span>Время отправки</span>
-                </label>
-              </div>
             </div>
 
             <div class="card" style="margin-top:12px">
-              <h3 class="sec">Автор</h3>
-              <label class="field">Имя</label>
-              <input type="text" id="f_author_name" maxlength="256" oninput="renderPreview()">
-              <label class="field">Иконка (URL)</label>
-              <input type="url" id="f_author_icon" oninput="renderPreview()">
-              <label class="field">Ссылка</label>
-              <input type="url" id="f_author_url" oninput="renderPreview()">
-            </div>
-
-            <div class="card" style="margin-top:12px">
-              <h3 class="sec">Подвал</h3>
-              <label class="field">Текст</label>
-              <input type="text" id="f_footer_text" maxlength="2048" oninput="renderPreview()">
-              <label class="field">Иконка (URL)</label>
-              <input type="url" id="f_footer_icon" oninput="renderPreview()">
-            </div>
-
-            <div class="card" style="margin-top:12px">
-              <h3 class="sec">Картинки</h3>
-              <label class="field">Изображение</label>
-              <div class="row-inline">
-                <input type="url" id="f_image" oninput="renderPreview()">
-                <button class="btn small op" type="button" onclick="document.getElementById('file_image').click()">⬆ Загрузить</button>
-                <input type="file" id="file_image" accept="image/*" style="display:none" onchange="if(this.files[0])uploadFile(this.files[0],'f_image');this.value=''">
-              </div>
-              <label class="field">Миниатюра</label>
-              <div class="row-inline">
-                <input type="url" id="f_thumb" oninput="renderPreview()">
-                <button class="btn small op" type="button" onclick="document.getElementById('file_thumb').click()">⬆ Загрузить</button>
-                <input type="file" id="file_thumb" accept="image/*" style="display:none" onchange="if(this.files[0])uploadFile(this.files[0],'f_thumb');this.value=''">
-              </div>
+              <h3 class="sec">Эмбеды <span class="muted small">(макс. 10, до 6000 символов вместе)</span></h3>
+              <div id="embeds_box"></div>
+              <button class="btn op small" type="button" style="margin-top:10px" onclick="addEmbed()">＋ Добавить эмбед</button>
             </div>
           </div>
 
           <div>
-            <div class="card">
-              <h3 class="sec">Поля (до 25)</h3>
-              <div id="fields"></div>
-              <button class="btn op small" type="button" style="margin-top:10px" onclick="addField()">＋ Добавить поле</button>
-            </div>
-
             <div class="card" style="margin-top:12px">
               <h3 class="sec">Кнопки (до 5×5)</h3>
               <p class="muted small" style="margin:0 0 8px">Стиль «Ссылка» → URL, остальные стили — декоративные.</p>

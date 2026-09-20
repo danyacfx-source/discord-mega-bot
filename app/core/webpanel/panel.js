@@ -17,7 +17,7 @@ const MODULE_LABELS = {
 };
 
 let mode = "webhook";
-let fields = [];
+let embeds = [newEmbed()];
 let btnRows = [[]];
 let settingsLoaded = false;
 let settingsData = null;
@@ -94,7 +94,7 @@ async function logout() {
   location.reload();
 }
 
-async function uploadFile(file, targetId) {
+async function uploadFile(file, targetId, cb) {
   if (!file) return;
   if (!/\.(png|jpe?g|gif|webp)$/i.test(file.name)) return toast("Формат не поддерживается: " + file.name, false);
   if (file.size > 8 * 1024 * 1024) return toast("Файл больше 8 МБ", false);
@@ -105,7 +105,7 @@ async function uploadFile(file, targetId) {
   if (r.status === 401) {
     if (PANEL_LOGIN) showLogin(); else if (TOKEN) location.reload();
   }
-  if (d && d.ok && d.url) { $(targetId).value = d.url; renderPreview(); toast("✅ Картинка загружена", true); }
+  if (d && d.ok && d.url) { $(targetId).value = d.url; if (cb) cb(d.url); else renderPreview(); toast("✅ Картинка загружена", true); }
   else toast(d.error ? "❌ " + d.error : "❌ Ошибка загрузки картинки", false);
 }
 
@@ -177,22 +177,6 @@ function resolveColor(str) {
   const m = hex6.exec(s);
   if (m) return parseInt(m[1], 16);
   return null;
-}
-
-function renderColor() {
-  const c = resolveColor($("f_color").value);
-  const el = document.getElementById("colsw");
-  if (el) el.style.background = c === null ? "transparent" : "#" + c.toString(16).padStart(6, "0");
-  const picker = document.getElementById("f_color_picker");
-  if (picker) picker.value = c === null ? "#5865f2" : "#" + c.toString(16).padStart(6, "0");
-}
-function pickColor(hex) {
-  const c = resolveColor(hex);
-  if (c === null) return;
-  const text = document.getElementById("f_color");
-  if (text) text.value = "#" + c.toString(16).padStart(6, "0");
-  renderColor();
-  renderPreview();
 }
 
 /* --- обзор --- */
@@ -313,11 +297,25 @@ function addButtonRow() {
   renderButtons();
 }
 
-function renderFields() {
-  const box = $("fields");
+function newEmbed() {
+  return { title: "", desc: "", color: "", author_name: "", author_icon: "", author_url: "", footer_text: "", footer_icon: "", image: "", thumb: "", ts: false, fields: [] };
+}
+function embedTag(i, key) {
+  return "em_" + i + "_" + key;
+}
+function bindEmbedInput(i, key) {
+  return (el) => { el.oninput = () => { embeds[i][key] = el.value; if (key === "color") renderColorFor(i); renderPreview(); }; };
+}
+function lbl(clazz, text) {
+  return tag("label", clazz, text);
+}
+function renderEmbedFields(i) {
+  const box = $(embedTag(i, "fields"));
+  if (!box) return;
+  const flds = embeds[i].fields;
   box.innerHTML = "";
-  if (fields.length === 0) box.appendChild(tag("div", "hint muted", "Поля не добавлены"));
-  fields.forEach((f, i) => {
+  if (flds.length === 0) box.appendChild(tag("div", "hint muted", "Поля не добавлены"));
+  flds.forEach((f, fi) => {
     const item = tag("div", "field-item");
     const row = tag("div", "row");
     const n = tag("input", null);
@@ -336,45 +334,201 @@ function renderFields() {
     inl.onchange = () => { f.inline = inl.value === "1"; renderPreview(); };
     const del = tag("button", "btn mini", "✖");
     del.type = "button"; del.title = "Удалить поле";
-    del.onclick = () => { fields.splice(i, 1); renderFields(); renderPreview(); };
+    del.onclick = () => { flds.splice(fi, 1); renderEmbedFields(i); renderPreview(); };
     row.append(n, v, inl, del);
     item.appendChild(row);
     box.appendChild(item);
   });
 }
-function addField() {
-  if (fields.length >= 25) return toast("Максимум 25 полей", false);
-  fields.push({ name: "Поле", value: "Описание", inline: false });
-  renderFields(); renderPreview();
+function addField(i) {
+  if (embeds[i].fields.length >= 25) return toast("Максимум 25 полей", false);
+  embeds[i].fields.push({ name: "Поле", value: "Описание", inline: false });
+  renderEmbedFields(i); renderPreview();
+}
+function addEmbed() {
+  if (embeds.length >= 10) return toast("Максимум 10 эмбедов в сообщении", false);
+  embeds.push(newEmbed());
+  renderEmbeds(); renderPreview();
+}
+function dupEmbed(i) {
+  if (embeds.length >= 10) return toast("Максимум 10 эмбедов в сообщении", false);
+  embeds.splice(i + 1, 0, JSON.parse(JSON.stringify(embeds[i])));
+  renderEmbeds(); renderPreview();
+}
+function delEmbed(i) {
+  if (embeds.length <= 1) return toast("Должен остаться минимум 1 эмбед", false);
+  embeds.splice(i, 1);
+  renderEmbeds(); renderPreview();
+}
+function renderColorFor(i) {
+  const c = resolveColor(embeds[i].color);
+  const sw = $(embedTag(i, "colsw"));
+  if (sw) sw.style.background = c === null ? "transparent" : "#" + c.toString(16).padStart(6, "0");
+  const picker = $(embedTag(i, "color_picker"));
+  if (picker) picker.value = c === null ? "#5865f2" : "#" + c.toString(16).padStart(6, "0");
+}
+function pickColorFor(i, hex) {
+  const c = resolveColor(hex);
+  if (c === null) return;
+  embeds[i].color = "#" + c.toString(16).padStart(6, "0");
+  const text = $(embedTag(i, "color"));
+  if (text) text.value = embeds[i].color;
+  renderColorFor(i);
+  renderPreview();
+}
+function renderEmbeds() {
+  const box = $("embeds_box");
+  box.innerHTML = "";
+  embeds.forEach((e, i) => {
+    const card = tag("div", "embed-ed");
+    card.appendChild(tag("div", "embed-ed-head", "Эмбед " + (i + 1) + " <span class=\"muted small\">(" + (i + 1) + "/10)</span>"));
+    const opts = tag("div", "embed-ed-opts");
+    const dup = tag("button", "btn mini", "⧉ Дублировать");
+    dup.type = "button"; dup.title = "Дублировать эмбед";
+    dup.onclick = () => dupEmbed(i);
+    const del = tag("button", "btn mini", "✖");
+    del.type = "button"; del.title = "Удалить эмбед";
+    del.onclick = () => delEmbed(i);
+    opts.append(dup, del);
+    card.appendChild(opts);
+
+    const inT = tag("input", null);
+    inT.type = "text"; inT.id = embedTag(i, "title"); inT.maxLength = 256; inT.placeholder = "Заголовок"; inT.value = e.title;
+    const inD = tag("textarea", null);
+    inD.id = embedTag(i, "desc"); inD.rows = 4; inD.maxLength = 4000; inD.placeholder = "Описание"; inD.value = e.desc;
+    bindEmbedInput(i, "title")(inT);
+    bindEmbedInput(i, "desc")(inD);
+    card.appendChild(lbl("field", "Заголовок"));
+    card.appendChild(inT);
+    card.appendChild(lbl("field", "Описание"));
+    card.appendChild(inD);
+
+    const inC = tag("input", null);
+    inC.type = "text"; inC.id = embedTag(i, "color"); inC.placeholder = "например #5865f2 или blurple"; inC.value = e.color;
+    const inP = tag("input", null);
+    inP.type = "color"; inP.id = embedTag(i, "color_picker"); inP.value = "#5865f2";
+    const sw = tag("span", null);
+    sw.id = embedTag(i, "colsw");
+    sw.style.cssText = "width:34px;height:34px;border-radius:8px;border:1px solid var(--border);display:inline-block";
+    inC.oninput = () => { e.color = inC.value; renderColorFor(i); renderPreview(); };
+    inP.oninput = () => pickColorFor(i, inP.value);
+    const rowC = tag("div", "row-inline");
+    inC.style.cssText = "flex:1;min-width:120px";
+    inP.style.cssText = "width:38px;height:38px;padding:2px;border:1px solid var(--border);background:var(--input);border-radius:8px;cursor:pointer";
+    rowC.append(inC, inP, sw);
+    card.appendChild(lbl("field", "Цвет полоски"));
+    card.appendChild(rowC);
+
+    card.appendChild(lbl("field", "Автор — имя"));
+    const inAN = tag("input", null);
+    inAN.id = embedTag(i, "author_name"); inAN.maxLength = 256; inAN.value = e.author_name;
+    bindEmbedInput(i, "author_name")(inAN);
+    card.appendChild(inAN);
+    card.appendChild(lbl("field", "Автор — иконка (URL)"));
+    const inAI = tag("input", null);
+    inAI.id = embedTag(i, "author_icon"); inAI.type = "url"; inAI.value = e.author_icon;
+    bindEmbedInput(i, "author_icon")(inAI);
+    card.appendChild(inAI);
+    card.appendChild(lbl("field", "Автор — ссылка"));
+    const inAU = tag("input", null);
+    inAU.id = embedTag(i, "author_url"); inAU.type = "url"; inAU.value = e.author_url;
+    bindEmbedInput(i, "author_url")(inAU);
+    card.appendChild(inAU);
+
+    card.appendChild(lbl("field", "Подвал — текст"));
+    const inFT = tag("input", null);
+    inFT.id = embedTag(i, "footer_text"); inFT.maxLength = 2048; inFT.value = e.footer_text;
+    bindEmbedInput(i, "footer_text")(inFT);
+    card.appendChild(inFT);
+    card.appendChild(lbl("field", "Подвал — иконка (URL)"));
+    const inFI = tag("input", null);
+    inFI.id = embedTag(i, "footer_icon"); inFI.type = "url"; inFI.value = e.footer_icon;
+    bindEmbedInput(i, "footer_icon")(inFI);
+    card.appendChild(inFI);
+
+    card.appendChild(lbl("field", "Изображение"));
+    const inI = tag("input", null);
+    inI.id = embedTag(i, "image"); inI.type = "url"; inI.value = e.image;
+    bindEmbedInput(i, "image")(inI);
+    const rowI = tag("div", "row-inline");
+    const upI = tag("button", "btn small op", "⬆ Загрузить");
+    upI.type = "button";
+    upI.onclick = () => $(embedTag(i, "file_image")).click();
+    const fI = tag("input", null);
+    fI.type = "file"; fI.id = embedTag(i, "file_image"); fI.accept = "image/*"; fI.style.display = "none";
+    fI.onchange = () => { if (fI.files[0]) uploadFile(fI.files[0], embedTag(i, "image"), (url) => { e.image = url; renderPreview(); }); fI.value = ""; };
+    rowI.append(inI, upI, fI);
+    card.appendChild(rowI);
+
+    card.appendChild(lbl("field", "Миниатюра"));
+    const inT2 = tag("input", null);
+    inT2.id = embedTag(i, "thumb"); inT2.type = "url"; inT2.value = e.thumb;
+    bindEmbedInput(i, "thumb")(inT2);
+    const rowT = tag("div", "row-inline");
+    const upT = tag("button", "btn small op", "⬆ Загрузить");
+    upT.type = "button";
+    upT.onclick = () => $(embedTag(i, "file_thumb")).click();
+    const fT = tag("input", null);
+    fT.type = "file"; fT.id = embedTag(i, "file_thumb"); fT.accept = "image/*"; fT.style.display = "none";
+    fT.onchange = () => { if (fT.files[0]) uploadFile(fT.files[0], embedTag(i, "thumb"), (url) => { e.thumb = url; renderPreview(); }); fT.value = ""; };
+    rowT.append(inT2, upT, fT);
+    card.appendChild(rowT);
+
+    const tsL = lbl("toggle-holder", "");
+    tsL.style.cssText = "margin:8px 0;font-size:13px";
+    const swTS = tag("span", "switch", null);
+    const cbTS = tag("input", null);
+    cbTS.type = "checkbox"; cbTS.id = embedTag(i, "ts"); cbTS.checked = e.ts;
+    cbTS.onchange = () => { e.ts = cbTS.checked; renderPreview(); };
+    swTS.appendChild(cbTS);
+    swTS.appendChild(tag("span", "slider", null));
+    tsL.append(swTS, tag("span", null, " Время отправки"));
+    card.appendChild(tsL);
+
+    card.appendChild(tag("h5", "sec", "Поля (до 25)"));
+    const fldBox = tag("div", null);
+    fldBox.id = embedTag(i, "fields");
+    card.appendChild(fldBox);
+    renderEmbedFields(i);
+    const addF = tag("button", "btn op small", "＋ Добавить поле");
+    addF.type = "button";
+    addF.style.cssText = "margin-top:10px";
+    addF.onclick = () => addField(i);
+    card.appendChild(addF);
+
+    renderColorFor(i);
+    box.appendChild(card);
+  });
 }
 
-function readEmbed() {
-  const e = {};
-  const t = $("f_title").value.trim().slice(0, 256);
-  const d = $("f_desc").value.trim().slice(0, 4000);
-  if (t) e.title = t;
-  if (d) e.description = d;
-  const co = resolveColor($("f_color").value);
-  if (co !== null) e.color = co;
-  const an = $("f_author_name").value.trim().slice(0, 256);
-  if (an) e.author = { name: an, icon_url: $("f_author_icon").value.trim().slice(0, 2048) || undefined, url: $("f_author_url").value.trim().slice(0, 2048) || undefined };
-  const ft = $("f_footer_text").value.trim().slice(0, 2048);
-  if (ft) e.footer = { text: ft, icon_url: $("f_footer_icon").value.trim().slice(0, 2048) || undefined };
-  const im = $("f_image").value.trim().slice(0, 2048);
-  if (im) e.image = { url: im };
-  const th = $("f_thumb").value.trim().slice(0, 2048);
-  if (th) e.thumbnail = { url: th };
-  const fs = fields.slice(0, 25).filter((f) => f.name.trim() || f.value.trim());
-  if (fs.length) e.fields = fs.map((f) => ({ name: f.name.trim().slice(0, 256), value: f.value.trim().slice(0, 1024), inline: !!f.inline }));
-  if (Object.keys(e).length === 0) return null;
-  return e;
+function readEmbed(i) {
+  const e = embeds[i];
+  const out = {};
+  const t = e.title.trim().slice(0, 256);
+  const d = e.desc.trim().slice(0, 4000);
+  if (t) out.title = t;
+  if (d) out.description = d;
+  const co = resolveColor(e.color);
+  if (co !== null) out.color = co;
+  const an = e.author_name.trim().slice(0, 256);
+  if (an) out.author = { name: an, icon_url: e.author_icon.trim().slice(0, 2048) || undefined, url: e.author_url.trim().slice(0, 2048) || undefined };
+  const ft = e.footer_text.trim().slice(0, 2048);
+  if (ft) out.footer = { text: ft, icon_url: e.footer_icon.trim().slice(0, 2048) || undefined };
+  const im = e.image.trim().slice(0, 2048);
+  if (im) out.image = { url: im };
+  const th = e.thumb.trim().slice(0, 2048);
+  if (th) out.thumbnail = { url: th };
+  if (e.ts) out.timestamp = new Date().toISOString();
+  const fs = e.fields.slice(0, 25).filter((f) => f.name.trim() || f.value.trim());
+  if (fs.length) out.fields = fs.map((f) => ({ name: f.name.trim().slice(0, 256), value: f.value.trim().slice(0, 1024), inline: !!f.inline }));
+  if (Object.keys(out).length === 0) return null;
+  return out;
 }
 function buildPayload() {
-  const embed = readEmbed();
   const isBot = mode === "bot";
   const p = {
     content: ($("f_content").value || "").slice(0, 2000) || null,
-    embeds: embed ? [embed] : [],
+    embeds: embeds.slice(0, 10).map((_, i) => readEmbed(i)).filter(Boolean),
     components: btnRows.filter((r) => r.length),
   };
   if (isBot) p.channel_id = $("sel_channel").value;
@@ -404,11 +558,10 @@ async function editMsg() {
   else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
 }
 function clearBuilder() {
-  fields = [];
+  embeds = [newEmbed()];
   btnRows = [[]];
-  ["f_content", "f_title", "f_desc", "f_color", "f_author_name", "f_author_icon", "f_author_url", "f_footer_text", "f_footer_icon", "f_image", "f_thumb"].forEach((id) => { $(id).value = ""; });
-  $("f_ts").checked = false;
-  renderFields(); renderButtons(); renderPreview();
+  $("f_content").value = "";
+  renderEmbeds(); renderButtons(); renderPreview();
   toast("🧹 Поля очищены", true);
 }
 async function loadMsg() {
@@ -428,58 +581,66 @@ async function loadMsg() {
   toast("✅ Загружено в конструктор", true);
 }
 function fillEmbed(msg) {
-  const em = (msg.embeds && msg.embeds[0]) ? msg.embeds[0] : null;
+  const src = (msg.embeds && msg.embeds.length) ? msg.embeds : [null];
+  embeds = src.slice(0, 10).map((em) => ({
+    title: (em && em.title) ? em.title : "",
+    desc: (em && em.description) ? em.description : "",
+    color: (em && em.color) ? em.color : "",
+    author_name: (em && em.author && em.author.name) ? em.author.name : "",
+    author_icon: (em && em.author && em.author.icon_url) ? em.author.icon_url : "",
+    author_url: (em && em.author && em.author.url) ? em.author.url : "",
+    footer_text: (em && em.footer && em.footer.text) ? em.footer.text : "",
+    footer_icon: (em && em.footer && em.footer.icon_url) ? em.footer.icon_url : "",
+    image: (em && em.image && em.image.url) ? em.image.url : "",
+    thumb: (em && em.thumbnail && em.thumbnail.url) ? em.thumbnail.url : "",
+    ts: false,
+    fields: (em && em.fields) ? em.fields.map((f) => ({ name: f.name || "", value: f.value || "", inline: !!f.inline })) : [],
+  }));
   $("f_content").value = msg.content || "";
-  const c = $("f_color"); c.value = (em && em.color) ? em.color : ""; renderColor();
-  $("f_title").value = (em && em.title) ? em.title : "";
-  $("f_desc").value = (em && em.description) ? em.description : "";
-  const a = (em && em.author) ? em.author : {};
-  $("f_author_name").value = a.name || "";
-  $("f_author_icon").value = a.icon_url || "";
-  $("f_author_url").value = a.url || "";
-  const fo = (em && em.footer) ? em.footer : {};
-  $("f_footer_text").value = fo.text || "";
-  $("f_footer_icon").value = fo.icon_url || "";
-  $("f_image").value = (em && em.image && em.image.url) ? em.image.url : "";
-  $("f_thumb").value = (em && em.thumbnail && em.thumbnail.url) ? em.thumbnail.url : "";
-  fields = (em && em.fields) ? em.fields.map((f) => ({ name: f.name || "", value: f.value || "", inline: !!f.inline })) : [];
   btnRows = msg.components && msg.components.length ? msg.components : [[]];
-  renderFields(); renderButtons(); renderPreview();
+  renderEmbeds(); renderButtons(); renderPreview();
 }
 
 function renderPreview() {
   const box = $("preview");
-  const c = resolveColor($("f_color").value);
-  const colorHex = c === null ? "#5865f2" : "#" + c.toString(16).padStart(6, "0");
   const content = ($("f_content").value || "").trim();
-  const title = $("f_title").value.trim();
-  const desc = $("f_desc").value.trim();
-  const an = $("f_author_name").value.trim();
-  const ft = $("f_footer_text").value.trim();
-  const im = $("f_image").value.trim();
-  const th = $("f_thumb").value.trim();
-  if (!content && !title && !desc && !an && !ft && !im && $("f_color").value.trim() === "" && fields.length === 0 && btnRows.every((r) => r.length === 0)) {
+  const ems = embeds.slice(0, 10);
+  const hasEmbed = ems.some((e) => e.title.trim() || e.desc.trim() || e.color.trim() || e.author_name.trim() || e.footer_text.trim() || e.image.trim() || e.thumb.trim() || e.fields.some((f) => f.name.trim() || f.value.trim()));
+  if (!content && !hasEmbed && btnRows.every((r) => r.length === 0)) {
     box.innerHTML = '<div class="empty">Заполните форму, чтобы увидеть предпросмотр</div>';
     return;
   }
+  const view = (obj) => escapeHtml(obj);
+  const sum = content.length + ems.reduce((acc, e) => acc + e.title.trim().length + e.desc.trim().length + e.fields.reduce((a, f) => a + f.name.trim().length + f.value.trim().length, 0), 0);
   let html = "";
   if (content) html += '<div class="content-preview">' + escapeHtml(content) + "</div>";
-  html += '<div class="embed-card" style="border-left-color:' + colorHex + '">';
-  if (an) html += '<div class="embed-author">' + escapeHtml(an) + (th ? '<img class="embed-thumb" src="' + escapeHtml(th) + '" alt="">' : "") + "</div>";
-  if (title) html += '<div class="embed-title">' + escapeHtml(title) + "</div>";
-  if (desc) html += '<div class="embed-desc">' + escapeHtml(desc) + "</div>";
-  const view = (obj) => escapeHtml(obj);
-  if (fields.length) {
-    html += '<div class="fields">';
-    fields.forEach((f) => {
-      html += '<div class="fname">' + view(f.name) + "</div><div class=\"fvalue\">" + view(f.value) + "</div>";
-    });
+  html += '<div class="' + (sum > 6000 ? "warnsum" : "") + '" style="font-size:12px;margin:2px 0 8px;color:var(--muted)">Суммарно: ' + sum + ' / 6000 символов' + (sum > 6000 ? ' — <span style="color:#f23f43">лимит превышен</span>' : "") + "</div>";
+  ems.forEach((e) => {
+    if (!e.title.trim() && !e.desc.trim() && !e.color.trim() && !e.author_name.trim() && !e.footer_text.trim() && !e.image.trim() && !e.thumb.trim() && !e.fields.some((f) => f.name.trim() || f.value.trim())) return;
+    const c = resolveColor(e.color);
+    const colorHex = c === null ? "#5865f2" : "#" + c.toString(16).padStart(6, "0");
+    const title = e.title.trim();
+    const desc = e.desc.trim();
+    const an = e.author_name.trim();
+    const ft = e.footer_text.trim();
+    const im = e.image.trim();
+    const th = e.thumb.trim();
+    html += '<div class="embed-card" style="border-left-color:' + colorHex + '">';
+    if (an) html += '<div class="embed-author">' + escapeHtml(an) + (th ? '<img class="embed-thumb" src="' + escapeHtml(th) + '" alt="">' : "") + "</div>";
+    if (title) html += '<div class="embed-title">' + escapeHtml(title) + "</div>";
+    if (desc) html += '<div class="embed-desc">' + escapeHtml(desc) + "</div>";
+    if (e.fields.length) {
+      html += '<div class="fields">';
+      e.fields.forEach((f) => {
+        html += '<div class="fname">' + view(f.name) + "</div><div class=\"fvalue\">" + view(f.value) + "</div>";
+      });
+      html += "</div>";
+    }
+    if (im) html += '<img class="embed-image" src="' + escapeHtml(im) + '" alt="">';
+    if (ft) html += '<div class="embed-footer">' + view(ft) + "</div>";
+    if (e.ts) html += '<div class="embed-ts">' + new Date().toLocaleString("ru-RU") + "</div>";
     html += "</div>";
-  }
-  if (im) html += '<img class="embed-image" src="' + escapeHtml(im) + '" alt="">';
-  if (ft) html += '<div class="embed-footer">' + view(ft) + "</div>";
-  if ($("f_ts").checked) html += '<div class="embed-ts">' + new Date().toLocaleString("ru-RU") + "</div>";
-  html += "</div>";
+  });
   if (btnRows.some((r) => r.length)) {
     html += "<div style=\"margin-top:8px\">";
     btnRows.filter((r) => r.length).forEach((row) => {
@@ -1223,7 +1384,7 @@ $("btn_login").onclick = doLogin;
 $("login_pw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
 
 function bootInit() {
-  renderFields();
+  renderEmbeds();
   renderButtons();
   renderPreview();
   setMode("webhook");
