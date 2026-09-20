@@ -43,6 +43,25 @@ class StartCog(MegaCog, name="Lifecycle"):
             logger.warning("FFmpeg не найден — музыкальные команды будут недоступны")
         try:
             if not discord.opus.is_loaded():
-                discord.opus.load_opus()
-        except Exception:
-            logger.warning("libopus не загружен — голосовые каналы могут не работать")
+                try:
+                    discord.opus.load_opus()
+                except Exception as exc:
+                    if not discord.opus.is_loaded():
+                        candidates = (
+                            "opus",
+                            "libopus",
+                            "libopus.so.0",
+                            "libopus.so",
+                            "libopus-0.x64.dll",
+                        )
+                        ok = False
+                        for cand in candidates:
+                            try:
+                                discord.opus.load_opus(cand)
+                            except Exception:
+                                continue
+                            ok = True
+                            logger.info("libopus загружен из %s", cand)
+                            break
+                        if not ok:
+                            logger.warning("libopus не загружен — голосовые каналы не работают: %s", exc)
