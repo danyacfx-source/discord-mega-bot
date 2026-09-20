@@ -748,6 +748,36 @@ async def test_webpanel_audit_page(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_admin_page_multiple_embeds(tmp_path):
+    """Страница /admin рендерит секцию эмбедов: контейнер, кнопка добавления и элементы редактора."""
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            page = await client.get("/admin")
+            assert page.status == 200
+            text = await page.text()
+            assert 'id="embeds_box"' in text
+            assert "addEmbed" in text
+            assert "Добавить эмбед" in text
+
+
+def test_webhook_body_multiple_embeds(tmp_path):
+    """_webhook_body сохраняет массив из нескольких эмбедов и обрезает лишние."""
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    body = panel._webhook_body(
+        {
+            "content": "много эмбедов",
+            "embeds": [{"title": "Эмбед %d" % i, "description": "текст %d" % i} for i in range(3)],
+        }
+    )
+    assert body["content"] == "много эмбедов"
+    assert len(body["embeds"]) == 3
+    assert [e["title"] for e in body["embeds"]] == ["Эмбед 0", "Эмбед 1", "Эмбед 2"]
+
+
+@pytest.mark.asyncio
 async def test_logging_service_writes_to_web_ring(tmp_path):
     """Аудит-события LoggingService попадают в веб-ленту (а не в Discord-канал)."""
     import logging

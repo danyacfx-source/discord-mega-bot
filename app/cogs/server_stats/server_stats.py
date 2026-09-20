@@ -45,6 +45,9 @@ class ServerStatsCog(MegaCog, name="ServerStats"):
         super().__init__(bot)
         self._started = False
         self._presence_cache: dict[int, float] = {}
+        self._last_rename: dict[int, float] = {}
+
+    _RENAME_MIN_INTERVAL = 360.0
 
     async def cog_load(self) -> None:
         if self.bot.config.server_stats_enabled:
@@ -103,8 +106,12 @@ class ServerStatsCog(MegaCog, name="ServerStats"):
                     logger.warning("ServerStats: нет прав создать канал счётчика в %s", guild.name)
                     continue
             if channel.name != name:
+                now = time.monotonic()
+                if now - self._last_rename.get(channel.id, 0.0) < self._RENAME_MIN_INTERVAL:
+                    continue
                 try:
                     await channel.edit(name=name, reason="Обновление счётчика сервера")
+                    self._last_rename[channel.id] = time.monotonic()
                 except discord.HTTPException:
                     logger.warning("ServerStats: нет прав переименовать канал в %s", guild.name)
 
