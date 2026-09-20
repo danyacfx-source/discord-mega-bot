@@ -350,6 +350,11 @@ class WebPanel:
         self._lat: deque[dict[str, Any]] = deque(maxlen=90)
         self._mem: deque[dict[str, Any]] = deque(maxlen=90)
         self._online: deque[dict[str, Any]] = deque(maxlen=90)
+        self._msg_by_hour: deque[dict[str, int]] = deque(maxlen=24 * 7)
+        self._msg_by_day: deque[dict[str, int]] = deque(maxlen=45)
+        self._msg_total: int = 0
+        self._msg_unknown_logs: int = 0
+        self._listener_registered = False
 
     # --- жизненный цикл ---
 
@@ -380,6 +385,7 @@ class WebPanel:
         app.router.add_get("/api/status", self._authorized(self._api_status))
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
         app.router.add_get("/api/monitor", self._authorized(self._api_monitor))
+        app.router.add_get("/api/stats", self._authorized(self._api_stats))
         app.router.add_get("/api/server", self._authorized(self._api_server))
         app.router.add_get("/api/server/members", self._authorized(self._api_server_members))
         app.router.add_post("/api/server/members/roles", self._authorized(self._api_server_members_roles))
@@ -432,6 +438,9 @@ class WebPanel:
         await runner.setup()
         await web.TCPSite(runner, self.host, self.port).start()
         self._runner = runner
+        if not self._listener_registered:
+            self.bot.add_listener(self._on_message_hook, "on_message")
+            self._listener_registered = True
         self._ring = RingBufferHandler(_LOG_RING_SIZE)
         logging.getLogger().addHandler(self._ring)
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
@@ -443,6 +452,9 @@ class WebPanel:
         if self._ring is not None:
             logging.getLogger().removeHandler(self._ring)
             self._ring = None
+        if getattr(self, "_listener_registered", False):
+            self.bot.remove_listener(self._on_message_hook, "on_message")
+            self._listener_registered = False
         if self._http is not None:
             await self._http.close()
             self._http = None
@@ -1004,12 +1016,51 @@ class WebPanel:
 
     # --- API: мониторинг, сервер, модерация, розыгрыши, планировщик, бэкап ---
 
+    # --- сбор сообщений для /api/stats (паттерн add_listener как в donations.py) ---
+
+    def _on_message_hook(self, message: discord.Message) -> asyncio.Future[None]:
+        """Считает сообщения по часам/дням — данные для вкладки «Статистика»."""
+        fut: asyncio.Future[None] = asyncio.ensure_future(self._msg_counter(message))
+        return fut
+
+    async def _msg_counter(self, message: discord.Message) -> None:
+        if message.guild is None or message.author.bot:
+            return
+        now = datetime.now(UTC)
+        hour_key = now.replace(minute=0, second=0, microsecond=0)
+        day_key = now.date().isoformat()
+        self._msg_total += 1
+        if self._msg_by_hour and self._msg_by_hour[-1]["t"] == hour_key.timestamp():
+            self._msg_by_hour[-1]["n"] += 1
+        else:
+            self._msg_by_hour.append({"t": hour_key.timestamp(), "n": 1})
+        if self._msg_by_day and self._msg_by_day[-1].get("d") == day_key:
+            self._msg_by_day[-1]["n"] += 1
+        else:
+            self._msg_by_day.append({"d": day_key, "n": 1})
+
     async def _api_monitor(self, request: web.Request) -> web.Response:
         sample = await self._live_sample()
         self._record_metrics(sample)
         return self._json(
             {
                 "ok": True,
+                "latency": list(self._lat),
+                "mem": list(self._mem),
+                "online": list(self._online),
+                **sample,
+            }
+        )
+
+    async def _api_stats(self, request: web.Request) -> web.Response:
+        sample = await self._live_sample()
+        self._record_metrics(sample)
+        return self._json(
+            {
+                "ok": True,
+                "by_hour": list(self._msg_by_hour),
+                "by_day": list(self._msg_by_day),
+                "total": self._msg_total,
                 "latency": list(self._lat),
                 "mem": list(self._mem),
                 "online": list(self._online),

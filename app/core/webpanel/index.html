@@ -200,6 +200,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
       <button class="nav-item" data-section="files"><span>🖼</span><span>Файлы</span></button>
       <button class="nav-item" data-section="logs"><span>📄</span><span>Логи</span></button>
       <button class="nav-item" data-section="audit"><span>👁</span><span>Логи Discord</span></button>
+      <button class="nav-item" data-section="stats"><span>📊</span><span>Статистика</span></button>
       <button class="nav-item" data-section="backup"><span>💾</span><span>Бэкап</span></button>
     </nav>
     <div class="theme-block">
@@ -417,6 +418,21 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
           </div>
           <div id="audit_box"><div class="muted small">Загрузка…</div></div>
           <div class="muted small" id="audit_last" style="margin-top:8px"></div>
+        </div>
+      </section>
+
+      <section id="sec-stats" class="section">
+        <div class="card">
+          <h3 class="sec">📊 Статистика активности</h3>
+          <p class="muted small" style="margin:0 0 12px">Реальные сообщения сервера: по часам (первые 7 дней) и по дням (первый 45 при полном деплое). Внизу — тренд латентности.</p>
+          <div class="stats-grid">
+            <div class="card mini"><div class="muted small">За сутки</div><div class="stat-big" id="st_today">–</div></div>
+            <div class="card mini"><div class="muted small">За неделю</div><div class="stat-big" id="st_week">–</div></div>
+            <div class="card mini"><div class="muted small">Всего</div><div class="stat-big" id="st_total">–</div></div>
+            <div class="card mini"><div class="muted small">Скорость</div><div class="stat-big" id="st_rate">–</div></div>
+          </div>
+          <canvas id="chart_hours" width="760" height="220" style="width:100%;max-width:760px;height:220px"></canvas>
+          <canvas id="chart_days" width="760" height="180" style="width:100%;max-width:760px;height:180px;margin-top:16px"></canvas>
         </div>
       </section>
 

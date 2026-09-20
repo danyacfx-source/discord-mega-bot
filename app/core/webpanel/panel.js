@@ -3,7 +3,7 @@ const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
-const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", backup: "Бэкап"};
+const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -160,6 +160,7 @@ function switchSection(name) {
   else stopLogsTimer();
   if (name === "audit") { loadAudit(); startAuditTimer(); }
   else stopAuditTimer();
+  if (name === "stats") loadStats();
   if (name === "files") loadFiles();
   if (name === "overview") startOverviewTimer();
   else stopOverviewTimer();
@@ -1377,7 +1378,81 @@ function stopAuditTimer() {
   if (auditTimer) { clearInterval(auditTimer); auditTimer = null; }
 }
 
-/* --- инициализация --- */
+/* --- Статистика: бары без chart.js (CSP self, без CDN) --- */
+
+function drawBars(canvasId, items, peak) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  const W = c.width, H = c.height;
+  const pad = { l: 30, r: 8, t: 12, b: 22 };
+  ctx.clearRect(0, 0, W, H);
+  if (!items || !items.length) return;
+  const n = items.length;
+  const cw = (W - pad.l - pad.r) / n;
+  const maxV = peak > 0 ? peak : Math.max(...items.map((i) => i.n || 0), 1);
+  ctx.font = "10px system-ui, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#8a8f98";
+  for (let g = 0; g <= 4; g++) {
+    const v = Math.round((maxV * g) / 4);
+    const y = pad.t + (H - pad.t - pad.b) - ((H - pad.t - pad.b) * g) / 4;
+    ctx.strokeStyle = "#ffffff14";
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    ctx.fillText(String(v), pad.l - 6, y + 3);
+  }
+  const hueIdx = (i) =>
+    `hsla(${(210 + (i / (n || 1)) * 90)}, 78%, ${52 + 8 * Math.sin(i * 0.6)}%, 0.9)`;
+  for (let i = 0; i < n; i++) {
+    const h = ((items[i].n || 0) / maxV) * (H - pad.t - pad.b);
+    const x = pad.l + i * cw + cw * 0.18;
+    const w = cw * 0.64;
+    const y = H - pad.b - h;
+    ctx.fillStyle = hueIdx(i);
+    ctx.fillRect(x, y, w, h);
+    if (cw > 22 && (i % 4 === 0 || i === n - 1)) {
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#8a8f98";
+      ctx.fillText(shortLbl(items[i], i), x + w / 2, H - 8);
+    }
+  }
+}
+
+function shortLbl(item, i) {
+  if (item.t != null) {
+    const d = new Date(item.t * 1000);
+    return `${String(d.getHours()).padStart(2, "0")}:00`;
+  }
+  if (item.d != null) return String(item.d).slice(5);
+  return String(i);
+}
+
+async function loadStats() {
+  const res = await fetch("/api/stats", { cache: "no-store" });
+  if (res.status === 401) { showLogin(); return; }
+  if (!res.ok) return;
+  const data = await res.json();
+  if (!data.ok) { showToast("Ошибка загрузки статистики", "err"); return; }
+  const byHour = data.by_hour || [];
+  const byDay = data.by_day || [];
+  const hourN = byHour.reduce((s, i) => s + (i.n || 0), 0);
+  const dayN = byDay.reduce((s, i) => s + (i.n || 0), 0);
+  $("st_today").textContent = byDay.length ? byDay[byDay.length - 1].n : 0;
+  $("st_week").textContent = byHour.slice(-24 * 7).reduce((s, i) => s + (i.n || 0), 0);
+  $("st_total").textContent = data.total ?? hourN;
+  const now = Date.now();
+  const rate =
+    byHour.length === 0
+      ? "нет данных"
+      : Math.round((byHour[byHour.length - 1].n || 0) / Math.max(now - byHour[byHour.length - 1].t * 1000, 1000) * 3600000);
+  $("st_rate").textContent = rate;
+  const maxH = Math.max(...byHour.map((i) => i.n || 0), 1);
+  const maxD = Math.max(...byDay.map((i) => i.n || 0), 1);
+  drawBars("chart_hours", byHour.slice(-24), maxH);
+  drawBars("chart_days", byDay.slice(-14), maxD);
+}
+
+
 applyTheme();
 buildAccents();
 $("btn_login").onclick = doLogin;
