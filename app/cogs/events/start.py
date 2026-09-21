@@ -65,3 +65,5 @@ class StartCog(MegaCog, name="Lifecycle"):
                             break
                         if not ok:
                             logger.warning("libopus не загружен — голосовые каналы не работают: %s", exc)
+        except Exception as exc:
+            logger.warning("Не удалось загрузить libopus: %s", exc)
