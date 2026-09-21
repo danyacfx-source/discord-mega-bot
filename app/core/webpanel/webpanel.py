@@ -1018,10 +1018,9 @@ class WebPanel:
 
     # --- сбор сообщений для /api/stats (паттерн add_listener как в donations.py) ---
 
-    def _on_message_hook(self, message: discord.Message) -> asyncio.Future[None]:
-        """Считает сообщения по часам/дням — данные для вкладки «Статистика»."""
-        fut: asyncio.Future[None] = asyncio.ensure_future(self._msg_counter(message))
-        return fut
+    async def _on_message_hook(self, message: discord.Message) -> None:
+        """Корутина дяди discord.py: add_listener требует async-функцию, не обёртку."""
+        await self._msg_counter(message)
 
     async def _msg_counter(self, message: discord.Message) -> None:
         if message.guild is None or message.author.bot:
