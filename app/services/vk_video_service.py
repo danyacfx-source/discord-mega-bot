@@ -67,12 +67,23 @@ class VkVideoService:
         slug = slug.strip().lstrip("@")
         if not slug:
             return None
-        url = f"{_VK_BASE}/@{slug}"
+        # LIVE-стенд: live.vkvideo.ru/<slug> (устаревший vkvideo.ru/@<slug> — обзорная карточка)
+        candidates = (
+            f"{_VK_BASE}/@{slug}",   # фолбэк: старый формат
+            f"{_LIVE_BASE}/{slug}",  # актуальный LIVE-хост из url пользователя
+        )
+        for url in candidates:
+            data = await self._channel_status_url(url, slug)
+            if data is not None:
+                return data
+        return None
+
+    async def _channel_status_url(self, url: str, slug: str) -> dict[str, Any] | None:
         try:
             timeout = aiohttp.ClientTimeout(total=15)
             async with self.session.get(url, timeout=timeout, headers={"User-Agent": _USER_AGENT}) as response:
                 if response.status != 200:
-                    logger.warning("VK Видео %s: статус %s", slug, response.status)
+                    logger.warning("VK Видео %s: статус %s", url, response.status)
                     return None
                 page = await response.text()
         except aiohttp.ClientError:
