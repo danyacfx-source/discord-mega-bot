@@ -26,6 +26,7 @@ from app.services.settings_service import SettingsService
 from app.services.temp_voice_service import TempVoiceService
 from app.services.ticket_service import TicketService
 from app.services.twitch_service import TwitchService
+from app.services.vk_video_service import VkVideoService
 
 
 @dataclass(slots=True)
@@ -42,6 +43,7 @@ class Services:
     donations: DonationService
     twitch: TwitchService
     kick: KickService
+    vk_video: VkVideoService
     tempvoice: TempVoiceService
     birthdays: BirthdayService
     seasons: SeasonService

@@ -62,6 +62,7 @@ def assemble(
     from app.services.temp_voice_service import TempVoiceService
     from app.services.ticket_service import TicketService
     from app.services.twitch_service import TwitchService
+    from app.services.vk_video_service import VkVideoService
 
     # --- Репозитории (слой данных) ---
     settings_repo = override_or(overrides, "settings_repo", SettingsRepository, db)
@@ -94,6 +95,7 @@ def assemble(
     )
     twitch = override_or(overrides, "twitch", TwitchService, kv_repo, config)
     kick = override_or(overrides, "kick", KickService, kv_repo, config)
+    vk_video = override_or(overrides, "vk_video", VkVideoService, kv_repo, config)
 
     services = Services(
         settings=settings,
@@ -108,6 +110,7 @@ def assemble(
         donations=donations,
         twitch=twitch,
         kick=kick,
+        vk_video=vk_video,
         tempvoice=tempvoice,
         birthdays=birthdays,
         seasons=seasons,
