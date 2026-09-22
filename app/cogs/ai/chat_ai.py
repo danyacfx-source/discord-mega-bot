@@ -62,6 +62,8 @@ class ChatAICog(MegaCog, name="ChatAI"):
         self._last_reply: dict[int, float] = {}
         self._pending: dict[int, asyncio.Task[None]] = {}
         self._session: aiohttp.ClientSession | None = None
+        # Пауза, переключаемая из веб-панели без рестарта (сбрасывается при рестарте).
+        self._paused = False
 
     # ------------------------------------------------------------------ helpers
 
@@ -70,6 +72,8 @@ class ChatAICog(MegaCog, name="ChatAI"):
 
     def _enabled(self) -> bool:
         config = self.bot.config
+        if self._paused:
+            return False
         return bool(config.ai_enabled and config.ai_api_key and config.ai_channels)
 
     def _cooldown(self, channel_id: int) -> bool:

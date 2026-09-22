@@ -79,6 +79,10 @@ class AutoModCog(MegaCog, name="AutoMod"):
         if message.author.bot or message.guild is None or isinstance(message.channel, discord.DMChannel):
             return
 
+        settings = await self.settings.get(message.guild.id)
+        if not settings.get("automod_enabled", True):
+            return
+
         member = message.author
         if isinstance(member, discord.User):
             member = message.guild.get_member(member.id)
@@ -93,7 +97,8 @@ class AutoModCog(MegaCog, name="AutoMod"):
             return
 
         self._track_spam(member.id)
-        reason = self._analyze(member.id, message.content or "")
+        blocked_words = await self.settings.blocked_words(message.guild.id)
+        reason = self._analyze(member.id, message.content or "", blocked_words)
         if not reason:
             return
 
@@ -109,13 +114,17 @@ class AutoModCog(MegaCog, name="AutoMod"):
         ignored = set(self.bot.config.automod_ignore_roles)
         return bool(ignored and any(role.name in ignored for role in member.roles))
 
-    def _analyze(self, user_id: int, content: str) -> str | None:
+    def _analyze(self, user_id: int, content: str, blocked_words: list[str] | None = None) -> str | None:
         if self._is_spam(user_id):
             return "спам"
         lowered = content.lower()
 
-        banned = list(self.bot.config.automod_banned_words.split(",")) if self.bot.config.automod_banned_words else []
-        for word in (w.strip() for w in banned):
+        banned: set[str] = {w.strip() for w in (blocked_words or []) if w and w.strip()}
+        for raw in (self.bot.config.automod_banned_words or "").split(","):
+            word = raw.strip()
+            if word:
+                banned.add(word)
+        for word in banned:
             if word and word in lowered:
                 return f"запрещённое слово: «{word}»"
 

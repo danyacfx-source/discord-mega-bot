@@ -47,6 +47,12 @@ class PollService(BaseService):
     async def active_with_message(self) -> list[dict[str, Any]]:
         return await self._repo.active_with_message()
 
+    async def list_for_guild(self, guild_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        return await self._repo.list_for_guild(guild_id, limit)
+
+    async def vote_counts(self, poll_id: int) -> dict[int, int]:
+        return await self._repo.vote_counts(poll_id)
+
     async def embed(self, poll_id: int) -> discord.Embed:
         from app.core import embeds
 

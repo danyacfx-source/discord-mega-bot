@@ -3,7 +3,7 @@ const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
-const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", tickets: "Тикеты", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
+const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", tickets: "Тикеты", automod: "Автомод", polls: "Опросы", birthdays: "Дни рождения", tempvoice: "Голосовые", ai: "AI-чат", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -168,6 +168,11 @@ function switchSection(name) {
   if (name === "moderation") loadModeration();
   if (name === "giveaways") loadGiveaways();
   if (name === "tickets") loadTickets();
+  if (name === "automod") loadAutomod();
+  if (name === "polls") loadPolls();
+  if (name === "birthdays") loadBirthdays();
+  if (name === "tempvoice") loadTempVoice();
+  if (name === "ai") loadAI();
   if (name === "scheduler") loadScheduler();
   if (name === "backup") loadBackup();
 }
@@ -1250,6 +1255,269 @@ function renderTickets() {
   open.forEach((t) => openBox.appendChild(tkLine(t, true)));
   if (!closed.length) closedBox.appendChild(tag("div", "muted", "Закрытых тикетов нет"));
   closed.forEach((t) => closedBox.appendChild(tkLine(t, false)));
+}
+
+/* --- автомод --- */
+let amData = null;
+async function loadAutomod() {
+  const r = await api("/api/automod");
+  if (r.status !== 200) {
+    if (r.data.error) toast("❌ " + r.data.error, false);
+    return;
+  }
+  amData = r.data;
+  const en = $("am_enabled"), words = $("am_words"), env = $("am_env"), eff = $("am_effective");
+  if (!en || !words || !env || !eff) return;
+  en.checked = !!amData.db_enabled;
+  words.value = (amData.blocked_words || []).join("\n");
+  const cfg = amData.env || {};
+  const ign = (cfg.ignored_channels || []).map((c) => escapeHtml(c.name || c.id)).join(", ") || "—";
+  eff.textContent = amData.enabled ? "— активен" : "— выключен";
+  env.innerHTML =
+    '<div style="margin-bottom:6px">Стоп-слова (.env): <b>' + escapeHtml(cfg.banned_words || "—") + "</b></div>" +
+    '<div style="margin-bottom:6px">Блок ссылок: <b>' + (cfg.block_links ? "вкл" : "выкл") + "</b></div>" +
+    '<div style="margin-bottom:6px">Капс: порог <b>' + cfg.caps_threshold + "</b>, мин. длина <b>" + cfg.caps_min_len + "</b></div>" +
+    '<div style="margin-bottom:6px">Сообщений в окне: <b>' + cfg.max_messages + "</b> · таймаут: <b>" + cfg.timeout_seconds + "с</b></div>" +
+    '<div style="margin-bottom:6px">Бан после <b>' + cfg.ban_after + "</b> нарушений за <b>" + cfg.ban_window + "с</b></div>" +
+    '<div style="margin-bottom:6px">Игнор-роли: <b>' + escapeHtml((cfg.ignore_roles || []).join(", ") || "—") + "</b></div>" +
+    '<div>Игнор-каналы: <b>' + ign + "</b></div>";
+}
+async function saveAutomod() {
+  const en = $("am_enabled"), words = $("am_words");
+  if (!en || !words) return;
+  const r = await api("/api/automod", {
+    enabled: en.checked,
+    words: words.value.split("\n").map((w) => w.trim()).filter(Boolean),
+  });
+  if (r.status === 200 && r.data.ok) { toast("💾 Автомод сохранён", true); loadAutomod(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- опросы --- */
+let plData = null;
+async function loadPolls() {
+  const chSel = $("pl_channel");
+  const r = await api("/api/polls");
+  if (r.status !== 200) {
+    if (r.data.error) toast("❌ " + r.data.error, false);
+    return;
+  }
+  plData = r.data;
+  if (chSel && !chSel.options.length) {
+    chSel.innerHTML = "";
+    (r.data.channels || []).forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.id; o.textContent = (c.category ? c.category + " / " : "") + c.name;
+      chSel.appendChild(o);
+    });
+  }
+  renderPolls();
+}
+function pollLine(p, active) {
+  const line = tag("div", "listline");
+  const counts = p.counts || {};
+  const bars = (p.options || []).map((opt, i) => {
+    const votes = counts[i] || 0;
+    const pct = p.total ? Math.round(votes / p.total * 100) : 0;
+    return '<div class="row-inline" style="gap:6px"><span class="grow">' + escapeHtml(opt) + '</span><span class="chip">' + votes + " (" + pct + "%)</span></div>";
+  }).join("");
+  line.innerHTML =
+    '<span class="chip" style="background:rgba(88,101,242,.16);color:#8ea1ff">#' + p.id + "</span>" +
+    '<span class="grow"><b>' + escapeHtml(p.question) + "</b> " +
+    '<span class="sub">· ' + escapeHtml(p.author_name) + " · " + escapeHtml(p.channel_name) + " · голосов: " + p.total + "</span>" +
+    '<div style="margin-top:4px">' + bars + "</div></span>";
+  const acts = tag("div", "row-actions");
+  if (active) {
+    const end = tag("button", "btn mini danger", "⬛ Завершить");
+    end.type = "button";
+    end.onclick = async () => {
+      if (!confirm("Завершить опрос #" + p.id + "? Итоги уйдут в канал.")) return;
+      const rr = await api("/api/polls/" + p.id + "/end", {});
+      if (rr.status === 200 && rr.data.ok) toast("📊 Опрос #" + p.id + " завершён", true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadPolls();
+    };
+    acts.appendChild(end);
+  }
+  line.appendChild(acts);
+  return line;
+}
+function renderPolls() {
+  const act = $("pl_active"), fin = $("pl_finished");
+  if (!act || !fin || !plData) return;
+  act.innerHTML = "";
+  fin.innerHTML = "";
+  const polls = plData.polls || [];
+  const active = polls.filter((p) => p.active), finished = polls.filter((p) => !p.active);
+  if (!active.length) act.appendChild(tag("div", "muted", "Активных опросов нет"));
+  active.forEach((p) => act.appendChild(pollLine(p, true)));
+  if (!finished.length) fin.appendChild(tag("div", "muted", "Завершённых опросов нет"));
+  finished.forEach((p) => fin.appendChild(pollLine(p, false)));
+}
+async function createPoll() {
+  const chSel = $("pl_channel"), q = $("pl_question"), opts = $("pl_options");
+  if (!chSel || !q || !opts) return;
+  const options = opts.value.split("\n").map((o) => o.trim()).filter(Boolean);
+  if (!options.length) return toast("Введите варианты ответа", false);
+  const r = await api("/api/polls/create", { channel_id: chSel.value, question: q.value, options });
+  if (r.status === 200 && r.data.ok) { toast("🗳 Опрос #" + r.data.poll_id + " создан", true); q.value = ""; opts.value = ""; loadPolls(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- дни рождения --- */
+let bdData = null;
+async function loadBirthdays() {
+  const r = await api("/api/birthdays");
+  if (r.status !== 200) {
+    if (r.data.error) toast("❌ " + r.data.error, false);
+    return;
+  }
+  bdData = r.data;
+  const sel = $("bd_member"), ch = $("bd_channel");
+  if (sel && !sel.options.length) {
+    sel.innerHTML = "";
+    sel.appendChild(tag("option", "", "— выберите участника —"));
+    (r.data.members || []).forEach((m) => {
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.name;
+      sel.appendChild(o);
+    });
+  }
+  if (ch) ch.textContent = r.data.channel_id ? "Канал <b>#" + r.data.channel_id + "</b>" : "не задан — анонс не отправляется";
+  renderBirthdays();
+}
+function renderBirthdays() {
+  const box = $("bd_list");
+  if (!box || !bdData) return;
+  box.innerHTML = "";
+  const list = bdData.birthdays || [];
+  if (!list.length) { box.appendChild(tag("div", "muted", "Дней рождения ещё нет")); return; }
+  list.forEach((b) => {
+    const line = tag("div", "listline");
+    const date = String(b.day).padStart(2, "0") + "." + String(b.month).padStart(2, "0");
+    line.innerHTML = '<span class="chip">' + date + "</span>" +
+      '<span class="grow"><b>' + escapeHtml(b.name) + "</b> <span class=\"sub\">· " + escapeHtml(b.user_id) + "</span></span>";
+    const del = tag("button", "btn mini danger", "✕");
+    del.type = "button"; del.title = "Удалить";
+    del.onclick = async () => {
+      if (!confirm("Убрать день рождения " + b.name + "?")) return;
+      const rr = await api("/api/birthdays/" + b.user_id + "/remove", {}, "POST");
+      if (rr.status === 200 && rr.data.ok) toast("🎂 Удалено", true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadBirthdays();
+    };
+    const acts = tag("div", "row-actions");
+    acts.appendChild(del);
+    line.appendChild(acts);
+    box.appendChild(line);
+  });
+}
+async function addBirthday() {
+  const sel = $("bd_member"), date = $("bd_date");
+  if (!sel || !date) return;
+  if (!sel.value) return toast("Выберите участника", false);
+  const m = /^(\d{1,2})\.(\d{1,2})$/.exec(date.value.trim());
+  if (!m) return toast("Дата в формате дд.мм (например, 15.08)", false);
+  const r = await api("/api/birthdays", { member_id: sel.value, day: +m[1], month: +m[2] });
+  if (r.status === 200 && r.data.ok) { toast("🎂 Добавлено: " + r.data.name, true); date.value = ""; loadBirthdays(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- временные голосовые --- */
+let tvData = null;
+async function loadTempVoice() {
+  const r = await api("/api/tempvoice");
+  if (r.status !== 200) {
+    if (r.data.error) toast("❌ " + r.data.error, false);
+    return;
+  }
+  tvData = r.data;
+  const status = $("tv_status");
+  if (status) {
+    const trig = (r.data.triggers || []).length ? r.data.triggers.map((t) => escapeHtml(t.name || t.id)).join(", ") : "—";
+    status.innerHTML = "Триггер-каналы: <b>" + trig + "</b> · категория: <b>" + escapeHtml(r.data.category_name || "—") + "</b> · комнат: <b>" + (r.data.rooms || []).length + "</b>";
+  }
+  renderTempVoice();
+}
+function renderTempVoice() {
+  const box = $("tv_rooms");
+  if (!box || !tvData) return;
+  box.innerHTML = "";
+  const rooms = tvData.rooms || [];
+  if (!rooms.length) { box.appendChild(tag("div", "muted", "Активных голосовых комнат нет")); return; }
+  rooms.forEach((rm) => {
+    const line = tag("div", "listline");
+    line.innerHTML =
+      '<span class="chip" style="background:rgba(88,101,242,.16);color:#8ea1ff">🔊</span>' +
+      '<span class="grow"><b>' + escapeHtml(rm.name || "(канал удалён)") + '</b> ' +
+      '<span class="sub">· владелец: ' + escapeHtml(rm.owner_name || rm.owner_id) + "</span></span>";
+    const acts = tag("div", "row-actions");
+    const sel = document.createElement("select");
+    sel.title = "Передать владельца";
+    const holder = tag("option", "", "— передать —");
+    holder.value = "";
+    sel.appendChild(holder);
+    (tvData.members || []).forEach((m) => {
+      if (m.id === rm.owner_id) return;
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.name;
+      sel.appendChild(o);
+    });
+    sel.onchange = async () => {
+      if (!sel.value) return;
+      const rr = await api("/api/tempvoice/" + rm.channel_id + "/transfer", { owner_id: sel.value });
+      if (rr.status === 200 && rr.data.ok) toast("🔁 Владелец: " + rr.data.owner_name, true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadTempVoice();
+    };
+    const del = tag("button", "btn mini danger", "🗑 Удалить");
+    del.type = "button";
+    del.onclick = async () => {
+      if (!confirm("Удалить комнату «" + (rm.name || rm.channel_id) + "»?")) return;
+      const rr = await api("/api/tempvoice/" + rm.channel_id + "/delete", {});
+      if (rr.status === 200 && rr.data.ok) toast("🔊 Комната удалена", true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadTempVoice();
+    };
+    acts.appendChild(sel);
+    acts.appendChild(del);
+    line.appendChild(acts);
+    box.appendChild(line);
+  });
+}
+
+/* --- ai-чат --- */
+let aiData = null;
+async function loadAI() {
+  const r = await api("/api/ai");
+  if (r.status !== 200) {
+    if (r.data.error) toast("❌ " + r.data.error, false);
+    return;
+  }
+  aiData = r.data;
+  const state = $("ai_state"), btn = $("ai_pause_btn"), cfg = $("ai_config");
+  if (state) {
+    if (aiData.paused) state.innerHTML = "⏸ <b>пауза</b> — ответы временно приостановлены";
+    else if (aiData.enabled) state.innerHTML = "🟢 <b>активен</b>";
+    else state.innerHTML = "⚫ <b>выключен</b> — включите AI_ENABLED + GEMINI_API_KEY + AI_CHANNELS в .env";
+  }
+  if (btn) btn.textContent = aiData.paused ? "▶ Снять паузу" : "⏸ Пауза";
+  if (cfg) {
+    const chans = (aiData.channels || []).map((c) => escapeHtml(c.name || c.id)).join(", ") || "—";
+    cfg.innerHTML =
+      '<div style="margin-bottom:6px">Модель: <b>' + escapeHtml(aiData.model) + "</b></div>" +
+      '<div style="margin-bottom:6px">Каналы: <b>' + chans + "</b></div>" +
+      '<div style="margin-bottom:6px">Температура: <b>' + aiData.temperature + "</b> · макс. токенов: <b>" + aiData.max_tokens + "</b> · история: <b>" + aiData.history_size + "</b></div>" +
+      '<div style="margin-bottom:6px">Кулдаун: <b>' + aiData.cooldown_seconds + "с</b> · таймаут: <b>" + aiData.timeout_seconds + "с</b></div>" +
+      '<div style="margin-bottom:6px">Ключ: <b>' + (aiData.has_key ? "задан" : "не задан") + "</b> · прокси: <b>" + (aiData.proxy ? "задан" : "нет") + "</b></div>" +
+      (aiData.system_prompt ? '<div>Промпт (начало):<br>' + escapeHtml(aiData.system_prompt.slice(0, 240)) + "</div>" : "");
+  }
+}
+async function toggleAIPause() {
+  if (!aiData) return;
+  const r = await api("/api/ai", { paused: !aiData.paused });
+  if (r.status === 200 && r.data.ok) { toast(aiData.paused ? "▶ AI-чат снят с паузы" : "⏸ AI-чат на паузе", true); loadAI(); }
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
 }
 
 /* --- планировщик --- */

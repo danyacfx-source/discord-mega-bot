@@ -36,6 +36,12 @@ class PollsRepository(BaseRepository):
         rows = await self.db.fetchall("SELECT * FROM polls WHERE active = 1 AND message_id IS NOT NULL", ())
         return [dict(row) for row in rows]
 
+    async def list_for_guild(self, guild_id: int, limit: int = 200) -> list[dict[str, Any]]:
+        rows = await self.db.fetchall(
+            "SELECT * FROM polls WHERE guild_id = ? ORDER BY id DESC LIMIT ?", (guild_id, limit)
+        )
+        return [dict(row) for row in rows]
+
     async def cast_vote(self, poll_id: int, user_id: int, option: int) -> int:
         """Возвращает 1 если голос изменён, 2 если новый, 0 если тот же."""
         current = await self.db.fetchone(

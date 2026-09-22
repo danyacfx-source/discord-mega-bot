@@ -194,6 +194,11 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
       <button class="nav-item" data-section="moderation"><span>🛡</span><span>Модерация</span></button>
       <button class="nav-item" data-section="giveaways"><span>🎁</span><span>Розыгрыши</span></button>
       <button class="nav-item" data-section="tickets"><span>🎫</span><span>Тикеты</span></button>
+      <button class="nav-item" data-section="automod"><span>🧹</span><span>Автомод</span></button>
+      <button class="nav-item" data-section="polls"><span>🗳</span><span>Опросы</span></button>
+      <button class="nav-item" data-section="birthdays"><span>🎂</span><span>Дни рождения</span></button>
+      <button class="nav-item" data-section="tempvoice"><span>🔊</span><span>Голосовые</span></button>
+      <button class="nav-item" data-section="ai"><span>🤖</span><span>AI-чат</span></button>
       <button class="nav-item" data-section="embed"><span>📝</span><span>Эмбеды</span></button>
       <button class="nav-item" data-section="scheduler"><span>⏰</span><span>Планировщик</span></button>
       <button class="nav-item" data-section="settings"><span>⚙️</span><span>Настройки</span></button>
@@ -570,6 +575,117 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
         <div class="card" style="margin-top:12px">
           <h3 class="sec">Закрытые</h3>
           <div id="tk_closed"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-automod" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🧹 Автомод</h3>
+          <p class="muted small" style="margin:0 0 12px">Фильтр спама, стоп-слов, ссылок, капса и растяжек. Сохранённые здесь стоп-слова применяются сразу; пороги, игнор-роли и каналы — в <code>.env</code> (снизу, только чтение).</p>
+          <div class="row-inline">
+            <label class="toggle-holder" style="margin:0">
+              <span class="switch"><input type="checkbox" id="am_enabled"><span class="slider"></span></span>
+              <span>Фильтр автомода включён (БД)</span>
+            </label>
+            <span class="muted small" id="am_effective"></span>
+          </div>
+          <div class="two" style="margin-top:10px">
+            <div>
+              <label class="field">Стоп-слова (по одному на строку)</label>
+              <textarea id="am_words" rows="6" placeholder="слово1&#10;слово2"></textarea>
+              <div class="row-inline" style="margin-top:8px">
+                <button class="btn primary" type="button" onclick="saveAutomod()">💾 Сохранить</button>
+                <span class="muted small">Совпадают с настройками в Discord (`/setup`), включая регистр.</span>
+              </div>
+            </div>
+            <div>
+              <label class="field">Параметры из .env (AUTOMOD_*) — только чтение</label>
+              <div id="am_env" class="muted small">Загрузка…</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-polls" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🗳 Новый опрос</h3>
+          <div class="two">
+            <div>
+              <label class="field">Канал</label>
+              <select id="pl_channel"></select>
+              <label class="field">Вопрос</label>
+              <input type="text" id="pl_question" maxlength="256" placeholder="За какой вариант?">
+            </div>
+            <div>
+              <label class="field">Варианты (2–5, по одному на строку)</label>
+              <textarea id="pl_options" rows="5" placeholder="Вариант 1&#10;Вариант 2"></textarea>
+              <div class="row-inline" style="margin-top:8px">
+                <button class="btn success" type="button" onclick="createPoll()">🗳 Создать опрос</button>
+                <span class="muted small">Участники голосуют кнопками в Discord.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Активные</h3>
+          <div id="pl_active"><div class="muted">Загрузка…</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Завершённые</h3>
+          <div id="pl_finished"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-birthdays" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🎂 Дни рождения</h3>
+          <div class="two">
+            <div>
+              <label class="field">Участник</label>
+              <select id="bd_member"></select>
+              <label class="field">Дата (дд.мм)</label>
+              <input type="text" id="bd_date" placeholder="15.08">
+            </div>
+            <div>
+              <label class="field">Канал анонса (из .env BIRTHDAY_CHANNEL_ID)</label>
+              <div id="bd_channel" class="muted small">—</div>
+              <div class="row-inline" style="margin-top:22px">
+                <button class="btn success" type="button" onclick="addBirthday()">🎂 Добавить</button>
+                <span class="muted small">Анонс в указанный час — как у `/birthday`.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Список</h3>
+          <div id="bd_list"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-tempvoice" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🔊 Временные голосовые</h3>
+          <p class="muted small" style="margin:0">Триггер-каналы и категория задаются в <code>.env</code> (TEMP_VOICE_TRIGGER_IDS / TEMP_VOICE_CATEGORY_ID); здесь — список активных комнат, удаление и передача владельца.</p>
+          <div id="tv_status" class="muted small" style="margin-top:8px">Загрузка…</div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Комнаты</h3>
+          <div id="tv_rooms"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-ai" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🤖 AI-чат (Gemini)</h3>
+          <div class="row-inline">
+            <button class="btn primary" type="button" id="ai_pause_btn" onclick="toggleAIPause()">⏸ Пауза</button>
+            <span class="muted small" id="ai_state">Загрузка…</span>
+          </div>
+          <p class="muted small" style="margin:10px 0 0">Все параметры (модель, каналы, промпт, температура) задаются в <code>.env</code> (AI_*, GEMINI_API_KEY) и применяются после рестарта. Кнопка паузы действует сразу — до следующего рестарта.</p>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Конфигурация</h3>
+          <div id="ai_config" class="muted small">Загрузка…</div>
         </div>
       </section>
 

@@ -406,6 +406,19 @@ class WebPanel:
         app.router.add_post("/api/tickets/panel", self._authorized(self._api_tickets_panel_post))
         app.router.add_post("/api/tickets/{ticket_id}/close", self._authorized(self._api_ticket_close))
         app.router.add_get("/api/tickets/{ticket_id}/transcript", self._authorized(self._api_ticket_transcript))
+        app.router.add_get("/api/automod", self._authorized(self._api_automod_get))
+        app.router.add_post("/api/automod", self._authorized(self._api_automod_post))
+        app.router.add_get("/api/polls", self._authorized(self._api_polls))
+        app.router.add_post("/api/polls/create", self._authorized(self._api_polls_create))
+        app.router.add_post("/api/polls/{poll_id}/end", self._authorized(self._api_polls_end))
+        app.router.add_get("/api/birthdays", self._authorized(self._api_birthdays_get))
+        app.router.add_post("/api/birthdays", self._authorized(self._api_birthdays_post))
+        app.router.add_post("/api/birthdays/{user_id}/remove", self._authorized(self._api_birthdays_remove))
+        app.router.add_get("/api/tempvoice", self._authorized(self._api_tempvoice_get))
+        app.router.add_post("/api/tempvoice/{channel_id}/delete", self._authorized(self._api_tempvoice_delete))
+        app.router.add_post("/api/tempvoice/{channel_id}/transfer", self._authorized(self._api_tempvoice_transfer))
+        app.router.add_get("/api/ai", self._authorized(self._api_ai_get))
+        app.router.add_post("/api/ai", self._authorized(self._api_ai_post))
         app.router.add_get("/api/schedule", self._authorized(self._api_schedule))
         app.router.add_post("/api/schedule", self._authorized(self._api_schedule_create))
         app.router.add_delete("/api/schedule/{schedule_id}", self._authorized(self._api_schedule_delete))
@@ -1369,6 +1382,13 @@ class WebPanel:
             return "Бот (панель)"
         return str(user_id)
 
+    def _member_options(self, guild: discord.Guild, limit: int = 0) -> list[dict[str, Any]]:
+        members = [member for member in guild.members if not member.bot]
+        members.sort(key=lambda member: member.display_name.lower())
+        if limit and len(members) > limit:
+            members = members[:limit]
+        return [{"id": str(member.id), "name": member.display_name} for member in members]
+
     async def _api_warn_add(self, request: web.Request) -> web.Response:
         guild = self._primary_guild()
         if guild is None:
@@ -1793,6 +1813,330 @@ class WebPanel:
                 "Cache-Control": "no-store",
             },
         )
+
+    # --- API: автомод ---
+
+    async def _api_automod_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.settings  # type: ignore[union-attr]
+        settings = await service.get(guild.id)
+        config = self.bot.config
+        ignored_channels = [
+            {"id": str(cid), "name": self._channel_name(guild, cid)}
+            for cid in config.automod_ignored_channels
+        ]
+        return self._json(
+            {
+                "ok": True,
+                "enabled": bool(config.automod_enabled and settings.get("automod_enabled", True)),
+                "config_enabled": bool(config.automod_enabled),
+                "db_enabled": bool(settings.get("automod_enabled", True)),
+                "blocked_words": await service.blocked_words(guild.id),
+                "env": {
+                    "banned_words": config.automod_banned_words or "",
+                    "block_links": bool(config.automod_block_links),
+                    "allowed_links": config.automod_allowed_links or "",
+                    "caps_threshold": config.automod_caps_threshold,
+                    "caps_min_len": config.automod_caps_min_len,
+                    "max_messages": config.automod_max_messages_in_window,
+                    "timeout_seconds": config.automod_timeout_seconds,
+                    "ban_after": config.automod_ban_after_timeouts,
+                    "ban_window": config.automod_ban_window_seconds,
+                    "ignore_roles": list(config.automod_ignore_roles),
+                    "ignored_channels": ignored_channels,
+                },
+            }
+        )
+
+    async def _api_automod_post(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        service = self.bot.services.settings  # type: ignore[union-attr]
+        updates: dict[str, Any] = {}
+        if "enabled" in payload:
+            updates["automod_enabled"] = 1 if payload.get("enabled") else 0
+        if updates:
+            await service.update(guild.id, **updates)
+        if "words" in payload:
+            raw = payload.get("words")
+            words = raw if isinstance(raw, list) else re.split(r"[\n,]+", str(raw or ""))
+            await service.set_blocked_words(guild.id, list(words))
+        settings = await service.get(guild.id)
+        return self._json(
+            {
+                "ok": True,
+                "enabled": bool(self.bot.config.automod_enabled and settings.get("automod_enabled", True)),
+                "db_enabled": bool(settings.get("automod_enabled", True)),
+                "blocked_words": await service.blocked_words(guild.id),
+            }
+        )
+
+    # --- API: опросы ---
+
+    async def _api_polls(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.polls  # type: ignore[union-attr]
+        rows = await service.list_for_guild(guild.id, 200)
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            options = json.loads(row["options"] or "[]")
+            counts = await service.vote_counts(row["id"])
+            items.append(
+                {
+                    "id": row["id"],
+                    "channel_id": str(row["channel_id"]),
+                    "channel_name": self._channel_name(guild, row["channel_id"]),
+                    "author_name": self._member_name(guild, row["author_id"]),
+                    "question": row["question"],
+                    "options": options,
+                    "counts": {str(k): v for k, v in counts.items()},
+                    "total": sum(counts.values()),
+                    "created_at": row["created_at"],
+                    "active": bool(row["active"]),
+                    "message_id": str(row["message_id"]) if row.get("message_id") else "",
+                }
+            )
+        return self._json({"ok": True, "polls": items, "channels": self._channel_options()})
+
+    async def _api_polls_create(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        channel = self._resolve_channel(payload.get("channel_id"))
+        if channel is None or channel.guild.id != guild.id:
+            return self._json({"ok": False, "error": "Канал не найден на этом сервере"}, status=400)
+        question = str(payload.get("question") or "").strip()[:256]
+        raw_options = payload.get("options") or []
+        options = [str(opt).strip()[:100] for opt in raw_options if str(opt).strip() and str(opt).strip().lower() != "нет"]
+        if not question:
+            return self._json({"ok": False, "error": "Укажите вопрос опроса"}, status=400)
+        if len(options) < 2:
+            return self._json({"ok": False, "error": "Минимум 2 варианта ответа"}, status=400)
+        options = options[:5]
+
+        service = self.bot.services.polls  # type: ignore[union-attr]
+        poll_id = await service.create(guild.id, channel.id, guild.me.id if guild.me else 0, question, options)
+        embed = await service.embed(poll_id)
+        from app.core.views import PollView
+
+        view = PollView(poll_id, len(options))
+        try:
+            message = await channel.send(embed=embed, view=view)
+        except (discord.HTTPException, discord.Forbidden) as exc:
+            return self._json({"ok": False, "error": str(exc)}, status=400)
+        await service.bind_message(poll_id, message.id)
+        self.bot.add_view(view, message_id=message.id)
+        return self._json({"ok": True, "poll_id": poll_id, "message_id": message.id, "channel_name": channel.name})
+
+    async def _api_polls_end(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        poll_id = self._parse_id(request.match_info.get("poll_id"))
+        if poll_id is None:
+            return self._json({"ok": False, "error": "Неверный ID опроса"}, status=400)
+        service = self.bot.services.polls  # type: ignore[union-attr]
+        poll = await service.get(poll_id)
+        if poll is None or poll["guild_id"] != guild.id:
+            return self._json({"ok": False, "error": "Опрос не найден"}, status=404)
+        if not poll["active"]:
+            return self._json({"ok": True, "already": True})
+        question, options, counts = await service.end(poll_id)
+        result = embeds.info(f"📊 Итоги: {question}")
+        total = sum(counts.values())
+        for index, option in enumerate(options):
+            votes = counts.get(index, 0)
+            percent = round(votes / total * 100) if total else 0
+            result.add_field(name=option, value=f"**{votes}** голосов ({percent}%)", inline=False)
+        result.set_footer(text=f"ID опроса: {poll_id} • Всего голосов: {total}")
+        if poll.get("message_id"):
+            channel = self.bot.get_channel(poll["channel_id"])
+            if isinstance(channel, discord.TextChannel):
+                try:
+                    message = await channel.fetch_message(poll["message_id"])
+                    await message.edit(embed=result, view=None)
+                except discord.HTTPException:
+                    pass
+        return self._json({"ok": True, "question": question, "counts": {str(k): v for k, v in counts.items()}, "total": total})
+
+    # --- API: дни рождения ---
+
+    async def _api_birthdays_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.birthdays  # type: ignore[union-attr]
+        rows = await service.all()
+        items = [
+            {
+                "user_id": str(row["user_id"]),
+                "name": self._member_name(guild, row["user_id"]),
+                "month": row["month"],
+                "day": row["day"],
+            }
+            for row in rows
+        ]
+        settings = await self.bot.services.settings.get(guild.id)  # type: ignore[union-attr]
+        return self._json(
+            {
+                "ok": True,
+                "birthdays": items,
+                "members": self._member_options(guild, 400),
+                "channel_id": str(settings.get("birthday_channel_id") or self.bot.config.birthday_channel_id or ""),
+            }
+        )
+
+    async def _api_birthdays_post(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        user_id = self._parse_id(payload.get("member_id"))
+        if user_id is None or guild.get_member(user_id) is None:
+            return self._json({"ok": False, "error": "Участник не найден на сервере"}, status=400)
+        month = self._parse_id(payload.get("month"))
+        day = self._parse_id(payload.get("day"))
+        if not (1 <= month <= 12 and 1 <= day <= 31):
+            return self._json({"ok": False, "error": "Некорректная дата: месяц 1–12, день 1–31"}, status=400)
+        try:
+            datetime(2000, month, day)
+        except ValueError:
+            return self._json({"ok": False, "error": "Некорректная дата"}, status=400)
+        service = self.bot.services.birthdays  # type: ignore[union-attr]
+        await service.set(user_id, month, day)
+        return self._json({"ok": True, "name": self._member_name(guild, user_id)})
+
+    async def _api_birthdays_remove(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        user_id = self._parse_id(request.match_info.get("user_id"))
+        if user_id is None or not await self.bot.services.birthdays.remove(user_id):  # type: ignore[union-attr]
+            return self._json({"ok": False, "error": "День рождения не найден"}, status=404)
+        return self._json({"ok": True})
+
+    # --- API: временные голосовые ---
+
+    async def _api_tempvoice_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        rooms: list[dict[str, Any]] = []
+        for row in await service.all():
+            channel = guild.get_channel(row["channel_id"])
+            rooms.append(
+                {
+                    "channel_id": str(row["channel_id"]),
+                    "name": channel.name if channel else None,
+                    "owner_id": str(row["owner_id"]),
+                    "owner_name": self._member_name(guild, row["owner_id"]),
+                    "created_at": row["created_at"],
+                }
+            )
+        config = self.bot.config
+        triggers = [
+            {"id": str(cid), "name": self._channel_name(guild, cid)}
+            for cid in config.temp_voice_trigger_ids
+        ]
+        category = guild.get_channel(config.temp_voice_category_id) if config.temp_voice_category_id else None
+        return self._json(
+            {
+                "ok": True,
+                "rooms": rooms,
+                "triggers": triggers,
+                "category_id": str(config.temp_voice_category_id) if config.temp_voice_category_id else "",
+                "category_name": category.name if category else None,
+                "members": self._member_options(guild, 400),
+            }
+        )
+
+    async def _api_tempvoice_delete(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        channel_id = self._parse_id(request.match_info.get("channel_id"))
+        if channel_id is None:
+            return self._json({"ok": False, "error": "Неверный ID канала"}, status=400)
+        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        if not await service.owner_of(channel_id):
+            return self._json({"ok": False, "error": "Комната не найдена"}, status=404)
+        await service.delete(channel_id)
+        channel = guild.get_channel(channel_id)
+        if isinstance(channel, discord.VoiceChannel):
+            try:
+                await channel.delete(reason="Удаление комнаты из веб-панели")
+            except (discord.HTTPException, discord.Forbidden):
+                pass
+        return self._json({"ok": True})
+
+    async def _api_tempvoice_transfer(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        channel_id = self._parse_id(request.match_info.get("channel_id"))
+        payload = await self._read_json(request)
+        new_owner_id = self._parse_id(payload.get("owner_id"))
+        if channel_id is None or new_owner_id is None:
+            return self._json({"ok": False, "error": "Неверные параметры"}, status=400)
+        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        if not await service.owner_of(channel_id):
+            return self._json({"ok": False, "error": "Комната не найдена"}, status=404)
+        if guild.get_member(new_owner_id) is None:
+            return self._json({"ok": False, "error": "Новый владелец не найден на сервере"}, status=400)
+        await service.transfer(channel_id, new_owner_id)
+        return self._json({"ok": True, "owner_name": self._member_name(guild, new_owner_id)})
+
+    # --- API: AI-чат ---
+
+    async def _api_ai_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        config = self.bot.config
+        cog = self.bot.cogs.get("ChatAI")
+        paused = bool(getattr(cog, "_paused", False))
+        channels = []
+        for cid in config.ai_channels:
+            channel = self.bot.get_channel(cid)
+            channels.append({"id": str(cid), "name": channel.name if channel else str(cid)})
+        return self._json(
+            {
+                "ok": True,
+                "guild_name": guild.name if guild else None,
+                "enabled": bool(config.ai_enabled and config.ai_api_key and config.ai_channels),
+                "paused": paused,
+                "has_key": bool(config.ai_api_key),
+                "has_channels": bool(config.ai_channels),
+                "model": config.ai_model,
+                "channels": channels,
+                "temperature": config.ai_temperature,
+                "max_tokens": config.ai_max_tokens,
+                "history_size": config.ai_history_size,
+                "cooldown_seconds": config.ai_cooldown_seconds,
+                "timeout_seconds": config.ai_timeout_seconds,
+                "system_prompt": config.ai_system_prompt or "",
+                "proxy": config.ai_proxy or None,
+            }
+        )
+
+    async def _api_ai_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        cog = self.bot.cogs.get("ChatAI")
+        if cog is None:
+            return self._json({"ok": False, "error": "Ког AI-чата не найден"}, status=500)
+        changed = False
+        if "paused" in payload:
+            cog._paused = bool(payload.get("paused"))
+            changed = True
+        if not changed:
+            return self._json({"ok": False, "error": "Нечего обновить"}, status=400)
+        return self._json({"ok": True, "paused": bool(cog._paused)})
 
     async def _api_schedule(self, request: web.Request) -> web.Response:
         service = self.bot.services.scheduled  # type: ignore[union-attr]
