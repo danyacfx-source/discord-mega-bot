@@ -89,6 +89,17 @@ class _TicketBaseView(discord.ui.View):
 class TicketOpenView(_TicketBaseView):
     """Устойчивая кнопка открытия тикета (работает после рестарта)."""
 
+    def __init__(
+        self,
+        ticket_service: TicketService,
+        *,
+        label: str = "Открыть тикет",
+        emoji: str | None = "🎫",
+    ) -> None:
+        super().__init__(ticket_service)
+        self.open_ticket.label = label
+        self.open_ticket.emoji = emoji or None
+
     @discord.ui.button(label="Открыть тикет", style=discord.ButtonStyle.success, custom_id=TICKET_OPEN_ID, emoji="🎫")
     async def open_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
         assert interaction.guild is not None
@@ -208,6 +219,17 @@ class _PollOptionButton(discord.ui.Button):
 
 class TicketCloseView(_TicketBaseView):
     """Устойчивая кнопка закрытия тикета (работает после рестарта)."""
+
+    def __init__(
+        self,
+        ticket_service: TicketService,
+        *,
+        label: str = "Закрыть тикет",
+        emoji: str | None = "🔒",
+    ) -> None:
+        super().__init__(ticket_service)
+        self.close_ticket.label = label
+        self.close_ticket.emoji = emoji or None
 
     @discord.ui.button(label="Закрыть тикет", style=discord.ButtonStyle.danger, custom_id=TICKET_CLOSE_ID, emoji="🔒")
     async def close_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:

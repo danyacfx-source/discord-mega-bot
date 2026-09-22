@@ -89,6 +89,34 @@ _SETTING_COLUMNS = (
     "donation_channel_id",
 )
 
+_TICKET_TEXT_FIELDS = (
+    "ticket_panel_title",
+    "ticket_panel_description",
+    "ticket_panel_footer",
+    "ticket_open_label",
+    "ticket_open_emoji",
+    "ticket_intro_title",
+    "ticket_intro_description",
+    "ticket_intro_footer",
+    "ticket_close_label",
+    "ticket_close_emoji",
+    "ticket_channel_prefix",
+)
+
+_TICKET_DEFAULTS = {
+    "ticket_panel_title": "Поддержка",
+    "ticket_panel_description": "Нажмите на кнопку, чтобы открыть тикет.",
+    "ticket_panel_footer": "Тикеты помогают решать личные вопросы без шума в каналах.",
+    "ticket_open_label": "Открыть тикет",
+    "ticket_open_emoji": "🎫",
+    "ticket_intro_title": "Новый тикет",
+    "ticket_intro_description": "Опишите свою проблему, {member}.",
+    "ticket_intro_footer": "Нажмите кнопку ниже, чтобы закрыть тикет по завершении.",
+    "ticket_close_label": "Закрыть тикет",
+    "ticket_close_emoji": "🔒",
+    "ticket_channel_prefix": "ticket",
+}
+
 
 def _trim_embeds(raw: Any) -> list[dict[str, Any]]:
     """Обрезает эмбеды до лимитов Discord для отправки (webhook-режим)."""
@@ -1696,12 +1724,14 @@ class WebPanel:
             {"id": str(c.id), "name": c.name}
             for c in sorted(guild.categories, key=lambda c: c.position)
         ]
+        texts = {field: (settings.get(field) or _TICKET_DEFAULTS[field]) for field in _TICKET_TEXT_FIELDS}
         return self._json(
             {
                 "ok": True,
                 "category_id": str(category_id) if category_id else "",
                 "categories": categories,
                 "channels": self._channel_options(),
+                "texts": texts,
             }
         )
 
@@ -1722,6 +1752,18 @@ class WebPanel:
             await settings_service.update(guild.id, ticket_category_id=category_id)
             made.append("category")
 
+        settings = await settings_service.get(guild.id)
+        text_updates = {f: payload[f] for f in _TICKET_TEXT_FIELDS if f in payload}
+        if text_updates:
+            updates = {}
+            for field, value in text_updates.items():
+                value = str(value).strip()
+                updates[field] = value if value else _TICKET_DEFAULTS[field]
+            if updates:
+                await settings_service.update(guild.id, **updates)
+                made.append("texts")
+            settings = await settings_service.get(guild.id)
+
         panel_sent = False
         raw_channel = payload.get("channel_id")
         if raw_channel not in (None, ""):
@@ -1730,10 +1772,20 @@ class WebPanel:
                 return self._json({"ok": False, "error": "Канал не найден на этом сервере"}, status=400)
             from app.core.views import TicketOpenView
 
-            embed = embeds.info("Поддержка", "Нажмите на кнопку, чтобы открыть тикет.")
-            embed.set_footer(text="Тикеты помогают решать личные вопросы без шума в каналах.")
+            embed = embeds.info(
+                settings.get("ticket_panel_title") or _TICKET_DEFAULTS["ticket_panel_title"],
+                settings.get("ticket_panel_description") or _TICKET_DEFAULTS["ticket_panel_description"],
+            )
+            embed.set_footer(text=settings.get("ticket_panel_footer") or _TICKET_DEFAULTS["ticket_panel_footer"])
             try:
-                await channel.send(embed=embed, view=TicketOpenView(service))
+                await channel.send(
+                    embed=embed,
+                    view=TicketOpenView(
+                        service,
+                        label=settings.get("ticket_open_label") or _TICKET_DEFAULTS["ticket_open_label"],
+                        emoji=settings.get("ticket_open_emoji"),
+                    ),
+                )
             except (discord.HTTPException, discord.Forbidden) as exc:
                 return self._json({"ok": False, "error": str(exc)}, status=400)
             panel_sent = True

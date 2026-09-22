@@ -20,7 +20,18 @@ CREATE TABLE IF NOT EXISTS guild_settings (
     bot_log_channel_id     INTEGER,
     donation_channel_id    INTEGER,
     automod_enabled     INTEGER NOT NULL DEFAULT 1,
-    blocked_words       TEXT    NOT NULL DEFAULT '[]'
+    blocked_words       TEXT    NOT NULL DEFAULT '[]',
+    ticket_panel_title       TEXT NOT NULL DEFAULT 'Поддержка',
+    ticket_panel_description TEXT NOT NULL DEFAULT 'Нажмите на кнопку, чтобы открыть тикет.',
+    ticket_panel_footer      TEXT NOT NULL DEFAULT 'Тикеты помогают решать личные вопросы без шума в каналах.',
+    ticket_open_label        TEXT NOT NULL DEFAULT 'Открыть тикет',
+    ticket_open_emoji        TEXT NOT NULL DEFAULT '🎫',
+    ticket_intro_title       TEXT NOT NULL DEFAULT 'Новый тикет',
+    ticket_intro_description TEXT NOT NULL DEFAULT 'Опишите свою проблему, {member}.',
+    ticket_intro_footer      TEXT NOT NULL DEFAULT 'Нажмите кнопку ниже, чтобы закрыть тикет по завершении.',
+    ticket_close_label       TEXT NOT NULL DEFAULT 'Закрыть тикет',
+    ticket_close_emoji       TEXT NOT NULL DEFAULT '🔒',
+    ticket_channel_prefix    TEXT NOT NULL DEFAULT 'ticket'
 );
 
 CREATE TABLE IF NOT EXISTS warns (
@@ -187,6 +198,21 @@ class Database:
         ):
             if column not in columns:
                 await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} INTEGER")
+        for column in (
+            "ticket_panel_title",
+            "ticket_panel_description",
+            "ticket_panel_footer",
+            "ticket_open_label",
+            "ticket_open_emoji",
+            "ticket_intro_title",
+            "ticket_intro_description",
+            "ticket_intro_footer",
+            "ticket_close_label",
+            "ticket_close_emoji",
+            "ticket_channel_prefix",
+        ):
+            if column not in columns:
+                await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} TEXT")
         gv_cursor = await self._conn.execute("PRAGMA table_info(giveaways)")
         gv_columns = {row["name"] for row in await gv_cursor.fetchall()}
         if "min_days" not in gv_columns:

@@ -18,6 +18,17 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "donation_channel_id": None,
     "automod_enabled": 1,
     "blocked_words": "[]",
+    "ticket_panel_title": "Поддержка",
+    "ticket_panel_description": "Нажмите на кнопку, чтобы открыть тикет.",
+    "ticket_panel_footer": "Тикеты помогают решать личные вопросы без шума в каналах.",
+    "ticket_open_label": "Открыть тикет",
+    "ticket_open_emoji": "🎫",
+    "ticket_intro_title": "Новый тикет",
+    "ticket_intro_description": "Опишите свою проблему, {member}.",
+    "ticket_intro_footer": "Нажмите кнопку ниже, чтобы закрыть тикет по завершении.",
+    "ticket_close_label": "Закрыть тикет",
+    "ticket_close_emoji": "🔒",
+    "ticket_channel_prefix": "ticket",
 }
 
 _INT_COLUMNS = (
@@ -47,6 +58,9 @@ class SettingsRepository(BaseRepository):
         data = dict(row)
         for column, default in DEFAULT_SETTINGS.items():
             data.setdefault(column, default)
+        for column, default in DEFAULT_SETTINGS.items():
+            if data.get(column) is None and default is not None:
+                data[column] = default
         return data
 
     async def set(self, guild_id: int, column: str, value: Any) -> None:

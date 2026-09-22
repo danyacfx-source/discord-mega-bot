@@ -157,3 +157,47 @@ async def test_has_open_limits_creator(tmp_path) -> None:
         assert third.error is None
     finally:
         await db.close()
+
+
+async def test_create_uses_editable_texts(tmp_path) -> None:
+    from app.core.views import TicketCloseView
+
+    tickets, db = await _setup(str(tmp_path))
+    try:
+        await tickets._settings.update(
+            GILD_ID,
+            ticket_channel_prefix="support",
+            ticket_intro_title="Помощь",
+            ticket_intro_description="Пишите сюда, {member}",
+            ticket_close_label="Завершить",
+            ticket_close_emoji="",
+        )
+        channel = _channel(557)
+        guild = _guild([channel])
+        guild.create_text_channel = AsyncMock(return_value=channel)
+        creator = _Creator(42, "vasya")
+
+        result = await tickets.create(guild, creator)
+        assert result.error is None and result.channel is channel
+
+        call_name = guild.create_text_channel.call_args.kwargs.get("name")
+        assert call_name.startswith("support-")
+
+        send_kwargs = channel.send.call_args.kwargs
+        embed = send_kwargs.get("embed")
+        assert embed.title == "Помощь"
+        assert "Пишите сюда, <@42>" in embed.description
+        view = send_kwargs.get("view")
+        assert isinstance(view, TicketCloseView)
+        assert view.close_ticket.label == "Завершить"
+        assert view.close_ticket.emoji is None
+    finally:
+        await db.close()
+
+
+async def test_open_view_applies_custom_label():
+    from app.core.views import TicketOpenView
+
+    view = TicketOpenView(MagicMock(), label="Проблема?", emoji="")
+    assert view.open_ticket.label == "Проблема?"
+    assert view.open_ticket.emoji is None

@@ -1189,6 +1189,22 @@ async function loadTickets() {
       chSel.appendChild(o);
     });
   }
+  const texts = (p.data && p.data.texts) || {};
+  for (const field of ["tk_title","tk_desc","tk_footer","tk_open_label","tk_open_emoji","tk_intro_title","tk_intro_desc","tk_intro_footer","tk_close_label","tk_close_emoji","tk_prefix"]) {
+    const el = document.getElementById(field);
+    if (el) el.value = texts[field] !== undefined ? texts[field] : "";
+  }
+}
+async function saveTicketTexts() {
+  const payload = {};
+  const map = { tk_title:"ticket_panel_title", tk_desc:"ticket_panel_description", tk_footer:"ticket_panel_footer", tk_open_label:"ticket_open_label", tk_open_emoji:"ticket_open_emoji", tk_intro_title:"ticket_intro_title", tk_intro_desc:"ticket_intro_description", tk_intro_footer:"ticket_intro_footer", tk_close_label:"ticket_close_label", tk_close_emoji:"ticket_close_emoji", tk_prefix:"ticket_channel_prefix" };
+  for (const id in map) {
+    const el = document.getElementById(id);
+    if (el) payload[map[id]] = el.value;
+  }
+  const r = await api("/api/tickets/panel", payload);
+  if (r.status === 200 && r.data.ok) toast("💾 Тексты тикетов сохранены", true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
 }
 async function saveTicketCategory() {
   const catSel = $("tk_category");

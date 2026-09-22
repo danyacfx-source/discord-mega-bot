@@ -31,9 +31,23 @@ class TicketCog(MegaCog, name="Tickets"):
         if not isinstance(target, discord.TextChannel):
             await interaction.response.send_message(embed=embeds.error("Ошибка", "Не удалось выбрать канал."), ephemeral=True)
             return
-        embed = embeds.info("Поддержка", "Нажмите на кнопку, чтобы открыть тикет.")
-        embed.set_footer(text="Тикеты помогают решать личные вопросы без шума в каналах.")
-        await target.send(embed=embed, view=TicketOpenView(self.tickets))
+        settings = await self.services.settings.get(interaction.guild.id)
+        embed = embeds.info(
+            settings.get("ticket_panel_title") or "Поддержка",
+            settings.get("ticket_panel_description") or "Нажмите на кнопку, чтобы открыть тикет.",
+        )
+        embed.set_footer(
+            text=settings.get("ticket_panel_footer")
+            or "Тикеты помогают решать личные вопросы без шума в каналах."
+        )
+        await target.send(
+            embed=embed,
+            view=TicketOpenView(
+                self.tickets,
+                label=settings.get("ticket_open_label") or "Открыть тикет",
+                emoji=settings.get("ticket_open_emoji"),
+            ),
+        )
         await interaction.response.send_message(embed=embeds.success("Панель отправлена", f"Панель в {target.mention}"), ephemeral=True)
 
     @ticket_group.command(name="info", description="Информация о текущем тикете")

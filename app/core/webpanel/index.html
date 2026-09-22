@@ -565,6 +565,69 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
             <span class="muted small">Панель отправится сообщением с кнопкой.</span>
           </div>
         </div>
+        <div class="card"
+          style="margin-top:12px">
+          <h3 class="sec">✏️ Внешний вид и тексты</h3>
+          <p class="muted small" style="margin:0 0 12px">Тексты панели, кнопок и сообщения внутри тикета. Применяется к новым панелям и тикетам.</p>
+          <div class="two">
+            <div>
+              <label class="field">Заголовок панели</label>
+              <input type="text" id="tk_title" maxlength="256" placeholder="Поддержка">
+            </div>
+            <div>
+              <label class="field">Описание панели</label>
+              <input type="text" id="tk_desc" maxlength="4000" placeholder="Нажмите на кнопку, чтобы открыть тикет.">
+            </div>
+          </div>
+          <div>
+            <label class="field">Футер панели (пусто — без футера)</label>
+            <input type="text" id="tk_footer" maxlength="2048" placeholder="Тикеты помогают решать личные вопросы без шума в каналах.">
+          </div>
+          <div class="two">
+            <div>
+              <label class="field">Кнопка «Открыть тикет» — текст</label>
+              <input type="text" id="tk_open_label" maxlength="80" placeholder="Открыть тикет">
+            </div>
+            <div>
+              <label class="field">… — эмодзи (пусто — без эмодзи)</label>
+              <input type="text" id="tk_open_emoji" maxlength="16" placeholder="🎫">
+            </div>
+          </div>
+          <div class="two">
+            <div>
+              <label class="field">Заголовок внутри тикета</label>
+              <input type="text" id="tk_intro_title" maxlength="256" placeholder="Новый тикет">
+            </div>
+            <div>
+              <label class="field">Текст внутри тикета ({member} — упоминание)</label>
+              <input type="text" id="tk_intro_desc" maxlength="4000" placeholder="Опишите свою проблему, {member}.">
+            </div>
+          </div>
+          <div class="two">
+            <div>
+              <label class="field">Футер внутри тикета</label>
+              <input type="text" id="tk_intro_footer" maxlength="2048" placeholder="Нажмите кнопку ниже, чтобы закрыть тикет по завершении.">
+            </div>
+            <div>
+              <label class="field">Префикс названия канала</label>
+              <input type="text" id="tk_prefix" maxlength="24" placeholder="ticket">
+            </div>
+          </div>
+          <div class="two">
+            <div>
+              <label class="field">Кнопка «Закрыть тикет» — текст</label>
+              <input type="text" id="tk_close_label" maxlength="80" placeholder="Закрыть тикет">
+            </div>
+            <div>
+              <label class="field">… — эмодзи (пусто — без эмодзи)</label>
+              <input type="text" id="tk_close_emoji" maxlength="16" placeholder="🔒">
+            </div>
+          </div>
+          <div class="row-inline" style="margin-top:14px">
+            <button class="btn success" type="button" onclick="saveTicketTexts()">💾 Сохранить тексты</button>
+            <span class="muted small">Изменения применятся к новым панелям и тикетам.</span>
+          </div>
+        </div>
         <div class="card" style="margin-top:12px">
           <div class="row-inline" style="justify-content:space-between">
             <h3 class="sec">🎫 Тикеты</h3>

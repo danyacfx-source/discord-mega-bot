@@ -62,9 +62,10 @@ class TicketService:
             ),
         }
         name = re.sub(r"[^a-z0-9-]", "-", member.name.lower()).strip("-") or "ticket"
+        prefix = re.sub(r"[^a-z0-9-]", "-", (settings.get("ticket_channel_prefix") or "ticket").lower()).strip("-") or "ticket"
         try:
             channel = await guild.create_text_channel(
-                name=f"ticket-{name}",
+                name=f"{prefix}-{name}",
                 category=category if isinstance(category, discord.CategoryChannel) else None,
                 overwrites=overwrites,
                 reason=f"Тикет от {member}",
@@ -75,10 +76,21 @@ class TicketService:
         now = datetime.now(UTC)
         await self._repo.create(guild.id, channel.id, member.id, now)
 
-        intro = embeds.info("Новый тикет", f"Опишите свою проблему, {member.mention}.")
+        intro_title = settings.get("ticket_intro_title") or "Новый тикет"
+        intro_text = (settings.get("ticket_intro_description") or "Опишите свою проблему, {member}.").replace(
+            "{member}", member.mention
+        )
+        intro = embeds.info(intro_title, intro_text)
         intro.add_field(name="Пользователь", value=member.mention, inline=True)
-        intro.set_footer(text="Нажмите кнопку ниже, чтобы закрыть тикет по завершении.")
-        await channel.send(embed=intro, view=TicketCloseView(self))
+        intro.set_footer(text=settings.get("ticket_intro_footer") or "Нажмите кнопку ниже, чтобы закрыть тикет по завершении.")
+        await channel.send(
+            embed=intro,
+            view=TicketCloseView(
+                self,
+                label=settings.get("ticket_close_label") or "Закрыть тикет",
+                emoji=settings.get("ticket_close_emoji"),
+            ),
+        )
         return TicketCreateResult(channel=channel)
 
     async def get_open_ticket(self, guild_id: int, channel_id: int) -> dict | None:
