@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS tickets (
     creator_id INTEGER NOT NULL,
     status     TEXT    NOT NULL DEFAULT 'open',
     created_at TEXT    NOT NULL,
-    closed_at  TEXT
+    closed_at  TEXT,
+    transcript TEXT
 );
 
 CREATE TABLE IF NOT EXISTS reminders (
@@ -190,6 +191,10 @@ class Database:
         gv_columns = {row["name"] for row in await gv_cursor.fetchall()}
         if "min_days" not in gv_columns:
             await self._conn.execute("ALTER TABLE giveaways ADD COLUMN min_days INTEGER NOT NULL DEFAULT 0")
+        tk_cursor = await self._conn.execute("PRAGMA table_info(tickets)")
+        tk_columns = {row["name"] for row in await tk_cursor.fetchall()}
+        if "transcript" not in tk_columns:
+            await self._conn.execute("ALTER TABLE tickets ADD COLUMN transcript TEXT")
         await self._conn.commit()
 
     async def close(self) -> None:

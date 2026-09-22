@@ -193,6 +193,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
       <button class="nav-item" data-section="server"><span>🖥</span><span>Сервер</span></button>
       <button class="nav-item" data-section="moderation"><span>🛡</span><span>Модерация</span></button>
       <button class="nav-item" data-section="giveaways"><span>🎁</span><span>Розыгрыши</span></button>
+      <button class="nav-item" data-section="tickets"><span>🎫</span><span>Тикеты</span></button>
       <button class="nav-item" data-section="embed"><span>📝</span><span>Эмбеды</span></button>
       <button class="nav-item" data-section="scheduler"><span>⏰</span><span>Планировщик</span></button>
       <button class="nav-item" data-section="settings"><span>⚙️</span><span>Настройки</span></button>
@@ -537,6 +538,38 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
         <div class="card" style="margin-top:12px">
           <h3 class="sec">Завершённые</h3>
           <div id="gv_finished"><div class="muted">Загрузка…</div></div>
+        </div>
+      </section>
+
+      <section id="sec-tickets" class="section">
+        <div class="card hl-card">
+          <h3 class="sec">🎟️ Панель тикетов</h3>
+          <div class="two">
+            <div>
+              <label class="field">Категория для новых тикетов</label>
+              <select id="tk_category"><option value="">— не выбрана —</option></select>
+            </div>
+            <div>
+              <label class="field">Канал для панели-кнопки «Открыть тикет»</label>
+              <select id="tk_channel"></select>
+            </div>
+          </div>
+          <div class="row-inline" style="margin-top:14px">
+            <button class="btn primary" type="button" onclick="saveTicketCategory()">💾 Сохранить категорию</button>
+            <button class="btn success" type="button" onclick="sendTicketPanel()">🎫 Отправить панель</button>
+            <span class="muted small">Панель отправится сообщением с кнопкой.</span>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="row-inline" style="justify-content:space-between">
+            <h3 class="sec">🎫 Тикеты</h3>
+            <span class="muted small">Открытые и закрытые обращения сервера.</span>
+          </div>
+          <div id="tk_open" style="margin-top:4px"><div class="muted">Загрузка…</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3 class="sec">Закрытые</h3>
+          <div id="tk_closed"><div class="muted">Загрузка…</div></div>
         </div>
       </section>
 

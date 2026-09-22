@@ -33,3 +33,20 @@ class TicketsRepository(BaseRepository):
             "UPDATE tickets SET status = 'closed', closed_at = ? WHERE ticket_id = ?",
             (closed_at.isoformat(), ticket_id),
         )
+
+    async def get(self, ticket_id: int) -> dict | None:
+        row = await self.db.fetchone("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,))
+        return dict(row) if row else None
+
+    async def save_transcript(self, ticket_id: int, transcript: str) -> None:
+        await self.db.execute(
+            "UPDATE tickets SET transcript = ? WHERE ticket_id = ?",
+            (transcript, ticket_id),
+        )
+
+    async def list_for_guild(self, guild_id: int, limit: int = 100) -> list[dict]:
+        rows = await self.db.fetchall(
+            "SELECT * FROM tickets WHERE guild_id = ? ORDER BY ticket_id DESC LIMIT ?",
+            (guild_id, limit),
+        )
+        return [dict(row) for row in rows]

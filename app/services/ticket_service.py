@@ -87,7 +87,34 @@ class TicketService:
             return ticket
         return None
 
-    async def close(self, guild: discord.Guild, channel: discord.TextChannel | None, closer: discord.Member) -> TicketCloseResult:
+    async def list_tickets(self, guild_id: int, limit: int = 100) -> list[dict]:
+        return await self._repo.list_for_guild(guild_id, limit)
+
+    async def get_ticket(self, ticket_id: int) -> dict | None:
+        return await self._repo.get(ticket_id)
+
+    async def close_by_id(
+        self, guild: discord.Guild, ticket_id: int, closer: discord.Member | discord.ClientUser
+    ) -> TicketCloseResult:
+        """Закрывает тикет по номеру (без привязки к каналу) — для веб-панели."""
+        ticket = await self._repo.get(ticket_id)
+        if ticket is None or ticket.get("guild_id") != guild.id:
+            return TicketCloseResult(error="Тикет не найден.")
+        if ticket["status"] != "open":
+            return TicketCloseResult(error="Тикет уже закрыт.")
+        channel = guild.get_channel(ticket["channel_id"])
+        if channel is None:
+            await self._repo.close(ticket["ticket_id"], datetime.now(UTC))
+            await self._repo.save_transcript(ticket["ticket_id"], "")
+            return TicketCloseResult(transcript_channel_mention="(канал тикета уже удалён)")
+        return await self.close(guild, channel, closer)
+
+    async def close(
+        self,
+        guild: discord.Guild,
+        channel: discord.TextChannel | None,
+        closer: discord.Member,
+    ) -> TicketCloseResult:
         if channel is None:
             return TicketCloseResult(error="Не удалось определить канал тикета.")
 
@@ -105,6 +132,7 @@ class TicketService:
             f"Закрыл: {closer.mention}\nСистемный номер: `{ticket['ticket_id']}`",
         )
         if transcript is not None:
+            await self._repo.save_transcript(ticket["ticket_id"], transcript.text)
             await self._send_transcript(guild, channel, transcript.file, summary)
             transcript.cleanup()
 
@@ -127,15 +155,17 @@ class TicketService:
 
         class _Transcript:
             file: discord.File
+            text: str
 
-            def __init__(self, file: discord.File) -> None:
+            def __init__(self, file: discord.File, text: str) -> None:
                 self.file = file
+                self.text = text
 
             def cleanup(self) -> None:
                 self.file.fp.close()
 
         buffer = io.BytesIO(data.encode("utf-8"))
-        return _Transcript(discord.File(buffer, filename=f"transcript-{channel.name}.txt"))
+        return _Transcript(discord.File(buffer, filename=f"transcript-{channel.name}.txt"), data)
 
     async def _send_transcript(
         self,

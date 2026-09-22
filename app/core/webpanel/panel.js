@@ -3,7 +3,7 @@ const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
-const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
+const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", tickets: "Тикеты", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -167,6 +167,7 @@ function switchSection(name) {
   if (name === "server" && !srvLoaded) loadServer();
   if (name === "moderation") loadModeration();
   if (name === "giveaways") loadGiveaways();
+  if (name === "tickets") loadTickets();
   if (name === "scheduler") loadScheduler();
   if (name === "backup") loadBackup();
 }
@@ -1158,6 +1159,97 @@ async function createGiveaway() {
     $("gv_prize").value = "";
     loadGiveaways();
   } else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+
+/* --- тикеты --- */
+let tkData = null;
+async function loadTickets() {
+  const [r, p] = await Promise.all([api("/api/tickets"), api("/api/tickets/panel")]);
+  tkData = r.data || { open: [], closed: [] };
+  renderTickets();
+  const catSel = $("tk_category"), chSel = $("tk_channel");
+  if (catSel && p.data && p.data.ok && !catSel.dataset.ready) {
+    catSel.innerHTML = '<option value="">— не выбрана —</option>' +
+      (p.data.categories || []).map((c) => '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + "</option>").join("");
+    if (p.data.category_id) catSel.value = p.data.category_id;
+    catSel.dataset.ready = "1";
+  }
+  if (chSel && p.data && p.data.ok && !chSel.options.length) {
+    chSel.innerHTML = "";
+    const list = p.data.channels || [];
+    if (!list.length) chSel.appendChild(tag("option", "", "— нет доступных каналов —"));
+    else list.forEach((c) => {
+      const o = document.createElement("option");
+      o.value = c.id; o.textContent = (c.category ? c.category + " / " : "") + c.name;
+      chSel.appendChild(o);
+    });
+  }
+}
+async function saveTicketCategory() {
+  const catSel = $("tk_category");
+  if (!catSel) return;
+  if (!catSel.value) return toast("Выберите категорию", false);
+  const r = await api("/api/tickets/panel", { category_id: catSel.value });
+  if (r.status === 200 && r.data.ok) toast("💾 Категория тикетов сохранена", true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function sendTicketPanel() {
+  const chSel = $("tk_channel");
+  if (!chSel) return;
+  if (!chSel.value) return toast("Выберите канал", false);
+  const category_id = $("tk_category") && $("tk_category").value ? $("tk_category").value : "";
+  const r = await api("/api/tickets/panel", { channel_id: chSel.value, category_id });
+  if (r.status === 200 && r.data.ok) toast("🎫 Панель отправлена в " + chSel.selectedOptions[0].textContent, true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+function relTicketTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return escapeHtml(String(iso));
+  return d.toLocaleString("ru-RU");
+}
+function tkLine(t, open) {
+  const line = tag("div", "listline");
+  const chan = t.channel_mention || "#" + t.channel_id;
+  line.innerHTML =
+    '<span class="chip" style="background:rgba(88,101,242,.16);color:#8ea1ff">#' + t.id + "</span>" +
+    '<span class="grow"><b>' + escapeHtml(t.creator_name || t.creator_id) + "</b> " +
+    '<span class="sub">· ' + (t.channel_name ? escapeHtml(t.channel_name) : "(канал удалён)") + ' · открыт ' + relTicketTime(t.created_at) +
+    (open ? "" : " · закрыт " + relTicketTime(t.closed_at)) +
+    (t.has_transcript ? " · 📄 транскрипт" : "") + "</span></span>" +
+    '<span class="chip">' + (open ? "открыт" : "закрыт") + "</span>";
+  const acts = tag("div", "row-actions");
+  if (t.has_transcript) {
+    const dl = tag("button", "btn mini", "📄");
+    dl.type = "button"; dl.title = "Скачать транскрипт";
+    dl.onclick = () => downloadBlob("/api/tickets/" + t.id + "/transcript");
+    acts.appendChild(dl);
+  }
+  if (open) {
+    const close = tag("button", "btn mini danger", "🔒 Закрыть");
+    close.type = "button";
+    close.onclick = async () => {
+      if (!confirm("Закрыть тикет #" + t.id + " (" + (t.creator_name || t.creator_id) + ")? Канал будет удалён.")) return;
+      const rr = await api("/api/tickets/" + t.id + "/close", {});
+      if (rr.status === 200 && rr.data.ok) toast("🔒 Тикет #" + t.id + " закрыт", true);
+      else toast(rr.data.error ? "❌ " + rr.data.error : "❌ Ошибка", false);
+      loadTickets();
+    };
+    acts.appendChild(close);
+  }
+  line.appendChild(acts);
+  return line;
+}
+function renderTickets() {
+  const openBox = $("tk_open"), closedBox = $("tk_closed");
+  if (!openBox || !closedBox) return;
+  openBox.innerHTML = "";
+  closedBox.innerHTML = "";
+  const open = tkData.open || [], closed = tkData.closed || [];
+  if (!open.length) openBox.appendChild(tag("div", "muted", "Открытых тикетов нет"));
+  open.forEach((t) => openBox.appendChild(tkLine(t, true)));
+  if (!closed.length) closedBox.appendChild(tag("div", "muted", "Закрытых тикетов нет"));
+  closed.forEach((t) => closedBox.appendChild(tkLine(t, false)));
 }
 
 /* --- планировщик --- */

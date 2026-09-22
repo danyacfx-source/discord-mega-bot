@@ -83,13 +83,20 @@ class MegaBot(commands.Bot):
         if self.user is None or self.application_id is None:
             logger.debug("Синк команд: application_id ещё не известен — пропуск")
             return
+        total = 0
+        for target in (None, discord.Object(self.config.guild_id) if self.config.guild_id else None):
+            label = "глобально" if target is None else f"гильдия {target.id}"
+            try:
+                synced = await self.tree.sync(guild=target)
+            except (discord.HTTPException, discord.MissingApplicationID, discord.ConnectionClosed) as exc:
+                logger.warning("Не удалось синхронизировать команды (%s): %s", label, exc)
+                continue
+            total += len(synced or [])
         try:
-            synced = await self.tree.sync()
-        except (discord.HTTPException, discord.MissingApplicationID, discord.ConnectionClosed) as exc:
-            logger.warning("Не удалось синхронизировать команды: %s", exc)
-            return
-        names = [command.name for command in synced if getattr(command, "name", None)]
-        logger.info("Синхронизировано команд: %d (%s)", len(synced), ", ".join(names[:20]))
+            names = [command.name for command in await self.tree.fetch_commands() if getattr(command, "name", None)]
+        except discord.HTTPException:
+            names = []
+        logger.info("Синхронизировано команд: %d (%s)", total, ", ".join(names[:20]))
 
     async def close(self) -> None:
         webpanel = self.webpanel

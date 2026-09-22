@@ -401,6 +401,11 @@ class WebPanel:
         app.router.add_post("/api/giveaways/create", self._authorized(self._api_giveaway_create))
         app.router.add_post("/api/giveaways/end", self._authorized(self._api_giveaway_end))
         app.router.add_post("/api/giveaways/reroll", self._authorized(self._api_giveaway_reroll))
+        app.router.add_get("/api/tickets", self._authorized(self._api_tickets))
+        app.router.add_get("/api/tickets/panel", self._authorized(self._api_tickets_panel_get))
+        app.router.add_post("/api/tickets/panel", self._authorized(self._api_tickets_panel_post))
+        app.router.add_post("/api/tickets/{ticket_id}/close", self._authorized(self._api_ticket_close))
+        app.router.add_get("/api/tickets/{ticket_id}/transcript", self._authorized(self._api_ticket_transcript))
         app.router.add_get("/api/schedule", self._authorized(self._api_schedule))
         app.router.add_post("/api/schedule", self._authorized(self._api_schedule_create))
         app.router.add_delete("/api/schedule/{schedule_id}", self._authorized(self._api_schedule_delete))
@@ -1660,6 +1665,134 @@ class WebPanel:
             return self._json({"ok": False, "error": "Розыгрыш не найден"}, status=404)
         winners = await self._finish_giveaway(giveaway, reroll=True)
         return self._json({"ok": True, "winners": winners, "message_id": str(message_id)})
+
+    async def _api_tickets_panel_get(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        settings = await self.bot.services.settings.get(guild.id)  # type: ignore[union-attr]
+        category_id = settings.get("ticket_category_id")
+        categories = [
+            {"id": str(c.id), "name": c.name}
+            for c in sorted(guild.categories, key=lambda c: c.position)
+        ]
+        return self._json(
+            {
+                "ok": True,
+                "category_id": str(category_id) if category_id else "",
+                "categories": categories,
+                "channels": self._channel_options(),
+            }
+        )
+
+    async def _api_tickets_panel_post(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await self._read_json(request)
+        service = self.bot.services.tickets  # type: ignore[union-attr]
+        settings_service = self.bot.services.settings  # type: ignore[union-attr]
+
+        made: list[str] = []
+        raw_category = payload.get("category_id")
+        if raw_category not in (None, ""):
+            category_id = self._parse_id(raw_category)
+            if category_id is None or not isinstance(guild.get_channel(category_id), discord.CategoryChannel):
+                return self._json({"ok": False, "error": "Категория не найдена"}, status=400)
+            await settings_service.update(guild.id, ticket_category_id=category_id)
+            made.append("category")
+
+        panel_sent = False
+        raw_channel = payload.get("channel_id")
+        if raw_channel not in (None, ""):
+            channel = self._resolve_channel(raw_channel)
+            if channel is None or channel.guild.id != guild.id:
+                return self._json({"ok": False, "error": "Канал не найден на этом сервере"}, status=400)
+            from app.core.views import TicketOpenView
+
+            embed = embeds.info("Поддержка", "Нажмите на кнопку, чтобы открыть тикет.")
+            embed.set_footer(text="Тикеты помогают решать личные вопросы без шума в каналах.")
+            try:
+                await channel.send(embed=embed, view=TicketOpenView(service))
+            except (discord.HTTPException, discord.Forbidden) as exc:
+                return self._json({"ok": False, "error": str(exc)}, status=400)
+            panel_sent = True
+            made.append("panel")
+
+        if not made:
+            return self._json({"ok": False, "error": "Не указано, что обновить"}, status=400)
+        return self._json({"ok": True, "made": made, "panel_sent": panel_sent})
+
+    async def _api_tickets(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.bot.services.tickets  # type: ignore[union-attr]
+        rows = await service.list_tickets(guild.id, 300)
+        open_items: list[dict[str, Any]] = []
+        closed_items: list[dict[str, Any]] = []
+        for row in rows:
+            channel = guild.get_channel(row["channel_id"])
+            item: dict[str, Any] = {
+                "id": row["ticket_id"],
+                "creator_id": str(row["creator_id"]),
+                "creator_name": self._member_name(guild, row["creator_id"]),
+                "channel_id": str(row["channel_id"]),
+                "channel_name": channel.name if channel else None,
+                "channel_mention": f"<#{row['channel_id']}>",
+                "status": row["status"],
+                "created_at": row["created_at"],
+                "closed_at": row.get("closed_at"),
+                "has_transcript": bool(row.get("transcript")),
+                "message_count": (row.get("transcript") or "").count("\n") if row.get("transcript") else 0,
+            }
+            (closed_items if row["status"] != "open" else open_items).append(item)
+        return self._json(
+            {
+                "ok": True,
+                "open_total": len(open_items),
+                "closed_total": len(closed_items),
+                "open": open_items,
+                "closed": closed_items,
+            }
+        )
+
+    async def _api_ticket_close(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        ticket_id = self._parse_id(request.match_info.get("ticket_id"))
+        if ticket_id is None:
+            return self._json({"ok": False, "error": "Неверный № тикета"}, status=400)
+        service = self.bot.services.tickets  # type: ignore[union-attr]
+        closer: discord.Member | discord.ClientUser = guild.me or self.bot.user  # type: ignore[union-attr]
+        if closer is None:
+            return self._json({"ok": False, "error": "Бот не авторизован на сервере"}, status=400)
+        result = await service.close_by_id(guild, ticket_id, closer)
+        if result.error:
+            return self._json({"ok": False, "error": result.error}, status=400)
+        return self._json({"ok": True, "transcript_channel_mention": result.transcript_channel_mention})
+
+    async def _api_ticket_transcript(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        ticket_id = self._parse_id(request.match_info.get("ticket_id"))
+        if ticket_id is None:
+            return self._json({"ok": False, "error": "Неверный № тикета"}, status=400)
+        service = self.bot.services.tickets  # type: ignore[union-attr]
+        ticket = await service.get_ticket(ticket_id)
+        if ticket is None or ticket["guild_id"] != guild.id:
+            return self._json({"ok": False, "error": "Тикет не найден"}, status=404)
+        text = ticket.get("transcript") or ""
+        return web.Response(
+            text=text,
+            content_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="ticket-{ticket_id}.txt"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     async def _api_schedule(self, request: web.Request) -> web.Response:
         service = self.bot.services.scheduled  # type: ignore[union-attr]

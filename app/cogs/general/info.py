@@ -12,7 +12,7 @@ from app.core.base import MegaCog
 _BOT_BADGES = {
     "partner": "🤝 Partner",
     "verified_bot_developer": "👨‍💻 Verified Dev",
-    "certified_moderator": "🛡️ Certified Moderator",
+    "discord_certified_moderator": "🛡️ Certified Moderator",
 }
 
 
@@ -79,7 +79,7 @@ class AboutCog(MegaCog, name="About"):
         embed.add_field(name="Серверов", value=str(guilds), inline=True)
         embed.add_field(name="Версия", value=self.bot.config.version, inline=True)
         embed.add_field(name="Аптайм", value=str(uptime).split(".")[0], inline=True)
-        public_flags = getattr(interaction.application, "flags", None)
+        public_flags = self.bot.user.public_flags
         if public_flags:
             badges = [_BOT_BADGES[name] for name, label in _BOT_BADGES.items() if getattr(public_flags, name, False)]
             if badges:
