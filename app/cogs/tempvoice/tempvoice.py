@@ -252,14 +252,28 @@ class TempVoiceCog(MegaCog, name="TempVoice"):
         for row in await self.tempvoice.all():
             channel = self.bot.get_channel(row["channel_id"])
             if isinstance(channel, discord.VoiceChannel) and not channel.members:
-                try:
-                    await channel.delete(reason="TempVoice: пустой канал убран")
-                    await self.tempvoice.delete(channel.id)
-                except discord.HTTPException:
-                    logger.debug("TempVoice: не удалось убрать канал %s", channel.id, exc_info=True)
+                await self._remove_channel(channel.id)
+
+    async def _remove_channel(self, channel_id: int) -> None:
+        """Удаляет временный голосовой канал из Discord и из БД."""
+        channel = self.bot.get_channel(channel_id)
+        if not isinstance(channel, discord.VoiceChannel):
+            return
+        try:
+            await channel.delete(reason="TempVoice: пустой канал убран")
+        except discord.HTTPException:
+            logger.debug("TempVoice: не удалось удалить канал %s", channel_id, exc_info=True)
+            return
+        await self.tempvoice.delete(channel_id)
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState) -> None:
+        before_channel = before.channel
+        if isinstance(before_channel, discord.VoiceChannel) and not before_channel.members:
+            owner = await self.tempvoice.owner_of(before_channel.id)
+            if owner is not None:
+                await self._remove_channel(before_channel.id)
+
         trigger = after.channel if after.channel and after.channel.id in self.bot.config.temp_voice_trigger_ids else None
         if trigger is None:
             return
