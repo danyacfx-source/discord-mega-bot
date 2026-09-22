@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import logging
+import sys
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -126,6 +127,25 @@ class MegaBot(commands.Bot):
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: Exception) -> None:
         original = getattr(error, "original", error)
+        command = interaction.command.qualified_name if interaction.command else "?"
+        location = self._interaction_location(interaction)
+
+        known = (
+            _BotMissingPermissions,
+            app_commands.MissingPermissions,
+            app_commands.CommandOnCooldown,
+            app_commands.TransformerError,
+            app_commands.CheckFailure,
+            commands.CommandError,
+            discord.Forbidden,
+            discord.HTTPException,
+            discord.NotFound,
+        )
+        if isinstance(original, known):
+            logger.warning("Ошибка команды /%s%s: %s", command, location, original)
+        else:
+            self._log_error("Ошибка команды /%s%s", error, command, location)
+            await self._notify_error_feed(interaction.guild, f"Команда /{command}: {original}")
 
         if isinstance(original, _BotMissingPermissions):
             embed = embeds.error(
@@ -135,8 +155,6 @@ class MegaBot(commands.Bot):
         elif isinstance(original, app_commands.MissingPermissions):
             names = ", ".join(f"`{name}`" for name in original.missing_permissions)
             embed = embeds.error("Недостаточно прав", f"Вам нужны права: {names}.")
-        elif isinstance(original, app_commands.NotOwner):
-            embed = embeds.error("Только для владельца", "Эта команда доступна владельцу бота.")
         elif isinstance(original, app_commands.CommandOnCooldown):
             embed = embeds.warning("Подождите", f"Команда на перезарядке: {original.retry_after:.1f} сек.")
         elif isinstance(original, discord.Forbidden):
@@ -148,14 +166,10 @@ class MegaBot(commands.Bot):
         elif isinstance(original, app_commands.TransformerError):
             embed = embeds.error("Неверный аргумент", "Некоторые параметры не распознаны. Проверьте ввод.")
         elif isinstance(original, app_commands.CommandInvokeError):
-            logger.exception(
-                "Ошибка выполнения команды %s", interaction.command.qualified_name if interaction.command else "?"
-            )
             embed = embeds.error("Ошибка выполнения", _SUPPORT_HINT)
         elif isinstance(original, (app_commands.CheckFailure, commands.CommandError)):
             embed = embeds.error("Команда недоступна", str(original) or _SUPPORT_HINT)
         else:
-            logger.exception("Необработанная ошибка команды %s", interaction.command.qualified_name if interaction.command else "?")
             embed = embeds.error("Ошибка команды", _SUPPORT_HINT)
 
         await self._reply_error(interaction, embed)
@@ -169,6 +183,90 @@ class MegaBot(commands.Bot):
                 await interaction.response.send_message(embed=embed, ephemeral=True)
         except discord.HTTPException:
             logger.debug("Не удалось отправить сообщение об ошибке", exc_info=True)
+
+    # --- логирование всех ошибок ---
+
+    @staticmethod
+    def _log_error(message: str, error: Exception, *args: Any) -> None:
+        """Пишет ошибку с полным трейсбеком в консоль и веб-ленту /logs."""
+        if args:
+            try:
+                message = message % args
+            except (TypeError, ValueError):
+                pass
+        logger.error(f"%s: %s", message, str(error), exc_info=(type(error), error, error.__traceback__))
+
+    @staticmethod
+    def _interaction_location(interaction: discord.Interaction) -> str:
+        parts: list[str] = []
+        if interaction.guild is not None:
+            parts.append(f" [сервер: {interaction.guild.name}]")
+        channel = interaction.channel
+        if isinstance(channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+            parts.append(f" [канал: #{channel.name}]")
+        return "".join(parts)
+
+    @staticmethod
+    def _guild_from_error_args(args: tuple[Any, ...]) -> discord.Guild | None:
+        for arg in args:
+            if isinstance(arg, discord.Guild):
+                return arg
+            if isinstance(arg, discord.Interaction) and arg.guild is not None:
+                return arg.guild
+            if isinstance(arg, discord.Message) and arg.guild is not None:
+                return arg.guild
+            if isinstance(arg, discord.Member):
+                return arg.guild
+            if isinstance(arg, (discord.TextChannel, discord.VoiceChannel, discord.Thread)) and arg.guild is not None:
+                return arg.guild
+        return None
+
+    async def _notify_error_feed(self, guild: discord.Guild | None, text: str) -> None:
+        """Дублирует ошибку в веб-ленту панели (/audit), если она доступна."""
+        services = getattr(self, "services", None)
+        if services is None or services.logging is None:
+            return
+        try:
+            await services.logging.log_event(guild, "⛔ Ошибка", text[:1500])
+        except Exception:
+            logger.debug("Не удалось записать ошибку в веб-ленту", exc_info=True)
+
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+        if isinstance(error, commands.CommandNotFound):
+            logger.debug("Неизвестная префикс-команда: %s", ctx.message.content[:200])
+            return
+        command = ctx.command.qualified_name if ctx.command else (ctx.invoked_with or "?")
+        if isinstance(
+            error,
+            (
+                commands.MissingRequiredArgument,
+                commands.TooManyArguments,
+                commands.BadArgument,
+                commands.ArgumentParsingError,
+                commands.CheckFailure,
+                commands.CommandOnCooldown,
+                commands.NoPrivateMessage,
+                commands.MissingPermissions,
+                commands.BotMissingPermissions,
+            ),
+        ):
+            logger.warning("Префикс-команда %s: %s", command, error)
+            try:
+                await ctx.reply(embed=embeds.error("Ошибка команды", str(error)), mention_author=False)
+            except (discord.HTTPException, discord.Forbidden):
+                pass
+            return
+        self._log_error("Ошибка префикс-команды %s", error, command)
+        await self._notify_error_feed(ctx.guild, f"Префикс-команда {command}: {error}")
+
+    async def on_error(self, event_method: str, *args: Any, **kwargs: Any) -> None:
+        exc_type, exc_value, _traceback = sys.exc_info()
+        guild = self._guild_from_error_args(args)
+        logger.error(
+            "Необработанная ошибка в событии %s", event_method, exc_info=(exc_type, exc_value, _traceback)
+        )
+        if exc_value is not None:
+            await self._notify_error_feed(guild, f"Событие {event_method}: {type(exc_value).__name__}: {exc_value}")
 
 
 class _BotMissingPermissions(app_commands.CheckFailure):
