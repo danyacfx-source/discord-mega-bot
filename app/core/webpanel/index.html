@@ -188,6 +188,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .brand-ic{position:relative;width:38px;height:38px;line-height:38px;border-radius:12px;font-size:18px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 68%,#fff));box-shadow:0 9px 26px color-mix(in srgb,var(--accent) 32%,transparent)}
 .brand-copy{display:flex;flex-direction:column;line-height:1.1}.brand-copy small{margin-top:5px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
 nav{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 4px 8px;gap:3px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.nav-search{position:relative}.nav-search input{height:38px;min-height:38px;padding:8px 42px 8px 34px;background:var(--input);font-size:12px}.nav-search:before{content:"⌕";position:absolute;left:12px;top:8px;color:var(--muted);font-size:16px;z-index:1}.nav-search kbd{position:absolute;right:8px;top:8px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:10px inherit;background:var(--card2)}
+.nav-label{margin:13px 10px 5px;color:var(--muted);font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.nav-label:first-child{margin-top:2px}.nav-empty{display:none;padding:18px 8px;color:var(--muted);font-size:12px;text-align:center}
 .nav-item{position:relative;min-height:40px;padding:9px 11px;border-radius:11px;font-size:13.5px;font-weight:550}
 .nav-item>span:first-child{width:22px;text-align:center;filter:saturate(.75);font-size:15px}
 .nav-item:hover{transform:none;background:color-mix(in srgb,var(--accent) 11%,transparent)}
@@ -197,6 +199,7 @@ nav{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 4px 8px;gap:3px;scr
 .main{min-width:0}.topbar{min-height:70px;padding:14px clamp(20px,3vw,38px);background:color-mix(in srgb,var(--bg) 76%,transparent);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
 .topbar-title{display:flex;align-items:center;gap:12px}.topbar h1{font-size:21px;letter-spacing:-.035em}.topbar h1:before{content:"УПРАВЛЕНИЕ / ";display:block;margin-bottom:3px;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.13em}
 .mobile-menu{display:none;width:38px;height:38px;padding:0;border:1px solid var(--border);border-radius:11px;background:var(--card);color:var(--text);font-size:18px;cursor:pointer}
+.search-trigger{display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--muted);font-size:11px;cursor:pointer}.search-trigger kbd{padding:2px 5px;border:1px solid var(--border);border-radius:5px;background:var(--card2);font:10px inherit}
 .sidebar-scrim{display:none}
 .pill{padding:6px 11px;background:color-mix(in srgb,var(--card) 85%,transparent);font-weight:600}
 .scroll{padding:28px clamp(20px,3vw,40px) 60px;scroll-behavior:smooth}.section{width:min(1260px,100%);margin:0 auto;animation:section-in .28s var(--ease)}
@@ -205,6 +208,7 @@ h3.sec{margin:2px 0 16px;font-size:16px;letter-spacing:-.02em}.grid{gap:16px}.tw
 .card,.set-group,.module-card,.file-card{border-color:color-mix(in srgb,var(--border) 88%,transparent);box-shadow:0 1px 0 rgba(255,255,255,.025),0 12px 36px rgba(0,0,0,.055)}
 .card{padding:20px}.card:hover{border-color:color-mix(in srgb,var(--border) 55%,var(--accent))}
 .stat{position:relative;overflow:hidden;min-height:112px}.stat:after{content:"";position:absolute;right:-26px;bottom:-38px;width:92px;height:92px;border-radius:50%;background:var(--accent);opacity:.055}.stat .val{margin-top:12px;font-size:25px;letter-spacing:-.035em}.stat .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.075em;font-weight:700}
+.overview-hero{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:20px;padding:25px 26px;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 15%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--accent) 24%,var(--border));border-radius:20px}.overview-hero:after{content:"⌁";position:absolute;right:24px;bottom:-45px;color:var(--accent);font-size:150px;font-weight:900;opacity:.06}.overview-copy{position:relative;z-index:1}.overview-kicker{color:var(--accent);font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase}.overview-hero h2{margin:7px 0 6px;font-size:27px;letter-spacing:-.045em}.overview-hero p{max-width:620px;margin:0;color:var(--muted);line-height:1.5}.overview-actions{position:relative;z-index:1;display:flex;gap:8px;flex-wrap:wrap}.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}.quick-card{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px solid var(--border);border-radius:13px;background:var(--card);color:var(--text);cursor:pointer;text-decoration:none;transition:.18s}.quick-card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--border));box-shadow:0 10px 30px rgba(0,0,0,.09)}.quick-card b{font-size:12px}.quick-card span{font-size:18px}
 label.field{margin:14px 0 7px;font-size:10px;font-weight:750;letter-spacing:.09em}
 input[type=text],input[type=password],input[type=url],select,textarea{min-height:42px;padding:10px 12px;border-radius:11px}.login-card input:focus,input:focus,select:focus,textarea:focus{border-color:color-mix(in srgb,var(--accent) 75%,var(--border));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)}
 .btn{min-height:38px;padding:9px 15px;border-radius:11px}.btn:hover{filter:none;transform:translateY(-1px);border-color:color-mix(in srgb,var(--border) 45%,var(--accent))}.btn:active{transform:translateY(0)}
@@ -219,9 +223,9 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
  .theme-block label{display:block}.seg{display:flex}
  .sidebar-scrim{display:block;position:fixed;inset:0;z-index:35;background:rgba(2,4,9,.62);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .25s}
  body.nav-open .sidebar-scrim{opacity:1;pointer-events:auto}
- .mobile-menu{display:grid;place-items:center}.topbar{min-height:64px;padding:12px 16px}.topbar-title{gap:10px}.topbar h1{font-size:18px}.scroll{padding:20px 14px 44px}.two{grid-template-columns:1fr}.cols4{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .mobile-menu{display:grid;place-items:center}.search-trigger{display:none}.topbar{min-height:64px;padding:12px 16px}.topbar-title{gap:10px}.topbar h1{font-size:18px}.scroll{padding:20px 14px 44px}.two{grid-template-columns:1fr}.cols4{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-hero{align-items:flex-start;flex-direction:column;padding:20px}.quick-grid{grid-template-columns:repeat(2,1fr)}
 }
-@media(max-width:560px){.cols,.three{grid-template-columns:1fr}.cols4{gap:10px}.card{padding:16px}.stat{min-height:98px}.stat .val{font-size:21px}.pill{max-width:35vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-inline>.btn{flex:1}.topbar h1:before{display:none}}
+@media(max-width:560px){.cols,.three{grid-template-columns:1fr}.cols4{gap:10px}.card{padding:16px}.stat{min-height:98px}.stat .val{font-size:21px}.pill{max-width:35vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-inline>.btn{flex:1}.topbar h1:before{display:none}.overview-hero h2{font-size:23px}.quick-grid{grid-template-columns:1fr 1fr}.quick-card{padding:11px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -240,9 +244,12 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
   <div class="sidebar-scrim" id="sidebar-scrim"></div>
   <aside class="sidebar">
     <div class="brand"><span class="brand-ic">⌁</span><span class="brand-copy">Control Center<small>Discord bot</small></span></div>
+    <div class="nav-search"><input id="nav-search" type="text" placeholder="Найти раздел…" autocomplete="off"><kbd>Ctrl K</kbd></div>
     <nav>
+      <div class="nav-label">Главное</div>
       <button class="nav-item active" data-section="overview"><span>🏠</span><span>Обзор</span></button>
       <button class="nav-item" data-section="server"><span>🖥</span><span>Сервер</span></button>
+      <div class="nav-label">Сообщество</div>
       <button class="nav-item" data-section="moderation"><span>🛡</span><span>Модерация</span></button>
       <button class="nav-item" data-section="giveaways"><span>🎁</span><span>Розыгрыши</span></button>
       <button class="nav-item" data-section="tickets"><span>🎫</span><span>Тикеты</span></button>
@@ -251,8 +258,10 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
       <button class="nav-item" data-section="birthdays"><span>🎂</span><span>Дни рождения</span></button>
       <button class="nav-item" data-section="tempvoice"><span>🔊</span><span>Голосовые</span></button>
       <button class="nav-item" data-section="ai"><span>🤖</span><span>AI-чат</span></button>
+      <div class="nav-label">Контент</div>
       <button class="nav-item" data-section="embed"><span>📝</span><span>Эмбеды</span></button>
       <button class="nav-item" data-section="scheduler"><span>⏰</span><span>Планировщик</span></button>
+      <div class="nav-label">Система</div>
       <button class="nav-item" data-section="settings"><span>⚙️</span><span>Настройки</span></button>
       <button class="nav-item" data-section="test"><span>🧪</span><span>Тест</span></button>
       <button class="nav-item" data-section="files"><span>🖼</span><span>Файлы</span></button>
@@ -260,6 +269,7 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
       <button class="nav-item" data-section="audit"><span>👁</span><span>Логи Discord</span></button>
       <button class="nav-item" data-section="stats"><span>📊</span><span>Статистика</span></button>
       <button class="nav-item" data-section="backup"><span>💾</span><span>Бэкап</span></button>
+      <div class="nav-empty" id="nav-empty">Ничего не найдено</div>
     </nav>
     <div class="theme-block">
       <label>Тема</label>
@@ -280,11 +290,15 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
   <main class="main">
     <header class="topbar">
       <div class="topbar-title"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button><h1 id="section-title">Обзор</h1></div>
-      <span class="pill" id="panel-name">…</span>
+      <div style="display:flex;align-items:center;gap:8px"><button class="search-trigger" id="search-trigger" type="button">⌕ Найти <kbd>Ctrl K</kbd></button><span class="pill" id="panel-name">…</span></div>
     </header>
     <div class="scroll">
 
       <section id="sec-overview" class="section active">
+        <div class="overview-hero">
+          <div class="overview-copy"><div class="overview-kicker">ZAVOD · CONTROL SYSTEM</div><h2>Всё под контролем</h2><p>Состояние бота, сервер и ключевые инструменты — в одном рабочем пространстве.</p></div>
+          <div class="overview-actions"><button class="btn primary quick-link" data-goto="embed" type="button">Создать эмбед</button><button class="btn op quick-link" data-goto="settings" type="button">Настройки</button></div>
+        </div>
         <h3 class="sec">Состояние бота</h3>
         <div class="grid cols4">
           <div class="card stat"><div class="lbl">Статус</div><div class="val"><span id="ov_status" class="badge off">Офлайн</span></div></div>
@@ -306,11 +320,11 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
             <div><div class="lbl">Онлайн на сервере <b id="spark_online_num">—</b></div><canvas class="spark-canvas" id="spark_online"></canvas></div>
           </div>
         </div>
-        <div class="card" style="margin-top:12px">
-          <b id="ov_botname">Бот</b>
-          <div class="muted" id="ov_about">Отправляйте эмбеды, настраивайте каналы и следите за состоянием бота прямо из админки.</div>
-          <a class="quick-link" data-goto="embed">→ Открыть конструктор эмбедов</a>
-          <br><a class="quick-link" data-goto="settings">→ Перейти к настройкам</a>
+        <div class="quick-grid">
+          <a class="quick-card quick-link" data-goto="moderation"><span>🛡</span><b>Модерация</b></a>
+          <a class="quick-card quick-link" data-goto="tickets"><span>🎫</span><b>Тикеты</b></a>
+          <a class="quick-card quick-link" data-goto="scheduler"><span>⏰</span><b>Планировщик</b></a>
+          <a class="quick-card quick-link" data-goto="logs"><span>⌁</span><b>Живые логи</b></a>
         </div>
       </section>
 

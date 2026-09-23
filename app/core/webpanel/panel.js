@@ -148,6 +148,43 @@ document.querySelectorAll(".nav-item").forEach((b) => {
 });
 const mobileMenu = $("mobile-menu");
 const sidebarScrim = $("sidebar-scrim");
+const navSearch = $("nav-search");
+const searchTrigger = $("search-trigger");
+
+function filterNavigation() {
+  const query = (navSearch ? navSearch.value : "").trim().toLocaleLowerCase("ru");
+  let visible = 0;
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    const match = !query || item.textContent.toLocaleLowerCase("ru").includes(query);
+    item.style.display = match ? "" : "none";
+    if (match) visible += 1;
+  });
+  document.querySelectorAll(".nav-label").forEach((label) => {
+    let next = label.nextElementSibling;
+    let groupVisible = false;
+    while (next && !next.classList.contains("nav-label") && !next.classList.contains("nav-empty")) {
+      if (next.classList.contains("nav-item") && next.style.display !== "none") groupVisible = true;
+      next = next.nextElementSibling;
+    }
+    label.style.display = groupVisible ? "" : "none";
+  });
+  if ($("nav-empty")) $("nav-empty").style.display = visible ? "none" : "block";
+}
+
+function focusNavigationSearch() {
+  if (window.matchMedia("(max-width: 900px)").matches) document.body.classList.add("nav-open");
+  if (navSearch) { navSearch.focus(); navSearch.select(); }
+}
+if (navSearch) {
+  navSearch.addEventListener("input", filterNavigation);
+  navSearch.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      const first = [...document.querySelectorAll(".nav-item")].find((item) => item.style.display !== "none");
+      if (first) switchSection(first.dataset.section);
+    }
+  });
+}
+if (searchTrigger) searchTrigger.addEventListener("click", focusNavigationSearch);
 function closeMobileNav() {
   document.body.classList.remove("nav-open");
   if (mobileMenu) mobileMenu.setAttribute("aria-expanded", "false");
@@ -162,12 +199,17 @@ if (mobileMenu) {
 if (sidebarScrim) sidebarScrim.addEventListener("click", closeMobileNav);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeMobileNav();
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    focusNavigationSearch();
+  }
 });
 document.querySelectorAll(".quick-link").forEach((a) => {
   a.addEventListener("click", () => switchSection(a.dataset.goto));
 });
 function switchSection(name) {
   closeMobileNav();
+  if (navSearch) { navSearch.value = ""; filterNavigation(); }
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.section === name));
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === "sec-" + name));
   $("section-title").textContent = TITLES[name] || name;
@@ -223,7 +265,6 @@ async function loadOverview() {
   $("ov_online").textContent = d.guild ? String(d.guild.online) : "—";
   $("ov_channels").textContent = d.guild ? String(d.guild.channels) + " / " + String(d.guild.roles) : "—";
   if (d.bot_name) {
-    $("ov_botname").textContent = "Бот: " + d.bot_name;
     $("panel-name").textContent = d.bot_name;
     document.title = "Панель — " + d.bot_name;
   }
