@@ -80,6 +80,7 @@ class DonationService:
                     _DONATIONS_URL,
                     params={"limit": limit},
                     headers={"Authorization": f"Bearer {self._token}"},
+                    timeout=aiohttp.ClientTimeout(total=20),
                 ) as response:
                     if response.status == 401 and attempt == 1 and await self._refresh_token():
                         continue

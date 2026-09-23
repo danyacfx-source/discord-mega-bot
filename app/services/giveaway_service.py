@@ -1,4 +1,5 @@
 """Сервис розыгрышей."""
+
 from __future__ import annotations
 
 import random
@@ -50,13 +51,13 @@ class GiveawayService(BaseService):
         from app.utils.format import relative
 
         entries = await self._repo.entries(giveaway["id"])
-        embed = embeds.info("🎉 Розыгрыш", giveaway["prize"])
-        embed.add_field(name="Участников", value=str(len(entries)), inline=True)
-        embed.add_field(name="Победителей", value=str(giveaway["winners"]), inline=True)
-        embed.add_field(name="ID", value=str(giveaway["id"]), inline=True)
+        embed = embeds.brand("Розыгрыш", f"## {giveaway['prize']}\nНажмите кнопку ниже, чтобы участвовать.")
+        embed.add_field(name="УЧАСТНИКОВ", value=f"**{len(entries)}**", inline=True)
+        embed.add_field(name="ПОБЕДИТЕЛЕЙ", value=f"**{giveaway['winners']}**", inline=True)
+        embed.add_field(name="НОМЕР", value=f"`#{giveaway['id']}`", inline=True)
         min_days = giveaway.get("min_days", 0)
         if min_days > 0:
-            embed.add_field(name="Мин. дней на сервере", value=str(min_days), inline=True)
+            embed.add_field(name="УСЛОВИЕ", value=f"От {min_days} дней на сервере", inline=False)
         if giveaway["active"]:
             embed.set_footer(text=f"Окончание: {relative(datetime.fromisoformat(giveaway['ends_at']))}")
         else:

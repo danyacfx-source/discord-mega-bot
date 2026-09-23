@@ -1,4 +1,5 @@
 """Сервис опросов."""
+
 from __future__ import annotations
 
 import json
@@ -61,11 +62,17 @@ class PollService(BaseService):
         options = json.loads(poll["options"])
         counts = await self._repo.vote_counts(poll_id)
         total = sum(counts.values())
-        embed = embeds.info(poll["question"])
+        embed = embeds.brand("Опрос", f"## {poll['question']}\nВыберите один вариант кнопкой ниже.")
         for index, option in enumerate(options):
             votes = counts.get(index, 0)
-            embed.add_field(name=f"{_NUM_REACTIONS[index]} {option}", value=f"Голосов: **{votes}**", inline=False)
-        embed.set_footer(text=f"ID опроса: {poll_id} • Всего голосов: {total}")
+            share = round(votes / total * 100) if total else 0
+            bar = "▰" * round(share / 10) + "▱" * (10 - round(share / 10))
+            embed.add_field(
+                name=f"{_NUM_REACTIONS[index]}  {option}",
+                value=f"`{bar}`  **{share}%** · {votes} голосов",
+                inline=False,
+            )
+        embed.set_footer(text=f"ZAVOD  •  POLL #{poll_id}  •  {total} голосов")
         return embed
 
 

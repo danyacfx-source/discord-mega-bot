@@ -62,7 +62,10 @@ class MegaBot(commands.Bot):
 
         self.db = Database(self.config.db_path)
         await self.db.connect()
-        root = assemble(config=self.config, db=self.db)
+        # Весь граф обязан ссылаться на текущий Discord-клиент. Без явной
+        # передачи ``self`` composition root создаст второй MegaBot, и сервисы
+        # (логи, музыка, тикеты) окажутся привязаны не к активному соединению.
+        root = assemble(config=self.config, db=self.db, bot=self)
         self.root = root
         self.services = root.services
         loaded = await load_cogs(self)
@@ -194,7 +197,7 @@ class MegaBot(commands.Bot):
                 message = message % args
             except (TypeError, ValueError):
                 pass
-        logger.error(f"%s: %s", message, str(error), exc_info=(type(error), error, error.__traceback__))
+        logger.error("%s: %s", message, str(error), exc_info=(type(error), error, error.__traceback__))
 
     @staticmethod
     def _interaction_location(interaction: discord.Interaction) -> str:

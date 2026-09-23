@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0c12">
 <title>Панель управления</title>
 <style>
 :root{--accent:#5865f2;--accent-hover:rgba(88,101,242,.15);--shadow:0 6px 24px rgba(0,0,0,.18);--radius:12px}
@@ -172,6 +173,56 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .guild-hero img{width:64px;height:64px;border-radius:16px}
 .guild-hero h4{margin:0 0 4px;font-size:17px}
 .guild-hero p{margin:0;font-size:13px;color:var(--muted)}
+
+/* 2026 visual refresh: calmer hierarchy, roomier controls and real mobile navigation */
+:root{--radius:16px;--shadow:0 18px 50px rgba(0,0,0,.24);--ease:cubic-bezier(.2,.8,.2,1)}
+body[data-theme="dark"]{--bg:#090b10;--bg2:#0d1017;--card:#121620;--card2:#181d29;--border:#252b39;--text:#f3f5fb;--muted:#8d97ab;--input:#0c1018;--glow:rgba(88,101,242,.13)}
+body[data-theme="light"]{--bg:#f3f5f9;--bg2:#e9edf5;--card:#fff;--card2:#f3f5f9;--border:#dce1eb;--text:#151925;--muted:#667086;--input:#fff;--glow:rgba(88,101,242,.09)}
+body{letter-spacing:-.006em;background:
+ radial-gradient(900px 600px at 88% -15%,var(--glow),transparent 66%),
+ linear-gradient(145deg,var(--bg),color-mix(in srgb,var(--bg) 95%,var(--accent)));}
+button,input,select,textarea{transition:border-color .18s var(--ease),box-shadow .18s var(--ease),background .18s var(--ease),transform .18s var(--ease)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 26%,transparent);outline-offset:2px}
+.sidebar{width:258px;flex-basis:258px;padding:18px 14px 14px;gap:14px;background:color-mix(in srgb,var(--bg2) 92%,transparent);box-shadow:8px 0 32px rgba(0,0,0,.08);z-index:40}
+.brand{min-height:54px;padding:0 8px 14px;gap:12px;border-bottom-color:color-mix(in srgb,var(--border) 70%,transparent);font-size:16px;letter-spacing:-.02em}
+.brand-ic{position:relative;width:38px;height:38px;line-height:38px;border-radius:12px;font-size:18px;background:linear-gradient(145deg,var(--accent),color-mix(in srgb,var(--accent) 68%,#fff));box-shadow:0 9px 26px color-mix(in srgb,var(--accent) 32%,transparent)}
+.brand-copy{display:flex;flex-direction:column;line-height:1.1}.brand-copy small{margin-top:5px;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}
+nav{min-height:0;overflow-y:auto;overflow-x:hidden;padding:0 4px 8px;gap:3px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.nav-item{position:relative;min-height:40px;padding:9px 11px;border-radius:11px;font-size:13.5px;font-weight:550}
+.nav-item>span:first-child{width:22px;text-align:center;filter:saturate(.75);font-size:15px}
+.nav-item:hover{transform:none;background:color-mix(in srgb,var(--accent) 11%,transparent)}
+.nav-item.active{background:color-mix(in srgb,var(--accent) 15%,var(--card));color:color-mix(in srgb,var(--accent) 62%,var(--text));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 25%,transparent)}
+.nav-item.active:before{content:"";position:absolute;left:-4px;top:11px;width:3px;height:18px;border-radius:4px;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+.theme-block{padding:10px 6px 0}.sidebar-foot{padding:0 6px;flex-wrap:wrap}.sidebar-foot #guildname{display:none}
+.main{min-width:0}.topbar{min-height:70px;padding:14px clamp(20px,3vw,38px);background:color-mix(in srgb,var(--bg) 76%,transparent);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%)}
+.topbar-title{display:flex;align-items:center;gap:12px}.topbar h1{font-size:21px;letter-spacing:-.035em}.topbar h1:before{content:"УПРАВЛЕНИЕ / ";display:block;margin-bottom:3px;color:var(--muted);font-size:9px;font-weight:750;letter-spacing:.13em}
+.mobile-menu{display:none;width:38px;height:38px;padding:0;border:1px solid var(--border);border-radius:11px;background:var(--card);color:var(--text);font-size:18px;cursor:pointer}
+.sidebar-scrim{display:none}
+.pill{padding:6px 11px;background:color-mix(in srgb,var(--card) 85%,transparent);font-weight:600}
+.scroll{padding:28px clamp(20px,3vw,40px) 60px;scroll-behavior:smooth}.section{width:min(1260px,100%);margin:0 auto;animation:section-in .28s var(--ease)}
+@keyframes section-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+h3.sec{margin:2px 0 16px;font-size:16px;letter-spacing:-.02em}.grid{gap:16px}.two,.three{gap:18px}
+.card,.set-group,.module-card,.file-card{border-color:color-mix(in srgb,var(--border) 88%,transparent);box-shadow:0 1px 0 rgba(255,255,255,.025),0 12px 36px rgba(0,0,0,.055)}
+.card{padding:20px}.card:hover{border-color:color-mix(in srgb,var(--border) 55%,var(--accent))}
+.stat{position:relative;overflow:hidden;min-height:112px}.stat:after{content:"";position:absolute;right:-26px;bottom:-38px;width:92px;height:92px;border-radius:50%;background:var(--accent);opacity:.055}.stat .val{margin-top:12px;font-size:25px;letter-spacing:-.035em}.stat .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.075em;font-weight:700}
+label.field{margin:14px 0 7px;font-size:10px;font-weight:750;letter-spacing:.09em}
+input[type=text],input[type=password],input[type=url],select,textarea{min-height:42px;padding:10px 12px;border-radius:11px}.login-card input:focus,input:focus,select:focus,textarea:focus{border-color:color-mix(in srgb,var(--accent) 75%,var(--border));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 13%,transparent)}
+.btn{min-height:38px;padding:9px 15px;border-radius:11px}.btn:hover{filter:none;transform:translateY(-1px);border-color:color-mix(in srgb,var(--border) 45%,var(--accent))}.btn:active{transform:translateY(0)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 72%,#fff));box-shadow:0 7px 20px color-mix(in srgb,var(--accent) 24%,transparent)}
+.login-card{padding:36px 32px;border-radius:22px}.login-logo{width:64px;height:64px;line-height:64px;border-radius:18px}.login-card h2{font-size:24px;letter-spacing:-.04em}.login-sub{margin-bottom:24px}
+.badge{padding:4px 10px}.listline{padding:10px 12px;border-radius:11px}.embed-cat,.field-item,.btn-row{border-radius:12px}
+#toasts{bottom:24px;right:24px}.toast{padding:12px 16px;border-radius:12px;backdrop-filter:blur(12px)}
+@media(max-width:900px){
+ .sidebar{position:fixed;inset:0 auto 0 0;width:min(292px,86vw);transform:translateX(-105%);transition:transform .25s var(--ease);box-shadow:20px 0 60px rgba(0,0,0,.42)}
+ body.nav-open .sidebar{transform:translateX(0)}
+ .brand span:last-child,.nav-item span:last-child{display:initial}.nav-item{justify-content:flex-start}
+ .theme-block label{display:block}.seg{display:flex}
+ .sidebar-scrim{display:block;position:fixed;inset:0;z-index:35;background:rgba(2,4,9,.62);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .25s}
+ body.nav-open .sidebar-scrim{opacity:1;pointer-events:auto}
+ .mobile-menu{display:grid;place-items:center}.topbar{min-height:64px;padding:12px 16px}.topbar-title{gap:10px}.topbar h1{font-size:18px}.scroll{padding:20px 14px 44px}.two{grid-template-columns:1fr}.cols4{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:560px){.cols,.three{grid-template-columns:1fr}.cols4{gap:10px}.card{padding:16px}.stat{min-height:98px}.stat .val{font-size:21px}.pill{max-width:35vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-inline>.btn{flex:1}.topbar h1:before{display:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body data-theme="dark">
@@ -186,8 +237,9 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 </div>
 
 <div class="app">
+  <div class="sidebar-scrim" id="sidebar-scrim"></div>
   <aside class="sidebar">
-    <div class="brand"><span class="brand-ic">🛠</span><span>Модуль админа</span></div>
+    <div class="brand"><span class="brand-ic">⌁</span><span class="brand-copy">Control Center<small>Discord bot</small></span></div>
     <nav>
       <button class="nav-item active" data-section="overview"><span>🏠</span><span>Обзор</span></button>
       <button class="nav-item" data-section="server"><span>🖥</span><span>Сервер</span></button>
@@ -227,7 +279,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 
   <main class="main">
     <header class="topbar">
-      <h1 id="section-title">Обзор</h1>
+      <div class="topbar-title"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button><h1 id="section-title">Обзор</h1></div>
       <span class="pill" id="panel-name">…</span>
     </header>
     <div class="scroll">

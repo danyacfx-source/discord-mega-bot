@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.services")
 
 _VK_BASE = "https://vkvideo.ru"
+_LIVE_BASE = "https://live.vkvideo.ru"
 _USER_AGENT = "Mozilla/5.0 (compatible; MegaBot/1.0; +https://vkvideo.ru)"
 
 _TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
@@ -69,8 +70,8 @@ class VkVideoService:
             return None
         # LIVE-стенд: live.vkvideo.ru/<slug> (устаревший vkvideo.ru/@<slug> — обзорная карточка)
         candidates = (
-            f"{_VK_BASE}/@{slug}",   # фолбэк: старый формат
             f"{_LIVE_BASE}/{slug}",  # актуальный LIVE-хост из url пользователя
+            f"{_VK_BASE}/@{slug}",   # фолбэк: старый формат
         )
         for url in candidates:
             data = await self._channel_status_url(url, slug)

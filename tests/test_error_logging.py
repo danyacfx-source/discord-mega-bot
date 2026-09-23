@@ -4,7 +4,6 @@
 а известные (права, кулдаун) — только предупреждением без шума.
 """
 import logging
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from discord import app_commands

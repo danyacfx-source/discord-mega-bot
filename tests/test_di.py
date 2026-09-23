@@ -86,6 +86,8 @@ async def test_setup_hook_injects_cog_with_services() -> None:
         try:
             # bot.services собран через composition root.
             assert isinstance(bot.services.settings, SettingsService)
+            assert bot.root.bot is bot
+            assert bot.services.logging._bot is bot
 
             # Loader отдал когу тот же синглтон, что лежит в services.
             setup = bot.get_cog("Setup")
@@ -104,6 +106,14 @@ async def test_all_cogs_load_through_composition() -> None:
             loaded = bot.cogs
             assert len(loaded) >= 30, f"когов загружено: {len(loaded)}"
             assert {"Setup", "Kick", "Moderation", "TwitchStatus", "AutoMod"} <= set(loaded)
+
+            from app.cogs.general.help import _CATEGORIES, _category_embed, _flatten
+
+            entries = _flatten(bot)
+            assert entries
+            for category in _CATEGORIES:
+                # Discord ограничивает description эмбеда 4096 символами.
+                assert len(_category_embed(category, entries).description or "") <= 4096
         finally:
             await bot.close()
 

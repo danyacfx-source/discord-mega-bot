@@ -64,7 +64,7 @@ class ConfirmView(discord.ui.View):
         callback = self.on_confirm or self._default_cancel
         await callback(interaction)
 
-    @discord.ui.button(label="Отмена", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="Отмена", style=discord.ButtonStyle.secondary)
     async def no_btn(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
         if not self._allowed(interaction):
             await interaction.response.defer()
@@ -109,8 +109,8 @@ class TicketOpenView(_TicketBaseView):
             embed = embeds.error("Не удалось открыть тикет", result.error)
         else:
             channel = result.channel
-            embed = embeds.success("Тикет создан", f"Открыл {channel.mention}: подпишите тикет 👉 {channel.mention}")
-            embed.add_field(name="Канал", value=channel.mention, inline=False)
+            embed = embeds.success("Тикет открыт", f"Перейдите в {channel.mention} и опишите вопрос одним сообщением.")
+            embed.add_field(name="КАНАЛ ПОДДЕРЖКИ", value=channel.mention, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -165,7 +165,11 @@ class GiveawayView(discord.ui.View):
                 return
 
         added = await services.giveaways.join(giveaway["id"], interaction.user.id)
-        embed = embeds.success("Готово!", "Вы участвуете в розыгрыше 🎉") if added else embeds.info("Уже участвуете")
+        embed = (
+            embeds.success("Заявка принята", "Вы участвуете в розыгрыше. Результат появится здесь после завершения.")
+            if added
+            else embeds.info("Вы уже участвуете", "Повторно нажимать кнопку не нужно.")
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
         try:
             embed = await services.giveaways.embed(giveaway)

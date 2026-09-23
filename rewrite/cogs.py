@@ -33,6 +33,7 @@ COG_PROVIDERS: dict[str, Callable[[Root], object]] = {
     "polls": lambda r: r.services.polls,
     "giveaways": lambda r: r.services.giveaways,
     "reaction_roles": lambda r: r.services.reaction_roles,
+    "scheduled": lambda r: r.services.scheduled,
     "donations": lambda r: r.services.donations,
     "twitch": lambda r: r.services.twitch,
     "kick": lambda r: r.services.kick,

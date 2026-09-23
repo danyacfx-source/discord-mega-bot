@@ -66,6 +66,12 @@ class Config:
     kick_pusher_app_key: str = "32cbd69e4b950bf97679"
     kick_pusher_host: str = "ws-us2.pusher.com"
 
+    # VK Видео Live
+    vk_channel_slug: str | None = None
+    vk_notify_channel_id: int | None = None
+    vk_ping_role_id: int | None = None
+    vk_poll_seconds: float = 300.0
+
     # Расширенные логи
     logs_ignore_channel_ids: tuple[int, ...] = ()
     logs_ignore_category_ids: tuple[int, ...] = ()
@@ -224,6 +230,10 @@ class Config:
             kick_ban_words=_strs(os.getenv("KICK_BAN_WORDS")),
             kick_pusher_app_key=os.getenv("KICK_PUSHER_APP_KEY", "32cbd69e4b950bf97679"),
             kick_pusher_host=os.getenv("KICK_PUSHER_HOST", "ws-us2.pusher.com"),
+            vk_channel_slug=os.getenv("VK_CHANNEL_SLUG"),
+            vk_notify_channel_id=_single_int(os.getenv("VK_NOTIFY_CHANNEL_ID")),
+            vk_ping_role_id=_single_int(os.getenv("VK_PING_ROLE_ID")),
+            vk_poll_seconds=max(30.0, float(os.getenv("VK_POLL_SECONDS", "300"))),
             logs_ignore_channel_ids=_ints(os.getenv("LOGS_IGNORE_CHANNEL_IDS")),
             logs_ignore_category_ids=_ints(os.getenv("LOGS_IGNORE_CATEGORY_IDS")),
             bot_log_channel_id=_single_int(os.getenv("BOT_LOG_CHANNEL_ID")),

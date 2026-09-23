@@ -146,10 +146,28 @@ document.querySelectorAll(".seg-btn").forEach((b) => {
 document.querySelectorAll(".nav-item").forEach((b) => {
   b.addEventListener("click", () => switchSection(b.dataset.section));
 });
+const mobileMenu = $("mobile-menu");
+const sidebarScrim = $("sidebar-scrim");
+function closeMobileNav() {
+  document.body.classList.remove("nav-open");
+  if (mobileMenu) mobileMenu.setAttribute("aria-expanded", "false");
+}
+if (mobileMenu) {
+  mobileMenu.setAttribute("aria-expanded", "false");
+  mobileMenu.addEventListener("click", () => {
+    const open = document.body.classList.toggle("nav-open");
+    mobileMenu.setAttribute("aria-expanded", String(open));
+  });
+}
+if (sidebarScrim) sidebarScrim.addEventListener("click", closeMobileNav);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeMobileNav();
+});
 document.querySelectorAll(".quick-link").forEach((a) => {
   a.addEventListener("click", () => switchSection(a.dataset.goto));
 });
 function switchSection(name) {
+  closeMobileNav();
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.section === name));
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === "sec-" + name));
   $("section-title").textContent = TITLES[name] || name;

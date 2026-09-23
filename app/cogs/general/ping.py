@@ -1,4 +1,5 @@
 """Команда ping."""
+
 from __future__ import annotations
 
 import discord
@@ -13,7 +14,9 @@ class PingCog(MegaCog, name="General"):
     @app_commands.command(name="ping", description="Проверка задержки бота")
     async def ping(self, interaction: discord.Interaction) -> None:
         latency = round(self.bot.latency * 1000)
-        embed = embeds.success("🏓 Pong!", f"Задержка: **{latency} мс**")
-        embed.add_field(name="Версия", value=self.config.version, inline=True)
-        embed.add_field(name="Аптайм", value=format_duration(int(self.bot.uptime.total_seconds())), inline=True)
+        quality = "отлично" if latency < 100 else "стабильно" if latency < 200 else "высокая задержка"
+        embed = embeds.brand("Система на связи", f"Ответ получен за **{latency} мс** · {quality}")
+        embed.add_field(name="ЗАДЕРЖКА", value=f"`{latency} ms`", inline=True)
+        embed.add_field(name="АПТАЙМ", value=f"`{format_duration(int(self.bot.uptime.total_seconds()))}`", inline=True)
+        embed.add_field(name="ВЕРСИЯ", value=f"`v{self.config.version}`", inline=True)
         await interaction.response.send_message(embed=embed)

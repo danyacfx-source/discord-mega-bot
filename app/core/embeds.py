@@ -1,14 +1,17 @@
-"""Фабрика embed-сообщений: единый стиль для всего бота."""
+"""Единая визуальная система Discord-сообщений ZAVOD."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
 import discord
 
-_SUCCESS = discord.Color.brand_green()
-_ERROR = discord.Color.brand_red()
-_INFO = discord.Color.blurple()
-_WARNING = discord.Color.orange()
+BRAND = discord.Color(0xFF5A36)
+SUCCESS = discord.Color(0x3ECF8E)
+ERROR = discord.Color(0xFF4D67)
+INFO = discord.Color(0x6C7CFF)
+WARNING = discord.Color(0xFFB547)
+NEUTRAL = discord.Color(0x272D3A)
 
 
 def _base(
@@ -22,22 +25,29 @@ def _base(
     embed = discord.Embed(title=title, description=description, color=color)
     if timestamp:
         embed.timestamp = datetime.now(UTC)
-    if footer:
-        embed.set_footer(text=footer)
+    embed.set_footer(text=footer or "ZAVOD  •  CONTROL SYSTEM")
     return embed
 
 
 def success(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
-    return _base(_SUCCESS, title, description, footer, timestamp=timestamp)
+    return _base(SUCCESS, title, description, footer, timestamp=timestamp)
 
 
 def error(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
-    return _base(_ERROR, title, description, footer, timestamp=timestamp)
+    return _base(ERROR, title, description, footer, timestamp=timestamp)
 
 
 def info(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
-    return _base(_INFO, title, description, footer, timestamp=timestamp)
+    return _base(INFO, title, description, footer, timestamp=timestamp)
 
 
 def warning(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
-    return _base(_WARNING, title, description, footer, timestamp=timestamp)
+    return _base(WARNING, title, description, footer, timestamp=timestamp)
+
+
+def brand(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
+    return _base(BRAND, title, description, footer, timestamp=timestamp)
+
+
+def neutral(title: str, description: str | None = None, footer: str | None = None, *, timestamp: bool = True) -> discord.Embed:
+    return _base(NEUTRAL, title, description, footer, timestamp=timestamp)

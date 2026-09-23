@@ -769,7 +769,7 @@ def test_webhook_body_multiple_embeds(tmp_path):
     body = panel._webhook_body(
         {
             "content": "много эмбедов",
-            "embeds": [{"title": "Эмбед %d" % i, "description": "текст %d" % i} for i in range(3)],
+            "embeds": [{"title": f"Эмбед {i}", "description": f"текст {i}"} for i in range(3)],
         }
     )
     assert body["content"] == "много эмбедов"

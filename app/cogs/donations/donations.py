@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -65,6 +66,8 @@ class DonationsCog(MegaCog, name="Donations"):
         self.donations = donations
         self._base_seconds = 15.0
         self._failures = 0
+        self._failure_started_at: float | None = None
+        self._last_warning_at = 0.0
 
     async def cog_load(self) -> None:
         config = self.bot.config
@@ -97,13 +100,26 @@ class DonationsCog(MegaCog, name="Donations"):
         try:
             new_donations = await self.donations.process_new(limit=50)
         except RuntimeError as exc:
+            now = time.monotonic()
             self._failures += 1
-            if self._failures <= 3 or self._failures % 20 == 0:
-                logger.error(
-                    "DonationAlerts недоступен (попытка %d): %s — пауза до %ds",
+            if self._failure_started_at is None:
+                self._failure_started_at = now
+            pause = min(self._base_seconds * (2 ** min(self._failures, 5)), 300.0)
+            # 429/5xx и сетевые таймауты внешнего API — штатная деградация,
+            # а не ошибка самого бота. Не засоряем ERROR и веб-ленту логов.
+            if not self._last_warning_at or now - self._last_warning_at >= 900:
+                logger.warning(
+                    "DonationAlerts временно недоступен: %s — повтор через %.0fс",
+                    exc,
+                    pause,
+                )
+                self._last_warning_at = now
+            else:
+                logger.debug(
+                    "DonationAlerts всё ещё недоступен (попытка %d): %s — повтор через %.0fс",
                     self._failures,
                     exc,
-                    min(self._base_seconds * (2 ** min(self._failures, 5)), 300.0),
+                    pause,
                 )
             self._schedule()
             return
@@ -112,8 +128,17 @@ class DonationsCog(MegaCog, name="Donations"):
             logger.exception("DonationAlerts: ошибка поллинга (попытка %d)", self._failures)
             self._schedule()
             return
+        failures = self._failures
+        outage_started = self._failure_started_at
         self._failures = 0
+        self._failure_started_at = None
         self._schedule()
+        if failures >= 2 and outage_started is not None:
+            logger.info(
+                "DonationAlerts снова доступен после %.0fс и %d неудачных попыток",
+                time.monotonic() - outage_started,
+                failures,
+            )
         for donation in new_donations:
             try:
                 await self._handle(donation)
