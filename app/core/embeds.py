@@ -1,4 +1,4 @@
-"""Единая визуальная система Discord-сообщений ZAVOD."""
+"""Единая визуальная система Discord-сообщений бота «Асуна Юки»."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ ERROR = discord.Color(0xFF4D67)
 INFO = discord.Color(0x6C7CFF)
 WARNING = discord.Color(0xFFB547)
 NEUTRAL = discord.Color(0x272D3A)
+BOT_NAME = "Асуна Юки"
 
 
 def _base(
@@ -25,7 +26,7 @@ def _base(
     embed = discord.Embed(title=title, description=description, color=color)
     if timestamp:
         embed.timestamp = datetime.now(UTC)
-    embed.set_footer(text=footer or "ZAVOD  •  CONTROL SYSTEM")
+    embed.set_footer(text=footer or f"{BOT_NAME}  •  Discord bot")
     return embed
 
 

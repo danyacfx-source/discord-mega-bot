@@ -1,4 +1,4 @@
-"""Интерактивный каталог команд ZAVOD."""
+"""Интерактивный каталог команд бота «Асуна Юки»."""
 
 from __future__ import annotations
 
@@ -123,7 +123,7 @@ def _overview(bot: discord.Client, entries: list[tuple[str, str, str]]) -> disco
     embed = embeds.brand(
         "Центр управления",
         "Все возможности бота собраны по разделам. Выберите категорию в меню ниже.",
-        footer=f"ZAVOD  •  {len(entries)} команд  •  выберите раздел",
+        footer=f"Асуна Юки  •  {len(entries)} команд  •  выберите раздел",
     )
     if bot.user:
         embed.set_author(name=bot.user.display_name, icon_url=bot.user.display_avatar.url)
@@ -145,7 +145,7 @@ def _category_embed(category: HelpCategory, entries: list[tuple[str, str, str]])
     return embeds.brand(
         f"{category.emoji}  {category.label}",
         "\n\n".join(lines) or "В этом разделе пока нет команд.",
-        footer=f"ZAVOD  •  {len(selected)} команд  •  /help",
+        footer=f"Асуна Юки  •  {len(selected)} команд  •  /help",
     )
 
 

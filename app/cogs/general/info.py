@@ -41,7 +41,7 @@ class InfoCog(MegaCog, name="Информация"):
         )
         embed.add_field(name="КАНАЛЫ", value=f"**{len(guild.channels)}**", inline=True)
         embed.add_field(name="РОЛИ / БУСТЫ", value=f"**{len(guild.roles)}** / **{guild.premium_subscription_count}**", inline=True)
-        embed.set_footer(text=f"ZAVOD  •  SERVER ID {guild.id}")
+        embed.set_footer(text=f"Асуна Юки  •  SERVER ID {guild.id}")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="userinfo", description="Информация о пользователе")
@@ -62,7 +62,7 @@ class InfoCog(MegaCog, name="Информация"):
             embed.add_field(name=f"РОЛИ · {len(target.roles) - 1}", value=" ".join(roles), inline=False)
         if target.id == interaction.guild.owner_id:
             embed.add_field(name="ВЛАДЕЛЕЦ СЕРВЕРА", value="Да", inline=True)
-        embed.set_footer(text=f"ZAVOD  •  USER ID {target.id}")
+        embed.set_footer(text=f"Асуна Юки  •  USER ID {target.id}")
         await interaction.response.send_message(embed=embed)
 
 
@@ -72,7 +72,7 @@ class AboutCog(MegaCog, name="About"):
         guilds = len(self.bot.guilds)
         uptime = dt.datetime.now(tz=dt.UTC) - self.bot.start_time
 
-        embed = embeds.brand("ZAVOD", "Система управления Discord-сообществом.")
+        embed = embeds.brand("Асуна Юки", "Система управления Discord-сообществом.")
         if self.bot.user:
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.add_field(name="СЕРВЕРОВ", value=f"`{guilds}`", inline=True)

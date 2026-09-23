@@ -90,7 +90,7 @@ class RamReportCog(MegaCog, name="RamReport"):
             return
         current = self._rss_mb()
         peak = self._peak_mb()
-        embed = embeds.neutral("Монитор памяти", "Автоматическая диагностика процесса ZAVOD.")
+        embed = embeds.neutral("Монитор памяти", "Автоматическая диагностика процесса бота «Асуна Юки».")
         embed.add_field(name="СЕЙЧАС", value=f"`{current:.1f} MB`", inline=True)
         embed.add_field(name="ПИК", value=f"`{peak:.1f} MB`", inline=True)
         embed.add_field(name="ИНТЕРВАЛ", value=f"`{self.bot.config.ram_report_interval_minutes} min`", inline=True)

@@ -79,7 +79,7 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
         embed = embeds.brand(
             "Сегодня день рождения",
             "## Время поздравлять! 🎂\n\n" + "\n".join(lines),
-            footer=f"ZAVOD  •  именинников сегодня: {len(lines)}",
+            footer=f"Асуна Юки  •  именинников сегодня: {len(lines)}",
         )
         content = None
         role_id = self.bot.config.birthday_ping_role_id
@@ -150,7 +150,7 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
         embed = embeds.brand(
             "Календарь дней рождения",
             "\n".join(f"`{index:02d}`  {line}" for index, line in enumerate(lines[:25], 1)),
-            footer=f"ZAVOD  •  ближайшие события: {min(len(lines), 25)}",
+            footer=f"Асуна Юки  •  ближайшие события: {min(len(lines), 25)}",
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
