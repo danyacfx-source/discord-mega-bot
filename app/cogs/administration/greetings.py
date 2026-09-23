@@ -83,16 +83,16 @@ class GreetingsCog(MegaCog, name="Greetings"):
             lines.extend(voice_lines)
 
         intro = config.welcome_intro or _DEFAULT_INTRO
-        embed = discord.Embed(title=config.welcome_title, description=intro, color=0x9B59B6)
+        embed = embeds.brand(config.welcome_title, intro)
         channel_text = "\n".join(lines).strip()
         if channel_text:
             if len(channel_text) > 1024:
                 channel_text = channel_text[:1020] + "\n…"
-            embed.add_field(name="📂 Наши каналы", value=channel_text, inline=False)
+            embed.add_field(name="КАНАЛЫ СЕРВЕРА", value=channel_text, inline=False)
 
         if member.guild.rules_channel:
             embed.add_field(
-                name="📜 Правила",
+                name="ПЕРЕД НАЧАЛОМ",
                 value=f"Ознакомься с правилами сервера: <#{member.guild.rules_channel.id}>",
                 inline=False,
             )
@@ -113,11 +113,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
                 embed = await self._catalog(member)
                 payload_size = len(json.dumps(embed.to_dict(), ensure_ascii=False))
                 if payload_size > 6000:
-                    embed = discord.Embed(
-                        title=config.welcome_title,
-                        description=(config.welcome_intro or _DEFAULT_INTRO)[:4096],
-                        color=0x9B59B6,
-                    )
+                    embed = embeds.brand(config.welcome_title, (config.welcome_intro or _DEFAULT_INTRO)[:4096])
                 await member.send(embed=embed)
                 logger.info("Welcome: приветствие отправлено %s", member.name)
             except discord.Forbidden:
@@ -142,13 +138,14 @@ class GreetingsCog(MegaCog, name="Greetings"):
         if channel is None:
             return
         embed = embeds.success(
-            "Новый участник",
-            f"**{member.display_name}** зашёл на сервер! Поздороваемся вместе? 👋",
+            "Добро пожаловать",
+            f"## {member.display_name}\n{member.mention} присоединяется к сообществу. Осваивайся и чувствуй себя как дома.",
         )
-        embed.color = discord.Color(0x2ECC71)
-        embed.set_author(name="Новый участник", icon_url=member.display_avatar.with_size(256).url)
-        embed.add_field(name="Участников на сервере", value=str(member.guild.member_count), inline=True)
-        embed.set_footer(text=f"ID: {member.id}")
+        embed.set_thumbnail(url=member.display_avatar.with_size(256).url)
+        embed.add_field(name="ТЕПЕРЬ НАС", value=f"**{member.guild.member_count}**", inline=True)
+        if member.guild.rules_channel:
+            embed.add_field(name="НАЧАТЬ ЗДЕСЬ", value=member.guild.rules_channel.mention, inline=True)
+        embed.set_footer(text=f"ZAVOD  •  USER ID {member.id}")
         try:
             await channel.send(embed=embed)
         except discord.HTTPException:
@@ -159,12 +156,11 @@ class GreetingsCog(MegaCog, name="Greetings"):
         if channel is None:
             return
         embed = embeds.info(
-            "Участник вышел",
-            f"**{member.display_name}** покинул сервер. До встречи! 👋",
+            "Участник покинул сервер",
+            f"**{member.display_name}** вышел из сообщества. Надеемся ещё увидеться.",
         )
-        embed.color = discord.Color(0x2C2F33)
-        embed.set_author(name="Участник вышел", icon_url=member.display_avatar.with_size(256).url)
-        embed.set_footer(text=f"ID: {member.id}")
+        embed.set_thumbnail(url=member.display_avatar.with_size(256).url)
+        embed.set_footer(text=f"ZAVOD  •  USER ID {member.id}")
         try:
             await channel.send(embed=embed)
         except discord.HTTPException:

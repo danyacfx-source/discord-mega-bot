@@ -32,7 +32,7 @@ class TicketCog(MegaCog, name="Tickets"):
             await interaction.response.send_message(embed=embeds.error("Ошибка", "Не удалось выбрать канал."), ephemeral=True)
             return
         settings = await self.services.settings.get(interaction.guild.id)
-        embed = embeds.info(
+        embed = embeds.brand(
             settings.get("ticket_panel_title") or "Поддержка",
             settings.get("ticket_panel_description") or "Нажмите на кнопку, чтобы открыть тикет.",
         )

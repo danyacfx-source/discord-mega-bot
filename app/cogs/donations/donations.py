@@ -269,10 +269,10 @@ class DonationsCog(MegaCog, name="Donations"):
 
     def _sponsor_embed(self) -> discord.Embed:
         config = self.bot.config
-        embed = discord.Embed(title=_SPONSOR_TITLE, color=0xF1C40F)
-        embed.description = (
+        embed = embeds.brand(
+            _SPONSOR_TITLE,
             f"Поддержи канал — при донате от **{config.donation_min_amount:g} ₽** "
-            f"роль **«{config.donation_role_name}»** выдастся автоматически."
+            f"роль **«{config.donation_role_name}»** выдастся автоматически.",
         )
         if config.donate_bonuses:
             embed.add_field(

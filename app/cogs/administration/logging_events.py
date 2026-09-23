@@ -34,12 +34,11 @@ class LoggingEventsCog(MegaCog, name="AuditLog"):
             return
         self._restart_logged = True
         for guild in self.bot.guilds:
-            embed = discord.Embed(title="🚀 Бот запущен и готов к работе", color=0x5865F2)
-            embed.timestamp = discord.utils.utcnow()
+            embed = embeds.brand("Система запущена", "Все модули загружены, соединение с Discord установлено.")
             if self.bot.user is not None:
-                embed.add_field(name="Бот", value=self.bot.user.mention, inline=True)
-            embed.add_field(name="Серверов", value=str(len(self.bot.guilds)), inline=True)
-            embed.add_field(name="Версия", value=self.bot.config.version, inline=True)
+                embed.add_field(name="БОТ", value=self.bot.user.mention, inline=True)
+            embed.add_field(name="СЕРВЕРОВ", value=f"`{len(self.bot.guilds)}`", inline=True)
+            embed.add_field(name="ВЕРСИЯ", value=f"`v{self.bot.config.version}`", inline=True)
             await self.logging.send_embed(guild, embed, category="bot")
 
     @commands.Cog.listener()

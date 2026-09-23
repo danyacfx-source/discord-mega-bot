@@ -54,6 +54,22 @@ background:var(--panel2);border:1px solid var(--border);text-transform:uppercase
 footer{color:var(--muted);font-size:11px;padding:0 20px 30px;text-align:center}
 .badge{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;
 background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
+/* ZAVOD Control System */
+:root{--bg:#090b10;--panel:#121620;--panel2:#181d29;--border:#272e3c;--text:#f3f5fb;--muted:#8d97ab;--accent:#ff5a36;--ok:#3ecf8e;--warn:#ffb547;--err:#ff4d67;--info:#6c7cff}
+body{background:radial-gradient(900px 520px at 80% -180px,rgba(255,90,54,.12),transparent 70%),var(--bg);letter-spacing:-.005em}
+header{min-height:70px;padding:14px clamp(16px,3vw,36px);background:rgba(9,11,16,.78);backdrop-filter:blur(18px) saturate(140%)}
+header .logo{width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,var(--accent),#ff896c);box-shadow:0 10px 28px rgba(255,90,54,.28)}
+header h1{font-size:18px;letter-spacing:-.025em}.sub{text-transform:uppercase;letter-spacing:.1em!important;font-weight:700}
+.toolbar{position:sticky;top:70px;z-index:9;padding:14px clamp(16px,3vw,36px);background:rgba(9,11,16,.76);border-bottom:1px solid var(--border);backdrop-filter:blur(16px)}
+select,input[type=text],button{min-height:38px;border-radius:11px;padding:8px 12px;transition:.18s}
+button:hover,.navlink:hover{transform:translateY(-1px);border-color:var(--accent);color:var(--text)}
+.navlink{padding:8px 13px;border-radius:11px}.list{width:min(1400px,100%);margin:auto;padding:18px clamp(16px,3vw,36px) 52px}
+.row{position:relative;gap:12px;padding:12px 14px;margin-bottom:8px;border-radius:13px;background:linear-gradient(145deg,var(--panel),rgba(18,22,32,.72));box-shadow:0 8px 28px rgba(0,0,0,.07);transition:.18s}
+.row:hover{border-color:#3a4355;transform:translateY(-1px)}.row:before{content:"";position:absolute;left:-1px;top:12px;bottom:12px;width:2px;border-radius:4px;background:var(--accent)}
+.row .cat,.badge,.chip{border-radius:999px;padding:2px 9px;font-weight:700}.login-card{padding:36px 32px;border-radius:22px;box-shadow:0 24px 80px rgba(0,0,0,.42)}
+.login-card h2{font-size:23px;letter-spacing:-.035em}.login-card input{min-height:44px;border-radius:12px}
+@media(max-width:720px){header{flex-wrap:wrap}.sub{display:none}.navlink{margin-left:auto}.toolbar{top:69px}.row{display:grid;grid-template-columns:auto 1fr}.row .msg{grid-column:1/-1}.list{padding-top:12px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>

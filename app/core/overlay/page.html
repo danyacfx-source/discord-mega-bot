@@ -2,24 +2,27 @@
 <html lang="ru"><head><meta charset="utf-8"><title>Overlay</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:transparent;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#fff;width:420px;overflow:hidden}
-.card{background:rgba(20,22,31,.82);border-left:4px solid #9146ff;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 4px 18px rgba(0,0,0,.45);backdrop-filter:blur(4px)}
-.card.live{border-left-color:#e74c3c}
-.card h3{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#a7a9be;margin-bottom:6px}
-.card .value{font-size:16px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
-.card .empty{color:#6a6c82;font-size:14px}
-.counters{font-size:14px;line-height:1.6}.counters b{color:#f1c40f}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e74c3c;margin-right:6px;animation:blink 1.2s infinite}
-@keyframes blink{50%{opacity:.25}}
+:root{--accent:#ff5a36;--text:#f6f7fb;--muted:#98a1b4;--surface:rgba(12,15,22,.88)}
+body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;color:var(--text);width:420px;overflow:hidden;padding:8px}
+.card{position:relative;overflow:hidden;background:linear-gradient(145deg,var(--surface),rgba(22,27,39,.82));border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:18px 20px;margin-bottom:12px;box-shadow:0 18px 55px rgba(0,0,0,.42);backdrop-filter:blur(18px) saturate(140%)}
+.card:after{content:"";position:absolute;right:-42px;bottom:-58px;width:130px;height:130px;border-radius:50%;background:var(--accent);opacity:.08}
+.card.live{border-color:rgba(255,90,54,.4);box-shadow:0 18px 60px rgba(255,60,35,.12)}
+.card h3{font-size:10px;text-transform:uppercase;letter-spacing:1.7px;color:var(--muted);margin-bottom:9px;font-weight:800}
+.card .value{font-size:17px;font-weight:700;line-height:1.45;white-space:pre-wrap;word-break:break-word;letter-spacing:-.02em}
+.card .empty{color:var(--muted);font-size:14px}.counters{font-size:13px;line-height:1.75;color:var(--muted)}.counters b{color:var(--text)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;box-shadow:0 0 0 0 rgba(255,90,54,.55);animation:pulse 1.8s infinite}
+.progress{height:6px;margin-top:12px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.progress i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#ff9a76)}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(255,90,54,0)}100%{box-shadow:0 0 0 0 rgba(255,90,54,0)}}
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
 </style></head><body><div id="root"></div>
 <script>
 async function load(){try{const r=await fetch('/overlay/api?token=__TOKEN__');const d=await r.json();let h='';
-if(d.stream&&d.stream.live){h+='<div class="card live"><h3>🔴 Стрим · '+esc(d.stream.platform)+'</h3><div class="value"><span class="dot"></span><b>'+esc(d.stream.title)+'</b></div>';
-h+='<div class="counters">👁 Зрители: <b>'+esc(d.stream.viewers)+'</b> · Пик: <b>'+esc(d.stream.peak)+'</b></div>';
-if(d.stream.category)h+='<div class="counters">🎮 '+esc(d.stream.category)+'</div>';h+='</div>'}
-else if(d.stream){h+='<div class="card"><h3>Стрим</h3><div class="empty">Офлайн</div></div>'}
-if(d.counters&&d.counters.length){h+='<div class="card"><h3>📦 Счётчики</h3><div class="counters">';for(const c of d.counters)h+='<div><b>'+esc(c.name)+'</b>: '+esc(c.value)+'</div>';h+='</div></div>'}
-if(d.donation_goal&&d.donation_goal.enabled){h+='<div class="card"><h3>💰 '+esc(d.donation_goal.label)+'</h3><div class="value">'+esc(d.donation_goal.current)+' / '+esc(d.donation_goal.target)+' '+esc(d.donation_goal.currency)+'</div></div>'}
+if(d.stream&&d.stream.live){h+='<div class="card live"><h3>В ЭФИРЕ · '+esc(d.stream.platform)+'</h3><div class="value"><span class="dot"></span>'+esc(d.stream.title)+'</div>';
+h+='<div class="counters">Зрители <b>'+esc(d.stream.viewers)+'</b> · Пик <b>'+esc(d.stream.peak)+'</b></div>';
+if(d.stream.category)h+='<div class="counters">Категория · '+esc(d.stream.category)+'</div>';h+='</div>'}
+else if(d.stream){h+='<div class="card"><h3>ТРАНСЛЯЦИЯ</h3><div class="empty">Сейчас офлайн</div></div>'}
+if(d.counters&&d.counters.length){h+='<div class="card"><h3>СЧЁТЧИКИ</h3><div class="counters">';for(const c of d.counters)h+='<div>'+esc(c.name)+' · <b>'+esc(c.value)+'</b></div>';h+='</div></div>'}
+if(d.donation_goal&&d.donation_goal.enabled){const p=Math.max(0,Math.min(100,Number(d.donation_goal.current)/Math.max(1,Number(d.donation_goal.target))*100));h+='<div class="card"><h3>'+esc(d.donation_goal.label)+'</h3><div class="value">'+esc(d.donation_goal.current)+' / '+esc(d.donation_goal.target)+' '+esc(d.donation_goal.currency)+'</div><div class="progress"><i style="width:'+p+'%"></i></div></div>'}
 document.getElementById('root').innerHTML=h;}catch(e){}}
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
 load();setInterval(load,5000);

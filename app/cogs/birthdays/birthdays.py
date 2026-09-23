@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
+from app.core import embeds
 from app.core.base import MegaCog
 from app.services.birthday_service import BirthdayService
 
@@ -75,10 +76,10 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
                 display = member.display_name
             mention = f"<@{row['user_id']}>"
             lines.append(f"🎂 **{display or mention}** {mention}")
-        embed = discord.Embed(
-            title="🎉 Сегодня день рождения!",
-            description="\n".join(lines),
-            color=discord.Color.magenta(),
+        embed = embeds.brand(
+            "Сегодня день рождения",
+            "## Время поздравлять! 🎂\n\n" + "\n".join(lines),
+            footer=f"ZAVOD  •  именинников сегодня: {len(lines)}",
         )
         content = None
         role_id = self.bot.config.birthday_ping_role_id
@@ -96,32 +97,38 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
         match = DATE_RE.match(date)
         if match is None:
             await interaction.response.send_message(
-                "Неверный формат. Используй **дд.мм** (например `15.03`).", ephemeral=True
+                embed=embeds.error("Неверный формат", "Укажите дату как `15.03` — день и месяц."),
+                ephemeral=True,
             )
             return
         day, month = int(match.group(1)), int(match.group(2))
         if not (1 <= month <= 12 and 1 <= day <= calendar.monthrange(2000, month)[1]):
-            await interaction.response.send_message("Такая дата не существует.", ephemeral=True)
+            await interaction.response.send_message(embed=embeds.error("Такой даты не существует"), ephemeral=True)
             return
         await self.birthdays.set(interaction.user.id, month, day)
         await interaction.response.send_message(
-            f"Дата сохранена: **{day:02d}.{month:02d}**\nВ этот день бот поздравит тебя на сервере! 🎉",
+            embed=embeds.success(
+                "Дата сохранена",
+                f"**{day:02d}.{month:02d}** · в этот день бот напомнит серверу о празднике.",
+            ),
             ephemeral=True,
         )
 
     @birthday.command(name="remove", description="Удалить свою дату рождения")
     async def remove_birthday(self, interaction: discord.Interaction) -> None:
         if await self.birthdays.get(interaction.user.id) is None:
-            await interaction.response.send_message("Дата не установлена.", ephemeral=True)
+            await interaction.response.send_message(embed=embeds.info("Дата не установлена"), ephemeral=True)
             return
         await self.birthdays.remove(interaction.user.id)
-        await interaction.response.send_message("Дата удалена.", ephemeral=True)
+        await interaction.response.send_message(embed=embeds.success("Дата удалена"), ephemeral=True)
 
     @birthday.command(name="list", description="Ближайшие дни рождения")
     async def list_birthdays(self, interaction: discord.Interaction) -> None:
         rows = await self.birthdays.all()
         if not rows:
-            await interaction.response.send_message("Пока никто не указал дату.", ephemeral=True)
+            await interaction.response.send_message(
+                embed=embeds.info("Календарь пока пуст", "Добавьте дату командой `/birthday set`."), ephemeral=True
+            )
             return
         now = datetime.now()
         upcoming = []
@@ -138,12 +145,12 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
             when = "Сегодня! 🎉" if delta == 0 else ("Завтра" if delta == 1 else f"через {delta} дн.")
             lines.append(f"**{name}** — {day:02d}.{month:02d} ({when})")
         if not lines:
-            await interaction.response.send_message("Ближайших дней рождения нет.", ephemeral=True)
+            await interaction.response.send_message(embed=embeds.info("Ближайших дней рождения нет"), ephemeral=True)
             return
-        embed = discord.Embed(
-            title="🎂 Ближайшие дни рождения",
-            description="\n".join(lines[:25]),
-            color=discord.Color.magenta(),
+        embed = embeds.brand(
+            "Календарь дней рождения",
+            "\n".join(f"`{index:02d}`  {line}" for index, line in enumerate(lines[:25], 1)),
+            footer=f"ZAVOD  •  ближайшие события: {min(len(lines), 25)}",
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

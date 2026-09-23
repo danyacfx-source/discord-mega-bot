@@ -135,8 +135,10 @@ class RoleMenuCog(MegaCog, name="RoleMenu"):
 
     @staticmethod
     def _panel_embed(role_names: list[str], message: str) -> discord.Embed:
-        description = "Первое меню — получить роль, второе — снять.\n\n" + "\n".join(f"• **{name}**" for name in role_names)
-        embed = embeds.info(message or "Уведомления и роли меню", description)
-        embed.color = discord.Color(0x9B59B6)
+        description = (
+            "Настройте уведомления и доступные роли. В первом меню роль можно получить, во втором — снять.\n\n"
+            + "\n".join(f"`{index:02d}`  **{name}**" for index, name in enumerate(role_names, 1))
+        )
+        embed = embeds.brand(message or "Центр ролей", description)
         embed.set_footer(text=PANEL_FOOTER)
         return embed

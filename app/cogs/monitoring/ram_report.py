@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import tasks
 
+from app.core import embeds
 from app.core.base import MegaCog
 
 if TYPE_CHECKING:
@@ -87,9 +88,12 @@ class RamReportCog(MegaCog, name="RamReport"):
         if channel is None or not isinstance(channel, discord.TextChannel):
             logger.warning("Канал %s для отчёта по ОЗУ не найден", channel_id)
             return
-        embed = discord.Embed(title="📊 Память бота", color=0x5865F2)
-        embed.add_field(name="Текущее потребление", value=f"{self._rss_mb():.1f} МБ", inline=False)
-        embed.add_field(name="Пик", value=f"{self._peak_mb():.1f} МБ", inline=False)
+        current = self._rss_mb()
+        peak = self._peak_mb()
+        embed = embeds.neutral("Монитор памяти", "Автоматическая диагностика процесса ZAVOD.")
+        embed.add_field(name="СЕЙЧАС", value=f"`{current:.1f} MB`", inline=True)
+        embed.add_field(name="ПИК", value=f"`{peak:.1f} MB`", inline=True)
+        embed.add_field(name="ИНТЕРВАЛ", value=f"`{self.bot.config.ram_report_interval_minutes} min`", inline=True)
         if self.bot.config.ram_report_tracemalloc:
             report = _fit_report(build_tracemalloc_report())
             if report:
