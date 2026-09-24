@@ -120,7 +120,7 @@ async def test_pipeline_smoke(config: Config, db: Database) -> None:
 
     root = assemble(config=config, db=db)
     await build_all_cogs(root, start_tasks=False)
-    assert root.bot.get_cog("General") is not None
+    assert root.bot.get_cog("Health") is not None
     await root.bot.close()
     assert root.bot.db is None
 

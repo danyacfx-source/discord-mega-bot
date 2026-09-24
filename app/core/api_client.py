@@ -75,6 +75,47 @@ class ApiClient:
         *,
         attempts: int = 3,
         acceptable: tuple[int, ...] = (200,),
+        circuit: str | None = None,
+        **kwargs: Any,
+    ) -> tuple[int, Any, CIMultiDictProxy[str]]:
+        """Возвращает `(status, json, headers)` или выбрасывает ApiRequestError.
+
+        Запрос автоматически проходит через circuit breaker с именем
+        ``circuit`` (по умолчанию — название сервиса в нижнем регистре).
+        При открытом breaker поднимается ApiRequestError со статусом 503.
+        """
+        from app.core.circuit_breaker import CircuitOpenError, get_circuit_breaker
+
+        breaker = get_circuit_breaker((circuit or self.service).lower())
+
+        def _is_failure(exc: BaseException) -> bool:
+            if isinstance(exc, CircuitOpenError):
+                return False
+            if isinstance(exc, ApiRequestError):
+                return exc.status in _RETRY_STATUSES or exc.status == 599
+            return True
+
+        try:
+            return await breaker.call(
+                self._request_json(
+                    method,
+                    url,
+                    attempts=attempts,
+                    acceptable=acceptable,
+                    **kwargs,
+                ),
+                is_failure=_is_failure,
+            )
+        except CircuitOpenError as exc:
+            raise ApiRequestError(self.service, 503, str(exc)) from exc
+
+    async def _request_json(
+        self,
+        method: str,
+        url: str,
+        *,
+        attempts: int = 3,
+        acceptable: tuple[int, ...] = (200,),
         **kwargs: Any,
     ) -> tuple[int, Any, CIMultiDictProxy[str]]:
         """Возвращает `(status, json, headers)` или выбрасывает ApiRequestError."""
@@ -100,7 +141,62 @@ class ApiClient:
                 await self._backoff({}, attempt)
         raise ApiRequestError(self.service, 599, "исчерпаны попытки")
 
+    async def json_with_circuit(
+        self,
+        method: str,
+        url: str,
+        *,
+        circuit_name: str,
+        attempts: int = 3,
+        acceptable: tuple[int, ...] = (200,),
+        **kwargs: Any,
+    ) -> tuple[int, Any, CIMultiDictProxy[str]]:
+        """Устаревший алиас: ``json()`` уже защищает все запросы circuit breaker'ом."""
+        return await self.json(
+            method,
+            url,
+            attempts=attempts,
+            acceptable=acceptable,
+            circuit=circuit_name,
+            **kwargs,
+        )
+
     async def text(
+        self,
+        method: str,
+        url: str,
+        *,
+        attempts: int = 3,
+        acceptable: tuple[int, ...] = (200,),
+        circuit: str | None = None,
+        **kwargs: Any,
+    ) -> tuple[int, str, CIMultiDictProxy[str]]:
+        from app.core.circuit_breaker import CircuitOpenError, get_circuit_breaker
+
+        breaker = get_circuit_breaker((circuit or self.service).lower())
+
+        def _is_failure(exc: BaseException) -> bool:
+            if isinstance(exc, CircuitOpenError):
+                return False
+            if isinstance(exc, ApiRequestError):
+                return exc.status in _RETRY_STATUSES or exc.status == 599
+            return True
+
+        try:
+            return await breaker.call(
+                self._request_text(
+                    method,
+                    url,
+                    attempts=attempts,
+                    acceptable=acceptable,
+                    **kwargs,
+                ),
+                is_failure=_is_failure,
+            )
+        except CircuitOpenError as exc:
+            raise ApiRequestError(self.service, 503, str(exc)) from exc
+
+    async def _request_text(
         self,
         method: str,
         url: str,
@@ -129,10 +225,26 @@ class ApiClient:
         raise ApiRequestError(self.service, 599, "исчерпаны попытки")
 
     async def _backoff(self, headers: Any, attempt: int) -> None:
+        """Exponential backoff with jitter."""
         retry_after = _retry_after_seconds(headers)
-        delay = retry_after if retry_after is not None else min(8.0, 2**attempt)
-        delay += random.uniform(0.0, 0.25)
-        logger.warning("%s: временная ошибка API, повтор через %.2fс", self.service, delay)
+
+        if retry_after is not None:
+            # Respect Discord/API retry-after header
+            delay = retry_after
+        else:
+            # Exponential backoff: 1s, 2s, 4s, 8s, ... max 30s
+            base_delay = min(30.0, 2.0 ** attempt)
+            # Add jitter (0-10% of base delay)
+            jitter = random.uniform(0.0, base_delay * 0.1)
+            delay = base_delay + jitter
+
+        logger.warning(
+            "%s: retry %d in %.2fs (retry_after=%s)",
+            self.service,
+            attempt + 1,
+            delay,
+            retry_after is not None
+        )
         await asyncio.sleep(delay)
 
 

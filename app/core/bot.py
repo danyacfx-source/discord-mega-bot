@@ -83,6 +83,25 @@ class MegaBot(commands.Bot):
         await self._sync_commands()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
 
+        # Initialize infrastructure components
+        from app.core.circuit_breaker import get_circuit_breaker_registry
+        from app.core.rate_limiter import get_rate_limiter
+
+        # Pre-create circuit breakers for external services
+        registry = get_circuit_breaker_registry()
+        if self.config.twitch_client_id:
+            registry.get("twitch", failure_threshold=5, recovery_timeout=60.0)
+        if self.config.kick_channel_slug:
+            registry.get("kick", failure_threshold=5, recovery_timeout=60.0)
+        if self.config.donations_token:
+            registry.get("donationalerts", failure_threshold=3, recovery_timeout=120.0)
+        if self.config.spotify_client_id:
+            registry.get("spotify", failure_threshold=5, recovery_timeout=60.0)
+
+        # Initialize rate limiter
+        get_rate_limiter()
+        logger.info("Infrastructure initialized: circuit breakers, rate limiter")
+
     async def _sync_commands(self) -> None:
         if self.user is None or self.application_id is None:
             logger.debug("Синк команд: application_id ещё не известен — пропуск")

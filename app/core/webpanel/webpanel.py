@@ -2624,6 +2624,23 @@ class WebPanel:
             return None
         return f"https://discord.com/api/webhooks/{match.group(1)}/{match.group(2)}"
 
+    async def _acquire_webhook_slot(self) -> None:
+        """Дожидается слота rate limiter перед обращением к Discord API."""
+        from app.core.rate_limiter import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        wait = await limiter.acquire("/api/webhooks")
+        if wait > 0:
+            await asyncio.sleep(wait)
+
+    @staticmethod
+    def _note_webhook_headers(headers: Any) -> None:
+        """Учитывает заголовки rate limit от Discord API."""
+        from app.core.rate_limiter import get_rate_limiter
+
+        if headers:
+            get_rate_limiter().update_from_headers(dict(headers))
+
     async def _read_json(self, request: web.Request) -> dict[str, Any]:
         try:
             payload = await request.json()
@@ -2648,10 +2665,12 @@ class WebPanel:
         if base is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL"}, status=400)
         try:
+            await self._acquire_webhook_slot()
             async with self._require_http().post(
                 f"{base}?wait=true", json=self._webhook_body(payload), allow_redirects=False
             ) as response:
                 data = await self._read_remote_json(response)
+                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
@@ -2669,10 +2688,12 @@ class WebPanel:
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
         try:
+            await self._acquire_webhook_slot()
             async with self._require_http().patch(
                 f"{base}/messages/{message_id}", json=self._webhook_body(payload), allow_redirects=False
             ) as response:
                 data = await self._read_remote_json(response)
+                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
@@ -2690,8 +2711,10 @@ class WebPanel:
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
         try:
+            await self._acquire_webhook_slot()
             async with self._require_http().get(f"{base}/messages/{message_id}", allow_redirects=False) as response:
                 data = await self._read_remote_json(response)
+                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
