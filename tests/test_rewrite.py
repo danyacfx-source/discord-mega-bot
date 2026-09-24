@@ -72,7 +72,7 @@ async def test_build_all_cogs_loads_real_cogs(config: Config, db: Database) -> N
     from rewrite.cogs import build_all_cogs
 
     loaded = await build_all_cogs(root, start_tasks=False)
-    assert len(loaded) == 36, loaded
+    assert len(loaded) == 37, loaded
     kick_cog = root.bot.get_cog("Kick")
     assert kick_cog is not None
     # Ког реально получил сервис из графа (не пересоздан контейнером).
@@ -120,7 +120,7 @@ async def test_pipeline_smoke(config: Config, db: Database) -> None:
 
     root = assemble(config=config, db=db)
     await build_all_cogs(root, start_tasks=False)
-    assert root.bot.get_cog("Health") is not None
+    assert root.bot.get_cog("General") is not None
     await root.bot.close()
     assert root.bot.db is None
 

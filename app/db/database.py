@@ -1,10 +1,15 @@
 """Управление подключением к SQLite через aiosqlite."""
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 import aiosqlite
+
+logger = logging.getLogger("bot.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS guild_settings (
@@ -170,6 +175,7 @@ class Database:
     def __init__(self, path: str) -> None:
         self.path = path
         self._conn: aiosqlite.Connection | None = None
+        self._postgres: Any | None = None
 
     @property
     def conn(self) -> aiosqlite.Connection:
@@ -178,14 +184,25 @@ class Database:
         return self._conn
 
     async def connect(self) -> None:
+        if self.path.startswith(("postgresql://", "postgres://")):
+            from app.db.postgres_database import PostgresDatabase
+
+            self._postgres = PostgresDatabase(self.path)
+            await self._postgres.connect()
+            return
         parent = Path(self.path).parent
         parent.mkdir(parents=True, exist_ok=True)
         self._conn = await aiosqlite.connect(self.path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode=WAL")
+        await self._conn.execute("PRAGMA synchronous=NORMAL")
+        await self._conn.execute("PRAGMA busy_timeout=5000")
+        await self._conn.execute("PRAGMA temp_store=MEMORY")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(_SCHEMA)
         await self._run_migrations()
+        # Обновляет статистику query planner без тяжёлого полного ANALYZE.
+        await self._conn.execute("PRAGMA optimize")
         integrity = await self.integrity_check()
         if integrity != "ok":
             raise RuntimeError(f"Проверка целостности SQLite не пройдена: {integrity}")
@@ -400,6 +417,8 @@ class Database:
         await conn.commit()
 
     async def integrity_check(self) -> str:
+        if self._postgres is not None:
+            return await self._postgres.integrity_check()
         cursor = await self.conn.execute("PRAGMA integrity_check")
         row = await cursor.fetchone()
         return str(row[0]) if row else "unknown"
@@ -407,20 +426,55 @@ class Database:
     async def execute_returning(
         self, sql: str, params: tuple[Any, ...] = ()
     ) -> aiosqlite.Row | None:
+        if self._postgres is not None:
+            return await self._postgres.execute_returning(sql, params)
         cursor = await self.conn.execute(sql, params)
         row = await cursor.fetchone()
         await self.conn.commit()
         return row
 
     async def backup(self, destination: str | Path) -> Path:
-        """Создаёт консистентный backup через SQLite backup API."""
+        """Создаёт консистентный backup через SQLite backup API.
+
+        Запись идёт во временный файл с последующей атомарной заменой. Так
+        процесс, который в этот момент читает backup, никогда не увидит
+        полуготовую SQLite-базу после сбоя или остановки контейнера.
+        """
+        if self._postgres is not None:
+            return await self._postgres.backup(destination)
         target = Path(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
-        backup_conn = await aiosqlite.connect(target)
+        temp_path: Path | None = None
         try:
-            await self.conn.backup(backup_conn)
+            with NamedTemporaryFile(
+                prefix=f".{target.name}.",
+                suffix=".tmp",
+                dir=target.parent,
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+            if temp_path is None:
+                raise RuntimeError("Не удалось подготовить временный файл SQLite backup")
+            backup_conn = await aiosqlite.connect(temp_path)
+            try:
+                await self.conn.backup(backup_conn)
+                cursor = await backup_conn.execute("PRAGMA integrity_check")
+                row = await cursor.fetchone()
+                if not row or str(row[0]).lower() != "ok":
+                    raise RuntimeError(f"Проверка backup SQLite не пройдена: {row[0] if row else 'unknown'}")
+            finally:
+                await backup_conn.close()
+            os.replace(temp_path, target)
+            temp_path = None
         finally:
-            await backup_conn.close()
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    # Windows держит temp-файл открытым, пока aiosqlite worker
+                    # дочищает отменённую операцию. Не перекрываем CancelledError
+                    # периодического backup-таска этой ошибкой.
+                    logger.debug("Не удалось удалить временный SQLite backup: %s", temp_path)
         return target
 
     async def record_admin_audit(
@@ -476,19 +530,29 @@ class Database:
         return [dict(row) for row in rows]
 
     async def close(self) -> None:
+        if self._postgres is not None:
+            await self._postgres.close()
+            self._postgres = None
+            return
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
 
     async def execute(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Cursor:
+        if self._postgres is not None:
+            return await self._postgres.execute(sql, params)
         cursor = await self.conn.execute(sql, params)
         await self.conn.commit()
         return cursor
 
     async def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Row | None:
+        if self._postgres is not None:
+            return await self._postgres.fetchone(sql, params)
         cursor = await self.conn.execute(sql, params)
         return await cursor.fetchone()
 
     async def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[aiosqlite.Row]:
+        if self._postgres is not None:
+            return await self._postgres.fetchall(sql, params)
         cursor = await self.conn.execute(sql, params)
         return list(await cursor.fetchall())

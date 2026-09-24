@@ -36,6 +36,9 @@ class DonationService:
             timeout=config.api_timeout_seconds,
             user_agent="DiscordMegaBot/3.3 DonationAlerts",
             proxy=config.api_proxy,
+            max_concurrency=config.api_max_concurrency,
+            circuit_failure_threshold=config.api_circuit_failure_threshold,
+            circuit_reset_seconds=config.api_circuit_reset_seconds,
         )
         self._token: str | None = config.donations_token
 

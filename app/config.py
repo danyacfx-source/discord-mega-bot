@@ -32,10 +32,19 @@ class Config:
     status_activity: str
     owner_id: int | None
     version: str = "3.3.0"
+    database_url: str | None = None
+
+    # Резервные копии SQLite (для single-server deployment).
+    db_backup_dir: str = str(_PROJECT_ROOT / "data" / "backups")
+    db_backup_interval_hours: float = 24.0
+    db_backup_retention: int = 7
 
     # Общий сетевой слой внешних API
     api_timeout_seconds: float = 20.0
     api_proxy: str | None = None
+    api_max_concurrency: int = 8
+    api_circuit_failure_threshold: int = 5
+    api_circuit_reset_seconds: float = 60.0
 
     # Spotify Client Credentials для импорта треков/плейлистов
     spotify_client_id: str | None = None
@@ -104,7 +113,14 @@ class Config:
     panel_admin_password: str | None = None
     panel_moderator_password: str | None = None
     panel_viewer_password: str | None = None
+    panel_password_hash: str | None = None
+    panel_admin_password_hash: str | None = None
+    panel_moderator_password_hash: str | None = None
+    panel_viewer_password_hash: str | None = None
     panel_public_url: str | None = None
+    panel_oauth_client_id: str | None = None
+    panel_oauth_client_secret: str | None = None
+    panel_oauth_redirect_url: str | None = None
 
     # Дни рождения
     birthday_channel_id: int | None = None
@@ -219,11 +235,18 @@ class Config:
             token=os.environ["BOT_TOKEN"],
             prefix=os.getenv("BOT_PREFIX", "!"),
             db_path=os.getenv("DB_PATH", str(_PROJECT_ROOT / "data" / "bot.db")),
+            database_url=os.getenv("DATABASE_URL") or None,
+            db_backup_dir=os.getenv("DB_BACKUP_DIR", str(_PROJECT_ROOT / "data" / "backups")),
+            db_backup_interval_hours=max(1.0, float(os.getenv("DB_BACKUP_INTERVAL_HOURS", "24"))),
+            db_backup_retention=max(1, min(90, int(os.getenv("DB_BACKUP_RETENTION", "7")))),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             status_activity=os.getenv("STATUS_ACTIVITY", "играет с кодом"),
             owner_id=int(owner_raw) if owner_raw and owner_raw.isdigit() else None,
             api_timeout_seconds=max(5.0, min(120.0, float(os.getenv("API_TIMEOUT_SECONDS", "20")))),
             api_proxy=os.getenv("API_PROXY") or None,
+            api_max_concurrency=max(1, min(64, int(os.getenv("API_MAX_CONCURRENCY", "8")))),
+            api_circuit_failure_threshold=max(1, min(20, int(os.getenv("API_CIRCUIT_FAILURE_THRESHOLD", "5")))),
+            api_circuit_reset_seconds=max(5.0, min(900.0, float(os.getenv("API_CIRCUIT_RESET_SECONDS", "60")))),
             spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID") or None,
             spotify_client_secret=os.getenv("SPOTIFY_CLIENT_SECRET") or None,
             donations_token=os.getenv("DONATIONS_TOKEN"),
@@ -274,7 +297,14 @@ class Config:
             panel_admin_password=os.getenv("PANEL_ADMIN_PASSWORD"),
             panel_moderator_password=os.getenv("PANEL_MODERATOR_PASSWORD"),
             panel_viewer_password=os.getenv("PANEL_VIEWER_PASSWORD"),
+            panel_password_hash=os.getenv("PANEL_PASSWORD_HASH") or None,
+            panel_admin_password_hash=os.getenv("PANEL_ADMIN_PASSWORD_HASH") or None,
+            panel_moderator_password_hash=os.getenv("PANEL_MODERATOR_PASSWORD_HASH") or None,
+            panel_viewer_password_hash=os.getenv("PANEL_VIEWER_PASSWORD_HASH") or None,
             panel_public_url=os.getenv("PANEL_PUBLIC_URL"),
+            panel_oauth_client_id=os.getenv("PANEL_OAUTH_CLIENT_ID") or None,
+            panel_oauth_client_secret=os.getenv("PANEL_OAUTH_CLIENT_SECRET") or None,
+            panel_oauth_redirect_url=os.getenv("PANEL_OAUTH_REDIRECT_URL") or None,
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
             birthday_ping_role_id=_single_int(os.getenv("BIRTHDAY_PING_ROLE_ID")),

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.core.overlay import Overlay
     from app.core.root import Root
     from app.core.webpanel import WebPanel
+    from app.db.backup_manager import DatabaseBackupManager
     from app.db.database import Database
     from app.services import Services
 
@@ -33,6 +34,7 @@ class MegaBot(commands.Bot):
     root: Root | None
     webpanel: WebPanel | None
     overlay: Overlay | None
+    db_backups: DatabaseBackupManager | None
 
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.all()
@@ -48,6 +50,7 @@ class MegaBot(commands.Bot):
         self.root = None
         self.webpanel = None
         self.overlay = None
+        self.db_backups = None
         self.start_time = datetime.now(UTC)
         self.tree.on_error = self.on_app_command_error
 
@@ -60,8 +63,16 @@ class MegaBot(commands.Bot):
         from app.core.loader import load_cogs, register_persistent_views
         from app.db.database import Database
 
-        self.db = Database(self.config.db_path)
+        self.db = Database(self.config.database_url or self.config.db_path)
         await self.db.connect()
+        from app.db.backup_manager import DatabaseBackupManager
+
+        self.db_backups = DatabaseBackupManager(
+            self.db,
+            self.config.db_backup_dir,
+            self.config.db_backup_interval_hours,
+            self.config.db_backup_retention,
+        )
         # Весь граф обязан ссылаться на текущий Discord-клиент. Без явной
         # передачи ``self`` composition root создаст второй MegaBot, и сервисы
         # (логи, музыка, тикеты) окажутся привязаны не к активному соединению.
@@ -81,26 +92,12 @@ class MegaBot(commands.Bot):
             self.overlay = Overlay(self)
             await self.overlay.start()
         await self._sync_commands()
+        # Запускаем первый backup только после bootstrap: SQLite backup API
+        # использует очередь того же aiosqlite-соединения и не должен
+        # конкурировать с регистрацией persistent views на старте.
+        if self.db_backups is not None:
+            self.db_backups.start()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
-
-        # Initialize infrastructure components
-        from app.core.circuit_breaker import get_circuit_breaker_registry
-        from app.core.rate_limiter import get_rate_limiter
-
-        # Pre-create circuit breakers for external services
-        registry = get_circuit_breaker_registry()
-        if self.config.twitch_client_id:
-            registry.get("twitch", failure_threshold=5, recovery_timeout=60.0)
-        if self.config.kick_channel_slug:
-            registry.get("kick", failure_threshold=5, recovery_timeout=60.0)
-        if self.config.donations_token:
-            registry.get("donationalerts", failure_threshold=3, recovery_timeout=120.0)
-        if self.config.spotify_client_id:
-            registry.get("spotify", failure_threshold=5, recovery_timeout=60.0)
-
-        # Initialize rate limiter
-        get_rate_limiter()
-        logger.info("Infrastructure initialized: circuit breakers, rate limiter")
 
     async def _sync_commands(self) -> None:
         if self.user is None or self.application_id is None:
@@ -146,6 +143,13 @@ class MegaBot(commands.Bot):
                 logger.exception("Ошибка при остановке оверлея")
             self.overlay = None
         db = self.db
+        backups = self.db_backups
+        if backups is not None:
+            try:
+                await backups.stop()
+            except Exception:
+                logger.exception("Ошибка при остановке планировщика SQLite backup")
+            self.db_backups = None
         try:
             await super().close()
         finally:

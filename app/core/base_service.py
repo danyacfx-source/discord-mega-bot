@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 if TYPE_CHECKING:
     from app.db.base_repository import BaseRepository

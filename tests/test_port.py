@@ -48,6 +48,9 @@ def test_config_new_options(tmp_path):
         "\n".join(
             [
                 "BOT_TOKEN=t",
+                "DB_BACKUP_DIR=var/backups",
+                "DB_BACKUP_INTERVAL_HOURS=12",
+                "DB_BACKUP_RETENTION=11",
                     "API_TIMEOUT_SECONDS=37",
                     "API_PROXY=http://127.0.0.1:8080",
                 "TWITCH_CHANNELS=a,b",
@@ -114,6 +117,9 @@ def test_config_new_options(tmp_path):
     config = Config.from_env(env)
     assert config.api_timeout_seconds == 37.0
     assert config.api_proxy == "http://127.0.0.1:8080"
+    assert config.db_backup_dir == "var/backups"
+    assert config.db_backup_interval_hours == 12.0
+    assert config.db_backup_retention == 11
     assert config.twitch_channels == ("a", "b")
     assert config.temp_voice_trigger_ids == (111, 222)
     assert config.logs_ignore_channel_ids == (5,)
@@ -589,6 +595,19 @@ async def test_webpanel_modules_status(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_prometheus_metrics(tmp_path):
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            response = await client.get("/metrics", headers={"X-Panel-Token": panel._static_token or ""})
+            assert response.status == 200
+            body = await response.text()
+            assert "megabot_panel_sessions_active" in body
+            assert "megabot_api_requests_total" in body
+
+
+@pytest.mark.asyncio
 async def test_webpanel_password_login(tmp_path):
     bot = _panel_bot(tmp_path, panel_password="hunter2")
     panel = WebPanel(bot)
@@ -604,6 +623,40 @@ async def test_webpanel_password_login(tmp_path):
             headers = {"X-Panel-Token": body["token"]}
             status_resp = await client.get("/api/status", headers=headers)
             assert status_resp.status == 200
+
+
+@pytest.mark.asyncio
+async def test_webpanel_argon2_password_hash_login(tmp_path):
+    from argon2 import PasswordHasher
+
+    password_hash = PasswordHasher().hash("hunter2")
+    bot = _panel_bot(tmp_path, panel_admin_password_hash=password_hash)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            wrong = await client.post("/api/login", json={"password": "nope"})
+            assert wrong.status == 401
+            ok = await client.post("/api/login", json={"password": "hunter2"})
+            body = await ok.json()
+            assert ok.status == 200 and body["ok"] is True and body["role"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_webpanel_oauth_redirect(tmp_path):
+    bot = _panel_bot(
+        tmp_path,
+        panel_oauth_client_id="client-id",
+        panel_oauth_client_secret="client-secret",
+        panel_oauth_redirect_url="https://panel.example/oauth/discord/callback",
+    )
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            response = await client.get("/oauth/discord", allow_redirects=False)
+            assert response.status == 302
+            location = response.headers["Location"]
+            assert location.startswith("https://discord.com/oauth2/authorize?")
+            assert panel._oauth_states
 
 
 @pytest.mark.asyncio
@@ -708,11 +761,16 @@ async def test_webpanel_logout_revokes_session(tmp_path):
     async with TestServer(panel._create_app()) as server:
         async with TestClient(server) as client:
             login = await client.post("/api/login", json={"password": "hunter2"})
-            token = (await login.json())["token"]
+            login_body = await login.json()
+            token = login_body["token"]
             headers = {"X-Panel-Token": token}
             before = await client.get("/api/status", headers=headers)
             assert before.status == 200
 
+            blocked = await client.post("/api/logout", headers=headers)
+            assert blocked.status == 403
+
+            headers["X-Panel-CSRF"] = login_body["csrf"]
             out = await client.post("/api/logout", headers=headers)
             assert out.status == 200
 

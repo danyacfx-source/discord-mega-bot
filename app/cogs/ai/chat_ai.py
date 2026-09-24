@@ -87,6 +87,9 @@ class ChatAICog(MegaCog, name="ChatAI"):
                 "Gemini",
                 timeout=self.bot.config.ai_timeout_seconds,
                 proxy=self.bot.config.ai_proxy or None,
+                max_concurrency=self.bot.config.api_max_concurrency,
+                circuit_failure_threshold=self.bot.config.api_circuit_failure_threshold,
+                circuit_reset_seconds=self.bot.config.api_circuit_reset_seconds,
             )
         return self._api
 

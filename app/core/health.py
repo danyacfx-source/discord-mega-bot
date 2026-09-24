@@ -1,7 +1,6 @@
 """Мониторинг здоровья сервисов."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -9,11 +8,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-import discord
-
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.db.database import Database
 
 logger = logging.getLogger("bot.health")
 
@@ -188,8 +184,9 @@ class HealthChecker:
 
     async def _check_memory(self) -> ServiceHealth:
         """Проверяет использование памяти."""
-        import psutil
         import tracemalloc
+
+        import psutil
 
         process = psutil.Process()
         memory_mb = process.memory_info().rss / 1024 / 1024

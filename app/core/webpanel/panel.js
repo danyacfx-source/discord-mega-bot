@@ -1,5 +1,17 @@
 let TOKEN = "__PANEL_TOKEN__" || localStorage.getItem("panel-token") || "";
+let CSRF_TOKEN = localStorage.getItem("panel-csrf") || "";
 const PANEL_LOGIN = "__PANEL_LOGIN__" === "1";
+const PANEL_OAUTH = "__PANEL_OAUTH__" === "1";
+const oauthQuery = typeof URLSearchParams === "function"
+  ? new URLSearchParams(location.search)
+  : { get: () => null };
+if (oauthQuery.get("oauth_token")) {
+  TOKEN = oauthQuery.get("oauth_token");
+  CSRF_TOKEN = oauthQuery.get("oauth_csrf") || "";
+  localStorage.setItem("panel-token", TOKEN);
+  if (CSRF_TOKEN) localStorage.setItem("panel-csrf", CSRF_TOKEN);
+  history.replaceState({}, document.title, location.pathname);
+}
 const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b232, dark: 0x111214, grey: 0x96989d, orange: 0xf2780d, teal: 0x1abc9c, pink: 0xeb459e};
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
@@ -47,7 +59,9 @@ function toast(msg, ok) {
 }
 
 async function api(url, body, method) {
-  const opts = { method: method || (body ? "POST" : "GET"), headers: { "X-Panel-Token": TOKEN } };
+  const requestMethod = method || (body ? "POST" : "GET");
+  const opts = { method: requestMethod, headers: { "X-Panel-Token": TOKEN } };
+  if (requestMethod !== "GET" && CSRF_TOKEN) opts.headers["X-Panel-CSRF"] = CSRF_TOKEN;
   if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
   try {
     const r = await fetch(url, opts);
@@ -71,7 +85,9 @@ async function doLogin() {
   const d = await r.json().catch(() => ({}));
   if (d && d.token) {
     TOKEN = d.token;
+    CSRF_TOKEN = d.csrf || "";
     localStorage.setItem("panel-token", d.token);
+    if (CSRF_TOKEN) localStorage.setItem("panel-csrf", CSRF_TOKEN);
     $("login_pw").value = "";
     hideLogin();
     bootInit();
@@ -93,6 +109,7 @@ function hideLogin() {
 async function logout() {
   await api("/api/logout", null, "POST");
   localStorage.removeItem("panel-token");
+  localStorage.removeItem("panel-csrf");
   location.reload();
 }
 
@@ -102,7 +119,11 @@ async function uploadFile(file, targetId, cb) {
   if (file.size > 8 * 1024 * 1024) return toast("Файл больше 8 МБ", false);
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch("/api/upload", { method: "POST", headers: { "X-Panel-Token": TOKEN }, body: fd });
+  const r = await fetch("/api/upload", {
+    method: "POST",
+    headers: { "X-Panel-Token": TOKEN, ...(CSRF_TOKEN ? { "X-Panel-CSRF": CSRF_TOKEN } : {}) },
+    body: fd,
+  });
   const d = await r.json().catch(() => ({}));
   if (r.status === 401) {
     if (PANEL_LOGIN) showLogin(); else if (TOKEN) location.reload();
@@ -1939,8 +1960,19 @@ applyTheme();
 buildAccents();
 $("btn_login").onclick = doLogin;
 $("login_pw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+if ($("btn_oauth")) {
+  $("btn_oauth").style.display = PANEL_OAUTH ? "block" : "none";
+  $("btn_oauth").onclick = () => { location.href = "/oauth/discord"; };
+}
 
-function bootInit() {
+async function bootInit() {
+  if (TOKEN) {
+    const session = await api("/api/session");
+    if (session.data && session.data.csrf) {
+      CSRF_TOKEN = session.data.csrf;
+      localStorage.setItem("panel-csrf", CSRF_TOKEN);
+    }
+  }
   renderEmbeds();
   renderButtons();
   renderPreview();
@@ -1950,5 +1982,5 @@ function bootInit() {
   startOverviewTimer();
   if (settingsData) renderSettings();
 }
-if (PANEL_LOGIN) { showLogin(); startOverviewTimer(); }
+if (PANEL_LOGIN && !TOKEN) { showLogin(); startOverviewTimer(); }
 else bootInit();

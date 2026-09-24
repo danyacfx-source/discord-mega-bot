@@ -7,7 +7,6 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from app.core.base_service import BaseService
 from app.db.settings_repository import _INT_COLUMNS
 
 if TYPE_CHECKING:
@@ -15,10 +14,10 @@ if TYPE_CHECKING:
     from app.db.settings_repository import SettingsRepository
 
 
-class SettingsService(BaseService):
+class SettingsService:
     def __init__(self, repo: SettingsRepository) -> None:
-        super().__init__(repo)
-        self._settings_cache: dict[int, tuple[float, dict[str, Any]]] = {}
+        self._repo = repo
+        self._cache: dict[int, tuple[float, dict[str, Any]]] = {}
         self._locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._ttl = 120.0
 
@@ -28,37 +27,27 @@ class SettingsService(BaseService):
 
     async def get(self, guild_id: int) -> dict[str, Any]:
         now = time.monotonic()
-        cached = self._settings_cache.get(guild_id)
+        cached = self._cache.get(guild_id)
         if cached is not None and cached[0] > now:
             return dict(cached[1])
         async with self._locks[guild_id]:
             now = time.monotonic()
-            cached = self._settings_cache.get(guild_id)
+            cached = self._cache.get(guild_id)
             if cached is not None and cached[0] > now:
                 return dict(cached[1])
-            settings = await self._safe_db_call(
-                self._repo.get(guild_id),
-                fallback={},
-                cache_key=f"settings_{guild_id}",
-            )
-            if not settings:
-                # Fallback to cached or empty dict
-                return self._get_cached(f"settings_{guild_id}") or {}
+            settings = await self._repo.get(guild_id)
             for column in _INT_COLUMNS:
                 raw = settings.get(column)
                 settings[column] = int(raw) if raw else None
             settings["automod_enabled"] = bool(settings.get("automod_enabled"))
-            self._settings_cache[guild_id] = (now + self._ttl, dict(settings))
+            self._cache[guild_id] = (now + self._ttl, dict(settings))
             return dict(settings)
 
     async def update(self, guild_id: int, **kwargs: Any) -> None:
         """Обновляет переданные колонки. ``None`` — осознанная очистка значения."""
         for column, value in kwargs.items():
-            await self._safe_db_call(
-                self._repo.set(guild_id, column, value),
-                cache_key=f"settings_{guild_id}",
-            )
-        self._settings_cache.pop(guild_id, None)
+            await self._repo.set(guild_id, column, value)
+        self._cache.pop(guild_id, None)
 
     async def set_blocked_words(self, guild_id: int, words: list[str]) -> list[str]:
         """Полностью заменяет список запрещённых слов (нормализует и убирает дубли)."""
@@ -67,11 +56,8 @@ class SettingsService(BaseService):
             clean = str(word).strip().lower()
             if clean and clean not in normalized:
                 normalized.append(clean)
-        await self._safe_db_call(
-            self._repo.set(guild_id, "blocked_words", json.dumps(normalized, ensure_ascii=False)),
-            cache_key=f"blocked_words_{guild_id}",
-        )
-        self._settings_cache.pop(guild_id, None)
+        await self._repo.set(guild_id, "blocked_words", json.dumps(normalized, ensure_ascii=False))
+        self._cache.pop(guild_id, None)
         return normalized
 
     async def blocked_words(self, guild_id: int) -> list[str]:

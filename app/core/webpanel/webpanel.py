@@ -15,14 +15,17 @@ from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import aiohttp
 import discord
 import psutil
 from aiohttp import web
+from argon2 import PasswordHasher
+from argon2.exceptions import VerificationError
 
 from app.core import embeds
+from app.core.api_client import ApiClient
 from app.core.webpanel.log_ring import RingBufferHandler
 
 if TYPE_CHECKING:
@@ -36,6 +39,7 @@ logger = logging.getLogger("bot.webpanel")
 class _PanelSession(TypedDict):
     expires: float
     role: str
+    csrf: str
 
 
 _PANEL_ROLE_KEY = web.RequestKey("panel_role", str)
@@ -378,6 +382,9 @@ class WebPanel:
         self.port = config.panel_port
         self.password = config.panel_password
         self.public_url = config.panel_public_url
+        self._oauth_client_id = config.panel_oauth_client_id
+        self._oauth_client_secret = config.panel_oauth_client_secret
+        self._oauth_redirect_url = config.panel_oauth_redirect_url
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
         self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
@@ -385,14 +392,21 @@ class WebPanel:
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
         self._static_token: str | None = None if self.password else self._load_static_token()
         self._sessions: dict[str, _PanelSession] = {}
+        self._oauth_states: dict[str, float] = {}
         self._panel_passwords: dict[str, str] = {}
+        self._panel_password_hashes: dict[str, str] = {}
+        self._password_hasher = PasswordHasher()
         if self.password:
             self._panel_passwords["owner"] = self.password
         for role in ("admin", "moderator", "viewer"):
             value = getattr(config, f"panel_{role}_password", None)
             if value:
                 self._panel_passwords[role] = value
-        self._password_auth = bool(self._panel_passwords)
+        for role in ("owner", "admin", "moderator", "viewer"):
+            value = getattr(config, f"panel_{role}_password_hash", None)
+            if value:
+                self._panel_password_hashes[role] = value
+        self._password_auth = bool(self._panel_passwords or self._panel_password_hashes)
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
         self._runner: web.AppRunner | None = None
@@ -412,10 +426,14 @@ class WebPanel:
 
     @property
     def services(self) -> Services:
-        services = self.services
+        services = self.bot.services
         if services is None:
             raise RuntimeError("Сервисы недоступны до запуска вебпанели")
         return services
+
+    @property
+    def _oauth_enabled(self) -> bool:
+        return bool(self._oauth_client_id and self._oauth_client_secret and self._oauth_redirect_url)
 
     # --- жизненный цикл ---
 
@@ -447,10 +465,14 @@ class WebPanel:
         app.router.add_get("/audit", self._serve_audit_page)
         app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
+        app.router.add_get("/oauth/discord", self._oauth_start)
+        app.router.add_get("/oauth/discord/callback", self._oauth_callback)
         app.router.add_post("/api/logout", self._authorized(self._api_logout, "viewer"))
         app.router.add_get("/api/session", self._authorized(self._api_session))
         app.router.add_get("/api/status", self._authorized(self._api_status))
         app.router.add_get("/api/health", self._authorized(self._api_health))
+        app.router.add_get("/api/metrics", self._authorized(self._api_metrics))
+        app.router.add_get("/metrics", self._authorized(self._prometheus_metrics))
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
         app.router.add_get("/api/monitor", self._authorized(self._api_monitor))
         app.router.add_get("/api/stats", self._authorized(self._api_stats))
@@ -521,13 +543,13 @@ class WebPanel:
         # That is convenient for localhost, but it would expose full admin
         # access to anyone who can open a public URL. Fail closed instead of
         # relying on a warning that is easy to miss in deployment logs.
-        if not self._password_auth and (self.host not in _LOCAL_HOSTS or self.public_url):
+        if not (self._password_auth or self._oauth_enabled) and (self.host not in _LOCAL_HOSTS or self.public_url):
             raise RuntimeError(
                 "PANEL_PASSWORD обязателен для публичной веб-панели "
                 "(задайте пароль или оставьте PANEL_HOST локальным без PANEL_PUBLIC_URL)"
             )
         self._http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5))
-        if not self._password_auth and self.host not in _LOCAL_HOSTS:
+        if not (self._password_auth or self._oauth_enabled) and self.host not in _LOCAL_HOSTS:
             logger.warning(
                 "Вебпанель без PANEL_PASSWORD слушает %s:%d — страница доступна по статическому токену. "
                 "В открытых сетях задайте PANEL_PASSWORD.",
@@ -584,7 +606,7 @@ class WebPanel:
         try:
             response = await handler(request)
         except web.HTTPException as exc:
-            response = exc
+            response = web.Response(status=exc.status, headers=exc.headers, text=exc.text)
         except Exception:
             logger.exception("Необработанная ошибка HTTP %s %s", request.method, request.path)
             response = self._json({"ok": False, "error": "Внутренняя ошибка сервера"}, status=500)
@@ -609,7 +631,7 @@ class WebPanel:
 
     def _required_role(self, request: web.Request) -> str:
         if request.method == "GET":
-            if request.path in {"/api/backup", "/api/backup/db"}:
+            if request.path in {"/api/backup", "/api/backup/db", "/api/metrics"}:
                 return "admin"
             return "viewer"
         if request.path in {
@@ -643,6 +665,12 @@ class WebPanel:
             required = required_role or self._required_role(request)
             if role is None or self._role_rank(role) < self._role_rank(required):
                 return self._json({"ok": False, "error": "Недостаточно прав"}, status=403 if role else 401)
+            if request.method != "GET" and self._password_auth:
+                token = request.headers.get("X-Panel-Token", "")
+                expected_csrf = self._csrf_for_token(token)
+                provided_csrf = request.headers.get("X-Panel-CSRF", "")
+                if not expected_csrf or not provided_csrf or not secrets.compare_digest(expected_csrf, provided_csrf):
+                    return self._json({"ok": False, "error": "Некорректный CSRF-токен"}, status=403)
             request[_PANEL_ROLE_KEY] = role
             response = await handler(request)
             await self._record_admin_audit(request, role, response)
@@ -691,6 +719,12 @@ class WebPanel:
     def _check_token(self, request: web.Request) -> str | None:
         return self._check_token_value(request.headers.get("X-Panel-Token", ""))
 
+    def _csrf_for_token(self, token: str) -> str | None:
+        session = self._sessions.get(token)
+        if session is None or session["expires"] <= time.time():
+            return None
+        return session["csrf"]
+
     def _check_token_value(self, token: str) -> str | None:
         if not token:
             return None
@@ -716,10 +750,12 @@ class WebPanel:
 
     async def _api_session(self, request: web.Request) -> web.Response:
         role = request.get(_PANEL_ROLE_KEY, "viewer")
+        token = request.headers.get("X-Panel-Token", "")
         return self._json(
             {
                 "ok": True,
                 "role": role,
+                "csrf": self._csrf_for_token(token),
                 "permissions": {
                     "read": True,
                     "moderate": self._role_rank(role) >= self._role_rank("moderator"),
@@ -728,6 +764,97 @@ class WebPanel:
                 },
             }
         )
+
+    async def _oauth_start(self, request: web.Request) -> web.Response:
+        if not self._oauth_enabled:
+            raise web.HTTPNotFound(text="Discord OAuth2 не настроен")
+        now = time.time()
+        self._oauth_states = {key: expires for key, expires in self._oauth_states.items() if expires > now}
+        state = secrets.token_urlsafe(32)
+        self._oauth_states[state] = now + 300
+        query = urlencode(
+            {
+                "client_id": self._oauth_client_id,
+                "response_type": "code",
+                "redirect_uri": self._oauth_redirect_url,
+                "scope": "identify guilds",
+                "state": state,
+            }
+        )
+        return web.Response(status=302, headers={"Location": f"https://discord.com/oauth2/authorize?{query}"})
+
+    async def _oauth_callback(self, request: web.Request) -> web.Response:
+        state = request.query.get("state", "")
+        if not self._oauth_enabled or not state or self._oauth_states.pop(state, 0) <= time.time():
+            raise web.HTTPBadRequest(text="OAuth2 state истёк или недействителен")
+        if request.query.get("error"):
+            raise web.HTTPUnauthorized(text="Discord OAuth2 отклонил авторизацию")
+        code = request.query.get("code", "")
+        if not code or self._http is None:
+            raise web.HTTPBadRequest(text="Discord OAuth2 не вернул code")
+
+        async with self._http.post(
+            "https://discord.com/api/oauth2/token",
+            data={
+                "client_id": self._oauth_client_id,
+                "client_secret": self._oauth_client_secret,
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": self._oauth_redirect_url,
+            },
+        ) as token_response:
+            if token_response.status != 200:
+                raise web.HTTPUnauthorized(text="Не удалось обменять OAuth2 code")
+            token_data = await token_response.json()
+        access_token = token_data.get("access_token")
+        if not isinstance(access_token, str) or not access_token:
+            raise web.HTTPUnauthorized(text="Discord не вернул access token")
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+        async with self._http.get("https://discord.com/api/users/@me", headers=headers) as user_response:
+            if user_response.status != 200:
+                raise web.HTTPUnauthorized(text="Не удалось получить Discord-профиль")
+            user_data = await user_response.json()
+        try:
+            user_id = int(user_data["id"])
+        except (KeyError, TypeError, ValueError):
+            raise web.HTTPUnauthorized(text="Некорректный Discord-профиль")
+
+        async with self._http.get("https://discord.com/api/users/@me/guilds", headers=headers) as guilds_response:
+            if guilds_response.status != 200:
+                raise web.HTTPUnauthorized(text="Не удалось получить список серверов")
+            guilds = await guilds_response.json()
+        if not isinstance(guilds, list):
+            raise web.HTTPUnauthorized(text="Discord вернул некорректный список серверов")
+        primary_guild = self._primary_guild()
+        target_guild = self.bot.config.guild_id or (primary_guild.id if primary_guild else None)
+        member_guild = next(
+            (item for item in guilds if isinstance(item, dict) and str(item.get("id")) == str(target_guild)),
+            None,
+        )
+        if member_guild is None:
+            raise web.HTTPForbidden(text="У Discord-пользователя нет доступа к серверу бота")
+
+        try:
+            permissions = int(str(member_guild.get("permissions") or 0))
+        except (TypeError, ValueError):
+            raise web.HTTPUnauthorized(text="Discord вернул некорректные права пользователя")
+        if self.bot.config.owner_id == user_id or bool(member_guild.get("owner")):
+            role = "owner"
+        elif permissions & (1 << 3) or permissions & (1 << 5):
+            role = "admin"
+        elif permissions & (1 << 13):
+            role = "moderator"
+        else:
+            role = "viewer"
+
+        session_token = secrets.token_urlsafe(32)
+        csrf = secrets.token_urlsafe(32)
+        self._sessions[session_token] = {"expires": time.time() + _SESSION_TTL, "role": role, "csrf": csrf}
+        if len(self._sessions) > _SESSION_MAX:
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        query = urlencode({"oauth_token": session_token, "oauth_csrf": csrf})
+        return web.Response(status=302, headers={"Location": f"/admin?{query}"})
 
     @staticmethod
     def _json(data: dict[str, Any], status: int = 200) -> web.Response:
@@ -744,6 +871,7 @@ class WebPanel:
             html = html.replace("__PANEL_TOKEN__", "")
         else:
             html = html.replace("__PANEL_TOKEN__", self._static_token or "")
+        html = html.replace("__PANEL_OAUTH__", "1" if self._oauth_enabled else "0")
         return web.Response(text=html, content_type="text/html", charset="utf-8")
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
@@ -768,6 +896,7 @@ class WebPanel:
             body = body.replace("__PANEL_TOKEN__", "").replace("__PANEL_LOGIN__", "1")
         else:
             body = body.replace("__PANEL_TOKEN__", self._static_token or "").replace("__PANEL_LOGIN__", "0")
+        body = body.replace("__PANEL_OAUTH__", "1" if self._oauth_enabled else "0")
         return web.Response(text=body, content_type="text/javascript", charset="utf-8")
 
     # --- API: login / status / channels ---
@@ -788,22 +917,32 @@ class WebPanel:
             payload = await request.json()
         except Exception:
             return self._json({"ok": False, "error": "Некорректный JSON"}, status=400)
+        password = str(payload.get("password") or "")
         role = next(
             (
                 candidate
                 for candidate, configured in self._panel_passwords.items()
-                if secrets.compare_digest(str(payload.get("password") or ""), configured)
+                if secrets.compare_digest(password, configured)
             ),
             None,
         )
         if role is None:
+            for candidate, configured in self._panel_password_hashes.items():
+                try:
+                    if self._password_hasher.verify(configured, password):
+                        role = candidate
+                        break
+                except VerificationError:
+                    continue
+        if role is None:
             attempts.append(now)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
         token = secrets.token_urlsafe(32)
-        self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role}
+        csrf = secrets.token_urlsafe(32)
+        self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role, "csrf": csrf}
         if len(self._sessions) > _SESSION_MAX:
             self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
-        return self._json({"ok": True, "token": token, "role": role})
+        return self._json({"ok": True, "token": token, "role": role, "csrf": csrf})
 
     async def _api_status(self, request: web.Request) -> web.Response:
         online = self.bot.is_ready() and self.bot.user is not None
@@ -830,12 +969,70 @@ class WebPanel:
             "ok": ready and db_ok,
             "discord": {"ready": ready, "guilds": len(self.bot.guilds)},
             "database": {"ok": db_ok, "integrity": integrity},
+            "backup": self.bot.db_backups.status() if self.bot.db_backups is not None else {"enabled": False},
             "latency_ms": round(self.bot.latency * 1000) if self.bot.latency >= 0 else None,
             "cogs": len(self.bot.cogs),
             "voice_clients": len(self.bot.voice_clients),
             "version": self.bot.config.version,
         }
         return self._json(payload, status=200 if payload["ok"] else 503)
+
+    async def _api_metrics(self, request: web.Request) -> web.Response:
+        """Диагностические метрики API и панели для owner/admin."""
+        return self._json(
+            {
+                "ok": True,
+                "api_clients": ApiClient.snapshots(),
+                "panel": {
+                    "active_sessions": len(self._sessions),
+                    "rate_limited_ips": sum(1 for hits in self._rate_hits.values() if hits),
+                    "analytics_clients": len(self._analytics_clients),
+                },
+            }
+        )
+
+    async def _prometheus_metrics(self, request: web.Request) -> web.Response:
+        """Отдаёт компактный Prometheus text exposition через ту же авторизацию."""
+        lines = [
+            "# HELP megabot_api_requests_total Total external API requests.",
+            "# TYPE megabot_api_requests_total counter",
+            "# HELP megabot_api_successes_total Successful external API requests.",
+            "# TYPE megabot_api_successes_total counter",
+            "# HELP megabot_api_failures_total Circuit-worthy external API failures.",
+            "# TYPE megabot_api_failures_total counter",
+            "# HELP megabot_api_retries_total External API retries.",
+            "# TYPE megabot_api_retries_total counter",
+            "# HELP megabot_api_circuit_open Whether an API circuit is open.",
+            "# TYPE megabot_api_circuit_open gauge",
+        ]
+        for item in ApiClient.snapshots():
+            service = re.sub(r"[^a-zA-Z0-9_]", "_", str(item["service"]).lower()).strip("_") or "unknown"
+            labels = f'service="{service}"'
+            lines.extend(
+                (
+                    f"megabot_api_requests_total{{{labels}}} {item['requests']}",
+                    f"megabot_api_successes_total{{{labels}}} {item['successes']}",
+                    f"megabot_api_failures_total{{{labels}}} {item['failures']}",
+                    f"megabot_api_retries_total{{{labels}}} {item['retries']}",
+                    f"megabot_api_circuit_open{{{labels}}} {1 if item['circuit_open'] else 0}",
+                )
+            )
+        lines.extend(
+            (
+                "# HELP megabot_panel_sessions_active Active panel sessions.",
+                "# TYPE megabot_panel_sessions_active gauge",
+                f"megabot_panel_sessions_active {len(self._sessions)}",
+                "# HELP megabot_panel_analytics_clients Active analytics WebSocket clients.",
+                "# TYPE megabot_panel_analytics_clients gauge",
+                f"megabot_panel_analytics_clients {len(self._analytics_clients)}",
+            )
+        )
+        return web.Response(
+            text="\n".join(lines) + "\n",
+            content_type="text/plain",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
 
     async def _api_bot_channels(self, request: web.Request) -> web.Response:
         return self._json({"ok": True, "channels": self._channel_options()})
@@ -854,6 +1051,9 @@ class WebPanel:
         return f"{minutes} мин"
 
     def _primary_guild(self) -> discord.Guild | None:
+        configured_id = self.bot.config.guild_id
+        if configured_id is not None:
+            return self.bot.get_guild(configured_id)
         return self.bot.guilds[0] if self.bot.guilds else None
 
     def _channel_options(self) -> list[dict[str, Any]]:
@@ -2624,23 +2824,6 @@ class WebPanel:
             return None
         return f"https://discord.com/api/webhooks/{match.group(1)}/{match.group(2)}"
 
-    async def _acquire_webhook_slot(self) -> None:
-        """Дожидается слота rate limiter перед обращением к Discord API."""
-        from app.core.rate_limiter import get_rate_limiter
-
-        limiter = get_rate_limiter()
-        wait = await limiter.acquire("/api/webhooks")
-        if wait > 0:
-            await asyncio.sleep(wait)
-
-    @staticmethod
-    def _note_webhook_headers(headers: Any) -> None:
-        """Учитывает заголовки rate limit от Discord API."""
-        from app.core.rate_limiter import get_rate_limiter
-
-        if headers:
-            get_rate_limiter().update_from_headers(dict(headers))
-
     async def _read_json(self, request: web.Request) -> dict[str, Any]:
         try:
             payload = await request.json()
@@ -2665,12 +2848,10 @@ class WebPanel:
         if base is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL"}, status=400)
         try:
-            await self._acquire_webhook_slot()
             async with self._require_http().post(
                 f"{base}?wait=true", json=self._webhook_body(payload), allow_redirects=False
             ) as response:
                 data = await self._read_remote_json(response)
-                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
@@ -2688,12 +2869,10 @@ class WebPanel:
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
         try:
-            await self._acquire_webhook_slot()
             async with self._require_http().patch(
                 f"{base}/messages/{message_id}", json=self._webhook_body(payload), allow_redirects=False
             ) as response:
                 data = await self._read_remote_json(response)
-                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
@@ -2711,10 +2890,8 @@ class WebPanel:
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
         try:
-            await self._acquire_webhook_slot()
             async with self._require_http().get(f"{base}/messages/{message_id}", allow_redirects=False) as response:
                 data = await self._read_remote_json(response)
-                self._note_webhook_headers(response.headers)
                 if response.status >= 400:
                     return self._json(
                         {"ok": False, "error": data.get("message") or str(response.status), "data": data},
