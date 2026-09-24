@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING, Any
 import discord
 
 from app.core.base import BaseService
+from app.db.polls_repository import PollsRepository
 
 if TYPE_CHECKING:
     from app.db.polls_repository import PollsRepository
 
 
-class PollService(BaseService):
+class PollService(BaseService[PollsRepository]):
     repo: PollsRepository
 
     def __init__(self, repo: PollsRepository) -> None:
@@ -31,11 +32,15 @@ class PollService(BaseService):
     async def vote(self, poll_id: int, user_id: int, option: int, max_options: int) -> int:
         if not 0 <= option < max_options:
             return -1
+        poll = await self._repo.get(poll_id)
+        if poll is None or not poll["active"]:
+            return -1
         return await self._repo.cast_vote(poll_id, user_id, option)
 
     async def result(self, poll_id: int) -> tuple[str, list[str], dict[int, int]]:
         poll = await self._repo.get(poll_id)
-        assert poll is not None
+        if poll is None:
+            raise ValueError("Опрос не найден")
         options = json.loads(poll["options"])
         counts = await self._repo.vote_counts(poll_id)
         return poll["question"], options, counts
@@ -58,7 +63,8 @@ class PollService(BaseService):
         from app.core import embeds
 
         poll = await self._repo.get(poll_id)
-        assert poll is not None
+        if poll is None:
+            raise ValueError("Опрос не найден")
         options = json.loads(poll["options"])
         counts = await self._repo.vote_counts(poll_id)
         total = sum(counts.values())

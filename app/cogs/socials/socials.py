@@ -40,7 +40,7 @@ class SocialsCog(MegaCog, name="Socials"):
             embed.add_field(name=f"{icon} {key.capitalize()}", value=url, inline=False)
         await interaction.response.send_message(embed=embed)
 
-    def _configured(self) -> dict[str, str]:
+    def _configured(self) -> dict[str, str | None]:
         return {
             "discord": self.bot.config.socials_discord,
             "site": self.bot.config.socials_site,

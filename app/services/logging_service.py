@@ -24,7 +24,7 @@ def _embed_to_text(embed: discord.Embed) -> str:
     if embed.description:
         parts.append(embed.description)
     for field in embed.fields:
-        value = field.value.replace("\n", " ")
+        value = str(field.value or "").replace("\n", " ")
         parts.append(f"{field.name}: {value}")
     text = "\n".join(p for p in parts if p)
     return text[:2000] if text else "(пустое событие)"
@@ -39,9 +39,9 @@ class LoggingService:
 
     async def target_channel(
         self, guild: discord.Guild, *, category: str | None = None
-    ) -> None:
+    ) -> discord.TextChannel | None:
         """Сохраняет совместимый интерфейс, но реальные каналы не используются."""
-        return
+        return None
 
     async def send_embed(self, guild: discord.Guild, embed: discord.Embed, *, category: str | None = None) -> None:
         cat = category or "general"

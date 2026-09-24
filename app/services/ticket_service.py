@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ import discord
 
 from app.core import embeds
 from app.core.views import TicketCloseView
+from app.types import TicketRow
 
 if TYPE_CHECKING:
     from app.db.tickets_repository import TicketsRepository
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
     from app.services.settings_service import SettingsService
 
 _MAX_TRANSCRIPT_MESSAGES = 300
+logger = logging.getLogger("bot.tickets")
 
 
 @dataclass(slots=True)
@@ -43,6 +46,7 @@ class TicketService:
         self._settings = settings
         self._repo = tickets_repo
         self._logging = logging_service
+        self._delete_tasks: set[asyncio.Task[None]] = set()
 
     async def create(self, guild: discord.Guild, member: discord.Member) -> TicketCreateResult:
         if await self._repo.has_open_by_creator(guild.id, member.id):
@@ -51,10 +55,13 @@ class TicketService:
         settings = await self._settings.get(guild.id)
         category_id = settings.get("ticket_category_id")
         category = guild.get_channel(category_id) if category_id else None
+        bot_member = guild.me
+        if bot_member is None:
+            return TicketCreateResult(channel=None, error="Бот ещё не готов на этом сервере.")
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            guild.me: discord.PermissionOverwrite(
+            bot_member: discord.PermissionOverwrite(
                 view_channel=True, send_messages=True, read_message_history=True, manage_messages=True
             ),
             member: discord.PermissionOverwrite(
@@ -73,36 +80,48 @@ class TicketService:
         except discord.HTTPException as exc:
             return TicketCreateResult(channel=None, error=f"Discord API: {exc}")
 
-        now = datetime.now(UTC)
-        await self._repo.create(guild.id, channel.id, member.id, now)
+        ticket_id: int | None = None
+        try:
+            now = datetime.now(UTC)
+            ticket_id = await self._repo.create(guild.id, channel.id, member.id, now)
 
-        intro_title = settings.get("ticket_intro_title") or "Новый тикет"
-        intro_text = (settings.get("ticket_intro_description") or "Опишите свою проблему, {member}.").replace(
-            "{member}", member.mention
-        )
-        intro = embeds.info(intro_title, intro_text)
-        intro.add_field(name="Пользователь", value=member.mention, inline=True)
-        intro.set_footer(text=settings.get("ticket_intro_footer") or "Нажмите кнопку ниже, чтобы закрыть тикет по завершении.")
-        await channel.send(
-            embed=intro,
-            view=TicketCloseView(
-                self,
-                label=settings.get("ticket_close_label") or "Закрыть тикет",
-                emoji=settings.get("ticket_close_emoji"),
-            ),
-        )
+            intro_title = settings.get("ticket_intro_title") or "Новый тикет"
+            intro_text = (settings.get("ticket_intro_description") or "Опишите свою проблему, {member}.").replace(
+                "{member}", member.mention
+            )
+            intro = embeds.info(intro_title, intro_text)
+            intro.add_field(name="Пользователь", value=member.mention, inline=True)
+            intro.set_footer(
+                text=settings.get("ticket_intro_footer")
+                or "Нажмите кнопку ниже, чтобы закрыть тикет по завершении."
+            )
+            await channel.send(
+                embed=intro,
+                view=TicketCloseView(
+                    self,
+                    label=settings.get("ticket_close_label") or "Закрыть тикет",
+                    emoji=settings.get("ticket_close_emoji"),
+                ),
+            )
+        except discord.HTTPException as exc:
+            await self._rollback_failed_create(channel, ticket_id)
+            return TicketCreateResult(channel=None, error=f"Discord API: {exc}")
+        except Exception:
+            await self._rollback_failed_create(channel, ticket_id)
+            logger.exception("Не удалось завершить создание тикета в канале %s", channel.id)
+            return TicketCreateResult(channel=None, error="Внутренняя ошибка при создании тикета.")
         return TicketCreateResult(channel=channel)
 
-    async def get_open_ticket(self, guild_id: int, channel_id: int) -> dict | None:
+    async def get_open_ticket(self, guild_id: int, channel_id: int) -> TicketRow | None:
         ticket = await self._repo.by_channel(channel_id)
         if ticket and ticket["status"] == "open":
             return ticket
         return None
 
-    async def list_tickets(self, guild_id: int, limit: int = 100) -> list[dict]:
+    async def list_tickets(self, guild_id: int, limit: int = 100) -> list[TicketRow]:
         return await self._repo.list_for_guild(guild_id, limit)
 
-    async def get_ticket(self, ticket_id: int) -> dict | None:
+    async def get_ticket(self, ticket_id: int) -> TicketRow | None:
         return await self._repo.get(ticket_id)
 
     async def close_by_id(
@@ -148,11 +167,33 @@ class TicketService:
             await self._send_transcript(guild, channel, transcript.file, summary)
             transcript.cleanup()
 
-        asyncio.create_task(self._delete_after(channel))
+        task = asyncio.create_task(self._delete_after(channel))
+        self._delete_tasks.add(task)
+        task.add_done_callback(self._delete_tasks.discard)
 
         target = await self._logging.target_channel(guild)
         mention = target.mention if target else channel.mention
         return TicketCloseResult(transcript_channel_mention=mention)
+
+    async def aclose(self) -> None:
+        """Отменяет отложенное удаление каналов при выгрузке cog."""
+        tasks = tuple(task for task in self._delete_tasks if not task.done())
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._delete_tasks.clear()
+
+    async def _rollback_failed_create(self, channel: discord.TextChannel, ticket_id: int | None) -> None:
+        if ticket_id is not None:
+            try:
+                await self._repo.close(ticket_id, datetime.now(UTC))
+            except Exception:
+                logger.exception("Не удалось закрыть незавершённый тикет %s", ticket_id)
+        try:
+            await channel.delete(reason="Откат неудачного создания тикета")
+        except discord.HTTPException:
+            logger.debug("Не удалось удалить канал незавершённого тикета %s", channel.id, exc_info=True)
 
     async def _build_transcript(self, guild: discord.Guild, channel: discord.TextChannel):
         lines: list[str] = []
@@ -190,6 +231,10 @@ class TicketService:
         try:
             await target.send(embed=summary, file=file)
         except discord.HTTPException:
+            try:
+                file.fp.seek(0)
+            except (AttributeError, ValueError):
+                logger.debug("Не удалось перемотать файл транскрипта", exc_info=True)
             try:
                 await channel.send(embed=summary, file=file)
             except discord.HTTPException:

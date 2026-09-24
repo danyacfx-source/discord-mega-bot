@@ -36,19 +36,19 @@ COLOR_NAMES = {
 
 class EmbedDraft:
     def __init__(self) -> None:
-        self.title = None
-        self.description = None
-        self.color = None
-        self.author_name = None
-        self.author_icon = None
-        self.author_url = None
-        self.footer_text = None
-        self.footer_icon = None
-        self.thumbnail = None
-        self.image = None
+        self.title: str | None = None
+        self.description: str | None = None
+        self.color: int | None = None
+        self.author_name: str | None = None
+        self.author_icon: str | None = None
+        self.author_url: str | None = None
+        self.footer_text: str | None = None
+        self.footer_icon: str | None = None
+        self.thumbnail: str | None = None
+        self.image: str | None = None
         self.timestamp = False
         self.fields: list[dict[str, str | bool]] = []
-        self.target_channel_id = None
+        self.target_channel_id: int | None = None
 
     def to_embed(self) -> discord.Embed:
         embed = discord.Embed()
@@ -128,14 +128,16 @@ class ColorModal(discord.ui.Modal, title="Цвет эмбеда"):
             draft.color = None
         elif raw in COLOR_NAMES:
             draft.color = COLOR_NAMES[raw]
-        elif HEX_RE.match(raw):
-            draft.color = int(HEX_RE.match(raw).group(1), 16)
         else:
-            await interaction.response.send_message(
-                "Неверный цвет. Примеры: `#ff0000`, `red`, `3498DB`.",
-                ephemeral=True,
-            )
-            return
+            match = HEX_RE.match(raw)
+            if match:
+                draft.color = int(match.group(1), 16)
+            else:
+                await interaction.response.send_message(
+                    "Неверный цвет. Примеры: `#ff0000`, `red`, `3498DB`.",
+                    ephemeral=True,
+                )
+                return
         await _refresh(interaction, draft)
 
 

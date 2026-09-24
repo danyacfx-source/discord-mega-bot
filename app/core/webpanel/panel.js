@@ -24,6 +24,8 @@ let settingsData = null;
 let logsTimer = null;
 let auditTimer = null;
 let overviewTimer = null;
+let analyticsSocket = null;
+let analyticsReconnectTimer = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -1355,7 +1357,10 @@ async function loadAutomod() {
     '<div style="margin-bottom:6px">Сообщений в окне: <b>' + cfg.max_messages + "</b> · таймаут: <b>" + cfg.timeout_seconds + "с</b></div>" +
     '<div style="margin-bottom:6px">Бан после <b>' + cfg.ban_after + "</b> нарушений за <b>" + cfg.ban_window + "с</b></div>" +
     '<div style="margin-bottom:6px">Игнор-роли: <b>' + escapeHtml((cfg.ignore_roles || []).join(", ") || "—") + "</b></div>" +
-    '<div>Игнор-каналы: <b>' + ign + "</b></div>";
+    '<div style="margin-bottom:6px">Игнор-каналы: <b>' + ign + "</b></div>" +
+    '<div style="margin-bottom:6px">Anti-raid: <b>' + (cfg.anti_raid && cfg.anti_raid.enabled ? "вкл" : "выкл") +
+    "</b> · порог входов: <b>" + (cfg.anti_raid ? cfg.anti_raid.join_threshold : "—") + "</b></div>" +
+    '<div>Regex-исключения: <b>' + escapeHtml(cfg.exempt_regex || "—") + "</b></div>";
 }
 async function saveAutomod() {
   const en = $("am_enabled"), words = $("am_words");
@@ -1366,6 +1371,12 @@ async function saveAutomod() {
   });
   if (r.status === 200 && r.data.ok) { toast("💾 Автомод сохранён", true); loadAutomod(); }
   else toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+}
+async function activateLockdown() {
+  if (!confirm("Закрыть отправку сообщений для @everyone на время lockdown?")) return;
+  const r = await api("/api/automod/lockdown", { seconds: 300 });
+  if (r.status === 200 && r.data.ok) toast("🔒 Lockdown включён для " + r.data.channels + " каналов", true);
+  else toast(r.data.error ? "❌ " + r.data.error : "❌ Не удалось включить lockdown", false);
 }
 
 /* --- опросы --- */
@@ -1885,6 +1896,42 @@ async function loadStats() {
   const maxD = Math.max(...byDay.map((i) => i.n || 0), 1);
   drawBars("chart_hours", byHour.slice(-24), maxH);
   drawBars("chart_days", byDay.slice(-14), maxD);
+  connectAnalyticsSocket();
+}
+
+function applyPersistentAnalytics(payload) {
+  const rows = (payload && payload.rows) || [];
+  if (!rows.length) return;
+  const hourly = rows.slice().reverse().map((row) => ({
+    t: new Date(row.bucket).getTime() / 1000,
+    n: Number(row.messages || 0),
+  }));
+  if (!hourly.length) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRows = hourly.filter((row) => new Date(row.t * 1000).toISOString().slice(0, 10) === today);
+  $("st_today").textContent = String(todayRows.reduce((sum, row) => sum + row.n, 0));
+  $("st_total").textContent = String(hourly.reduce((sum, row) => sum + row.n, 0));
+  const max = Math.max(...hourly.map((row) => row.n), 1);
+  drawBars("chart_hours", hourly.slice(-24), max);
+}
+
+function connectAnalyticsSocket() {
+  if (analyticsSocket && analyticsSocket.readyState <= 1) return;
+  if (!window.WebSocket || !TOKEN) return;
+  const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+  analyticsSocket = new WebSocket(`${scheme}//${location.host}/ws/analytics`);
+  analyticsSocket.onopen = () => analyticsSocket.send(JSON.stringify({ token: TOKEN }));
+  analyticsSocket.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === "analytics") applyPersistentAnalytics(message.data);
+    } catch (_) {}
+  };
+  analyticsSocket.onclose = () => {
+    analyticsSocket = null;
+    clearTimeout(analyticsReconnectTimer);
+    analyticsReconnectTimer = setTimeout(connectAnalyticsSocket, 10000);
+  };
 }
 
 

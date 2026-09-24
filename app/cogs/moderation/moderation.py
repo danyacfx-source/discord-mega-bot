@@ -1,7 +1,8 @@
 """Команды модерации: kick, ban, timeout, purge, warn, роли, slowmode."""
 from __future__ import annotations
 
-from datetime import timedelta
+import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 import discord
@@ -12,11 +13,14 @@ from app.core import embeds
 from app.core.base import MegaCog
 from app.core.checks import moderation_reason
 from app.services.logging_service import LoggingService
+from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import SLOWMODE_SUGGESTIONS, TIMEOUT_SUGGESTIONS, ModerationService
 from app.utils.pagination import PaginatorView
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
+
+logger = logging.getLogger("bot.cogs")
 
 
 def _member_embed(action: str, target: discord.User | discord.Member, reason: str) -> discord.Embed:
@@ -36,14 +40,49 @@ async def _slowmode_autocomplete(_interaction: discord.Interaction, current: str
 
 
 class ModerationCog(MegaCog, name="Moderation"):
-    def __init__(self, bot: MegaBot, moderation: ModerationService, logging: LoggingService) -> None:
+    def __init__(
+        self,
+        bot: MegaBot,
+        moderation: ModerationService,
+        logging: LoggingService,
+        cases: ModerationCaseService,
+    ) -> None:
         super().__init__(bot)
         self.moderation = moderation
         self.logging = logging
+        self.cases = cases
+
+    async def _record_case(
+        self,
+        interaction: discord.Interaction,
+        user_id: int,
+        action: str,
+        reason: str = "",
+        expires_at: datetime | None = None,
+    ) -> int | None:
+        if interaction.guild is None:
+            return None
+        try:
+            return await self.cases.create(
+                interaction.guild.id,
+                user_id,
+                interaction.user.id,
+                action,
+                reason,
+                expires_at,
+            )
+        except Exception:
+            logger.exception("Не удалось создать moderation case для %s", user_id)
+            return None
 
     async def _guard_target(self, interaction: discord.Interaction, member: discord.Member) -> bool:
-        me = interaction.guild.me
-        assert isinstance(me, discord.Member)
+        me = interaction.guild.me if interaction.guild is not None else None
+        if not isinstance(me, discord.Member):
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Не удалось определить участника-бота на сервере."),
+                ephemeral=True,
+            )
+            return False
         if not self.moderation.can_moderate(me, member):
             await interaction.response.send_message(
                 embed=embeds.error(
@@ -68,6 +107,9 @@ class ModerationCog(MegaCog, name="Moderation"):
             return
         await member.kick(reason=moderation_reason(interaction.user, reason))
         embed = _member_embed("Кик", member, reason or "не указана")
+        case_id = await self._record_case(interaction, member.id, "kick", reason)
+        if case_id is not None:
+            embed.add_field(name="CASE", value=f"`#{case_id}`", inline=True)
         await interaction.response.send_message(embed=embed)
         await self.logging.log_mod_action(
             interaction.guild, "kick", member, interaction.user, reason, description=f"{member.mention} исключён"
@@ -87,6 +129,9 @@ class ModerationCog(MegaCog, name="Moderation"):
             return
         await member.ban(reason=moderation_reason(interaction.user, reason), delete_message_seconds=delete_days * 86400)
         embed = _member_embed("Бан", member, reason or "не указана")
+        case_id = await self._record_case(interaction, member.id, "ban", reason)
+        if case_id is not None:
+            embed.add_field(name="CASE", value=f"`#{case_id}`", inline=True)
         await interaction.response.send_message(embed=embed)
         await self.logging.log_mod_action(
             interaction.guild, "ban", member, interaction.user, reason, description=f"{member.mention} забанен"
@@ -97,7 +142,12 @@ class ModerationCog(MegaCog, name="Moderation"):
     @app_commands.guild_only()
     async def unban(self, interaction: discord.Interaction, user_id: str) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Команда работает только на сервере."),
+                ephemeral=True,
+            )
+            return
         try:
             ban_entry = await guild.fetch_ban(discord.Object(id=int(user_id)))
         except discord.NotFound:
@@ -105,6 +155,9 @@ class ModerationCog(MegaCog, name="Moderation"):
             return
         await guild.unban(ban_entry.user, reason=moderation_reason(interaction.user))
         embed = _member_embed("Разбан", ban_entry.user, "")
+        case_id = await self._record_case(interaction, ban_entry.user.id, "unban")
+        if case_id is not None:
+            embed.add_field(name="CASE", value=f"`#{case_id}`", inline=True)
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="timeout", description="Тайм-аут участника")
@@ -124,6 +177,15 @@ class ModerationCog(MegaCog, name="Moderation"):
             return
         await member.timeout(utcnow() + timedelta(seconds=seconds), reason=moderation_reason(interaction.user, reason))
         embed = _member_embed("Тайм-аут", member, f"{duration} · {reason or 'не указана'}")
+        case_id = await self._record_case(
+            interaction,
+            member.id,
+            "timeout",
+            reason,
+            utcnow() + timedelta(seconds=seconds),
+        )
+        if case_id is not None:
+            embed.add_field(name="CASE", value=f"`#{case_id}`", inline=True)
         await interaction.response.send_message(embed=embed)
         await self.logging.log_mod_action(
             interaction.guild,
@@ -166,6 +228,9 @@ class ModerationCog(MegaCog, name="Moderation"):
         count = await self.moderation.warn(interaction.guild.id, member.id, interaction.user.id, reason)
         embed = _member_embed("Предупреждение", member, reason)
         embed.add_field(name="Всего предупреждений", value=str(count), inline=True)
+        case_id = await self._record_case(interaction, member.id, "warn", reason)
+        if case_id is not None:
+            embed.add_field(name="CASE", value=f"`#{case_id}`", inline=True)
         await interaction.response.send_message(embed=embed)
         await self.logging.log_mod_action(
             interaction.guild, "warn", member, interaction.user, reason, description=f"{member.mention} получил предупреждение {count}"
@@ -209,6 +274,50 @@ class ModerationCog(MegaCog, name="Moderation"):
         embed = embeds.success("Предупреждения сняты", f"Удалено: **{removed}** у {member.mention}")
         await interaction.response.send_message(embed=embed)
         await self.logging.log_mod_action(interaction.guild, "clearwarns", member, interaction.user, "")
+
+    @app_commands.command(name="case", description="Показать moderation case")
+    @app_commands.describe(case_id="Номер case из ответа модерации")
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.guild_only()
+    async def case(self, interaction: discord.Interaction, case_id: int) -> None:
+        current = await self.cases.get(interaction.guild.id, case_id)
+        if current is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Не найдено", f"Case `#{case_id}` не существует на этом сервере."),
+                ephemeral=True,
+            )
+            return
+        embed = embeds.info(
+            f"Case #{current['case_id']}",
+            f"Действие: **{current['action']}**\nПричина: {current['reason'] or 'не указана'}",
+        )
+        embed.add_field(name="Участник", value=f"<@{current['user_id']}>", inline=True)
+        embed.add_field(name="Модератор", value=f"<@{current['moderator_id']}>", inline=True)
+        embed.add_field(name="Дата", value=current["created_at"][:19].replace("T", " "), inline=True)
+        expires_at = current.get("expires_at")
+        if expires_at:
+            embed.add_field(name="Истекает", value=expires_at[:19].replace("T", " "), inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="cases", description="Показать последние moderation cases")
+    @app_commands.describe(member="Фильтр по участнику")
+    @app_commands.default_permissions(moderate_members=True)
+    @app_commands.guild_only()
+    async def cases_list(self, interaction: discord.Interaction, member: discord.Member | None = None) -> None:
+        rows = await self.cases.list_for_guild(interaction.guild.id, 100)
+        if member is not None:
+            rows = [row for row in rows if row["user_id"] == member.id]
+        if not rows:
+            await interaction.response.send_message(embed=embeds.info("Cases", "История пуста."), ephemeral=True)
+            return
+        embed = embeds.info("Последние moderation cases", f"Найдено: **{len(rows)}**")
+        for row in rows[:10]:
+            embed.add_field(
+                name=f"#{row['case_id']} · {row['action']}",
+                value=f"<@{row['user_id']}> · {row['reason'] or 'без причины'}",
+                inline=False,
+            )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="slowmode", description="Задать задержку сообщений в канале")
     @app_commands.default_permissions(manage_channels=True)

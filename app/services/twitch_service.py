@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from app.core.api_client import ApiClient, ApiRequestError
+
 if TYPE_CHECKING:
     from app.config import Config
     from app.db.kv_repository import KvRepository
@@ -39,20 +41,21 @@ class TwitchService:
     def __init__(self, repo: KvRepository, config: Config) -> None:
         self._repo = repo
         self._config = config
-        self._session: aiohttp.ClientSession | None = None
+        self._http = ApiClient(
+            "Twitch",
+            timeout=config.api_timeout_seconds,
+            user_agent="DiscordMegaBot/3.3 Twitch",
+            proxy=config.api_proxy,
+        )
         self._token: str | None = None
         self._token_expires: datetime = datetime.now(UTC)
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-        return self._session
+        return self._http.session
 
     async def aclose(self) -> None:
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        await self._http.close()
 
     async def _access_token(self) -> str:
         config = self._config
@@ -61,18 +64,17 @@ class TwitchService:
         if not (config.twitch_client_id and config.twitch_client_secret):
             raise RuntimeError("Twitch: не настроены TWITCH_CLIENT_ID/TWITCH_CLIENT_SECRET")
         try:
-            async with self.session.post(
+            _, body, _ = await self._http.json(
+                "POST",
                 _TOKEN_URL,
+                attempts=2,
                 data={
                     "client_id": config.twitch_client_id,
                     "client_secret": config.twitch_client_secret,
                     "grant_type": "client_credentials",
                 },
-            ) as response:
-                if response.status != 200:
-                    raise RuntimeError(f"Twitch OAuth вернул {response.status}")
-                body = await response.json(content_type=None)
-        except aiohttp.ClientError as exc:
+            )
+        except ApiRequestError as exc:
             raise RuntimeError(f"Twitch: сеть при получении токена ({exc})") from exc
         self._token = body["access_token"]
         self._token_expires = datetime.now(UTC) + timedelta(seconds=int(body.get("expires_in", 3600)))
@@ -87,7 +89,11 @@ class TwitchService:
         helix = await self._helix_status(login)
         if helix is not None:
             return helix
-        return await self._gql_status(login)
+        try:
+            return await self._gql_status(login)
+        except ApiRequestError:
+            logger.warning("Twitch: GQL временно недоступен для %s", login, exc_info=True)
+            return None
 
     async def _helix_status(self, login: str) -> dict[str, Any] | None:
         config = self._config
@@ -101,7 +107,7 @@ class TwitchService:
                     logger.warning("Twitch %s: Helix вернул статус %d", login, response.status)
                     return None
                 body = await response.json(content_type=None)
-        except (aiohttp.ClientError, RuntimeError):
+        except (ApiRequestError, RuntimeError):
             logger.exception("Twitch: не удалось получить статус канала %s (Helix)", login)
             return None
         streams = (body or {}).get("data") or []
@@ -124,13 +130,13 @@ class TwitchService:
                 "variables": {"login": login},
             }
         ]
-        timeout = aiohttp.ClientTimeout(total=12)
-        async with self.session.post(
-            _GQL_URL, json=payload, headers={"Client-Id": _GQL_CLIENT_ID}, timeout=timeout
-        ) as response:
-            if response.status != 200:
-                raise RuntimeError(f"Twitch GQL вернул {response.status}")
-            body = await response.json(content_type=None)
+        _, body, _ = await self._http.json(
+            "POST",
+            _GQL_URL,
+            attempts=2,
+            json=payload,
+            headers={"Client-Id": _GQL_CLIENT_ID},
+        )
         stream = ((body or [{}])[0].get("data") or {}).get("user") or {}
         live = (stream.get("stream") or {}) if stream.get("stream") else None
         if not live:

@@ -16,7 +16,9 @@ class PollsRepository(BaseRepository):
             "INSERT INTO polls (guild_id, channel_id, author_id, question, options, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (guild_id, channel_id, author_id, question, json.dumps(options, ensure_ascii=False), _now_iso()),
         )
-        return cursor.lastrowid
+        if cursor.lastrowid is None:
+            raise RuntimeError("SQLite не вернул ID опроса")
+        return int(cursor.lastrowid)
 
     async def set_message_id(self, poll_id: int, message_id: int) -> None:
         await self.db.execute("UPDATE polls SET message_id = ? WHERE id = ?", (message_id, poll_id))

@@ -32,11 +32,13 @@ def assert_wiring(root: Root) -> None:
     """Гарантирует, что привилегированные коги привязаны к реальным сервисам Root."""
     for cog_name, pairs in PRIVILEGED_WIRING.items():
         cog = root.bot.get_cog(cog_name)
-        assert cog is not None, f"привилегированный ког {cog_name} не загружен"
+        if cog is None:
+            raise RuntimeError(f"привилегированный ког {cog_name} не загружен")
         for attr, svc in pairs:
             got = getattr(cog, attr, None)
             want = getattr(root.services, svc)
-            assert got is want, (
-                f"{cog_name}.{attr} указывает не на root.services.{svc} "
-                f"(got {type(got).__name__})"
-            )
+            if got is not want:
+                raise RuntimeError(
+                    f"{cog_name}.{attr} указывает не на root.services.{svc} "
+                    f"(got {type(got).__name__})"
+                )

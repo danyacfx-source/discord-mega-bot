@@ -185,7 +185,183 @@ class Database:
         await self._conn.execute("PRAGMA journal_mode=WAL")
         await self._conn.execute("PRAGMA foreign_keys=ON")
         await self._conn.executescript(_SCHEMA)
-        cursor = await self._conn.execute("PRAGMA table_info(guild_settings)")
+        await self._run_migrations()
+        integrity = await self.integrity_check()
+        if integrity != "ok":
+            raise RuntimeError(f"Проверка целостности SQLite не пройдена: {integrity}")
+        await self._conn.commit()
+
+    async def _run_migrations(self) -> None:
+        """Применяет идемпотентные миграции поверх базовой схемы."""
+        conn = self.conn
+        await conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+        applied_rows = await conn.execute_fetchall("SELECT version FROM schema_migrations")
+        applied = {int(row[0]) for row in applied_rows}
+
+        if 1 not in applied:
+            await conn.executescript(
+                """
+                CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(active, remind_at);
+                CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_messages(done, send_at);
+                CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(active, ends_at);
+                CREATE INDEX IF NOT EXISTS idx_warns_guild_user ON warns(guild_id, user_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_tickets_guild_status ON tickets(guild_id, status);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (1, datetime('now'))"
+            )
+
+        if 2 not in applied:
+            for table in ("reminders", "scheduled_messages", "giveaways"):
+                columns = await conn.execute_fetchall(f"PRAGMA table_info({table})")
+                if "processing_until" not in {row[1] for row in columns}:
+                    await conn.execute(f"ALTER TABLE {table} ADD COLUMN processing_until TEXT")
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_reminders_processing ON reminders(active, processing_until)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_scheduled_processing ON scheduled_messages(done, processing_until)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_giveaways_processing ON giveaways(active, processing_until)"
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (2, datetime('now'))"
+            )
+
+        if 3 not in applied:
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS moderation_cases (
+                    case_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    moderator_id INTEGER NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT,
+                    active INTEGER NOT NULL DEFAULT 1
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cases_guild_user ON moderation_cases(guild_id, user_id, created_at)"
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (3, datetime('now'))"
+            )
+        if 4 not in applied:
+            await conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS admin_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    actor_role TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    method TEXT NOT NULL,
+                    path TEXT NOT NULL,
+                    remote TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_admin_audit_created ON admin_audit(created_at DESC)"
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (4, datetime('now'))"
+            )
+        if 5 not in applied:
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS music_playlists (
+                    guild_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    created_by INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (guild_id, name)
+                );
+                CREATE TABLE IF NOT EXISTS music_playlist_tracks (
+                    guild_id INTEGER NOT NULL,
+                    playlist_name TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    stream_url TEXT NOT NULL DEFAULT '',
+                    duration INTEGER,
+                    uploader TEXT,
+                    thumbnail TEXT,
+                    PRIMARY KEY (guild_id, playlist_name, position),
+                    FOREIGN KEY (guild_id, playlist_name)
+                        REFERENCES music_playlists(guild_id, name) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_playlist_tracks
+                    ON music_playlist_tracks(guild_id, playlist_name, position);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (5, datetime('now'))"
+            )
+        if 6 not in applied:
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS music_queue (
+                    guild_id INTEGER NOT NULL,
+                    position INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    stream_url TEXT NOT NULL DEFAULT '',
+                    duration INTEGER,
+                    uploader TEXT,
+                    thumbnail TEXT,
+                    PRIMARY KEY (guild_id, position)
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_queue_guild ON music_queue(guild_id, position);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (6, datetime('now'))"
+            )
+        if 7 not in applied:
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS activity_hourly (
+                    guild_id INTEGER NOT NULL,
+                    bucket TEXT NOT NULL,
+                    messages INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (guild_id, bucket)
+                );
+                CREATE INDEX IF NOT EXISTS idx_activity_hourly_bucket
+                    ON activity_hourly(guild_id, bucket);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (7, datetime('now'))"
+            )
+        if 8 not in applied:
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS music_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    guild_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    duration INTEGER,
+                    played_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_music_history_guild
+                    ON music_history(guild_id, played_at DESC);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (8, datetime('now'))"
+            )
+        conn = self.conn
+        cursor = await conn.execute("PRAGMA table_info(guild_settings)")
         rows = await cursor.fetchall()
         columns = {row["name"] for row in rows}
         for column in (
@@ -197,7 +373,7 @@ class Database:
             "donation_channel_id",
         ):
             if column not in columns:
-                await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} INTEGER")
+                await conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} INTEGER")
         for column in (
             "ticket_panel_title",
             "ticket_panel_description",
@@ -212,16 +388,92 @@ class Database:
             "ticket_channel_prefix",
         ):
             if column not in columns:
-                await self._conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} TEXT")
-        gv_cursor = await self._conn.execute("PRAGMA table_info(giveaways)")
+                await conn.execute(f"ALTER TABLE guild_settings ADD COLUMN {column} TEXT")
+        gv_cursor = await conn.execute("PRAGMA table_info(giveaways)")
         gv_columns = {row["name"] for row in await gv_cursor.fetchall()}
         if "min_days" not in gv_columns:
-            await self._conn.execute("ALTER TABLE giveaways ADD COLUMN min_days INTEGER NOT NULL DEFAULT 0")
-        tk_cursor = await self._conn.execute("PRAGMA table_info(tickets)")
+            await conn.execute("ALTER TABLE giveaways ADD COLUMN min_days INTEGER NOT NULL DEFAULT 0")
+        tk_cursor = await conn.execute("PRAGMA table_info(tickets)")
         tk_columns = {row["name"] for row in await tk_cursor.fetchall()}
         if "transcript" not in tk_columns:
-            await self._conn.execute("ALTER TABLE tickets ADD COLUMN transcript TEXT")
-        await self._conn.commit()
+            await conn.execute("ALTER TABLE tickets ADD COLUMN transcript TEXT")
+        await conn.commit()
+
+    async def integrity_check(self) -> str:
+        cursor = await self.conn.execute("PRAGMA integrity_check")
+        row = await cursor.fetchone()
+        return str(row[0]) if row else "unknown"
+
+    async def execute_returning(
+        self, sql: str, params: tuple[Any, ...] = ()
+    ) -> aiosqlite.Row | None:
+        cursor = await self.conn.execute(sql, params)
+        row = await cursor.fetchone()
+        await self.conn.commit()
+        return row
+
+    async def backup(self, destination: str | Path) -> Path:
+        """Создаёт консистентный backup через SQLite backup API."""
+        target = Path(destination)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        backup_conn = await aiosqlite.connect(target)
+        try:
+            await self.conn.backup(backup_conn)
+        finally:
+            await backup_conn.close()
+        return target
+
+    async def record_admin_audit(
+        self,
+        actor_role: str,
+        action: str,
+        method: str,
+        path: str,
+        remote: str = "",
+    ) -> None:
+        await self.execute(
+            """
+            INSERT INTO admin_audit(actor_role, action, method, path, remote, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """,
+            (actor_role, action[:200], method[:16], path[:500], remote[:120]),
+        )
+
+    async def list_admin_audit(self, limit: int = 200) -> list[dict[str, Any]]:
+        rows = await self.fetchall(
+            """
+            SELECT id, actor_role, action, method, path, remote, created_at
+            FROM admin_audit
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (max(1, min(limit, 1000)),),
+        )
+        return [dict(row) for row in rows]
+
+    async def increment_activity(self, guild_id: int, bucket: str, amount: int = 1) -> None:
+        await self.execute(
+            """
+            INSERT INTO activity_hourly(guild_id, bucket, messages)
+            VALUES (?, ?, ?)
+            ON CONFLICT(guild_id, bucket) DO UPDATE SET
+                messages = activity_hourly.messages + excluded.messages
+            """,
+            (guild_id, bucket, max(1, amount)),
+        )
+
+    async def list_activity(self, guild_id: int, limit: int = 1000) -> list[dict[str, Any]]:
+        rows = await self.fetchall(
+            """
+            SELECT bucket, messages
+            FROM activity_hourly
+            WHERE guild_id = ?
+            ORDER BY bucket DESC
+            LIMIT ?
+            """,
+            (guild_id, max(1, min(limit, 5000))),
+        )
+        return [dict(row) for row in rows]
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -239,4 +491,4 @@ class Database:
 
     async def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[aiosqlite.Row]:
         cursor = await self.conn.execute(sql, params)
-        return await cursor.fetchall()
+        return list(await cursor.fetchall())

@@ -3,18 +3,17 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import discord
 
 from app.core import embeds
 from app.core.base import BaseService
+from app.db.scheduled_repository import ScheduledRepository
+from app.types import ScheduledMessageRow
 
-if TYPE_CHECKING:
-    from app.db.scheduled_repository import ScheduledRepository
 
-
-class ScheduledMessagesService(BaseService):
+class ScheduledMessagesService(BaseService[ScheduledRepository]):
     repo: ScheduledRepository
 
     def __init__(self, repo: ScheduledRepository) -> None:
@@ -37,28 +36,34 @@ class ScheduledMessagesService(BaseService):
         embed_json = json.dumps(embed or {}, ensure_ascii=False, separators=(",", ":"))
         return await self._repo.create(guild_id, channel_id, author_id, content[:2000], embed_json, send_at)
 
-    async def upcoming(self, limit: int = 100) -> list[dict[str, Any]]:
+    async def upcoming(self, limit: int = 100) -> list[ScheduledMessageRow]:
         return await self._repo.upcoming(limit)
 
-    async def recent(self, limit: int = 100) -> list[dict[str, Any]]:
+    async def recent(self, limit: int = 100) -> list[ScheduledMessageRow]:
         return await self._repo.recent(limit)
 
-    async def get(self, scheduled_id: int) -> dict[str, Any] | None:
+    async def get(self, scheduled_id: int) -> ScheduledMessageRow | None:
         return await self._repo.get(scheduled_id)
 
     async def delete(self, scheduled_id: int) -> bool:
         return await self._repo.delete(scheduled_id)
 
-    async def due(self, moment: datetime) -> list[dict[str, Any]]:
+    async def due(self, moment: datetime) -> list[ScheduledMessageRow]:
         return await self._repo.due_up_to(moment)
+
+    async def claim_due(self, moment: datetime, lease_seconds: int = 120) -> ScheduledMessageRow | None:
+        return await self._repo.claim_due(moment, lease_seconds)
+
+    async def release_claim(self, scheduled_id: int) -> None:
+        await self._repo.release_claim(scheduled_id)
 
     async def mark_done(self, scheduled_id: int) -> None:
         await self._repo.mark_done(scheduled_id)
 
     @staticmethod
-    def build_embed(data: dict[str, Any], *, finished: bool = False) -> discord.Embed:
+    def build_embed(data: ScheduledMessageRow, *, finished: bool = False) -> discord.Embed:
         """Собирает эмбед из JSON-схемы, хранимой в планировщике."""
-        raw = {}
+        raw: dict[str, Any] = {}
         if data.get("embed_json"):
             try:
                 raw = json.loads(data["embed_json"]) or {}

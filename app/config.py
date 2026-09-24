@@ -31,7 +31,15 @@ class Config:
     log_level: str
     status_activity: str
     owner_id: int | None
-    version: str = "3.2.0"
+    version: str = "3.3.0"
+
+    # Общий сетевой слой внешних API
+    api_timeout_seconds: float = 20.0
+    api_proxy: str | None = None
+
+    # Spotify Client Credentials для импорта треков/плейлистов
+    spotify_client_id: str | None = None
+    spotify_client_secret: str | None = None
 
     # Донаты (DonationAlerts)
     donations_token: str | None = None
@@ -93,6 +101,9 @@ class Config:
     panel_host: str = "127.0.0.1"
     panel_port: int | None = None
     panel_password: str | None = None
+    panel_admin_password: str | None = None
+    panel_moderator_password: str | None = None
+    panel_viewer_password: str | None = None
     panel_public_url: str | None = None
 
     # Дни рождения
@@ -186,6 +197,14 @@ class Config:
     automod_ban_window_seconds: int = 300
     automod_ignore_roles: tuple[str, ...] = ()
     automod_ignored_channels: tuple[int, ...] = ()
+    automod_antiraid_enabled: bool = False
+    automod_antiraid_window_seconds: int = 60
+    automod_antiraid_join_threshold: int = 8
+    automod_antiraid_slowmode_seconds: int = 10
+    automod_antiraid_cooldown_seconds: int = 300
+    automod_min_account_age_days: int = 0
+    automod_exempt_regex: str = ""
+    automod_lockdown_seconds: int = 300
 
     @classmethod
     def from_env(cls, env_file: str | os.PathLike[str] | None = None) -> Config:
@@ -203,6 +222,10 @@ class Config:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             status_activity=os.getenv("STATUS_ACTIVITY", "играет с кодом"),
             owner_id=int(owner_raw) if owner_raw and owner_raw.isdigit() else None,
+            api_timeout_seconds=max(5.0, min(120.0, float(os.getenv("API_TIMEOUT_SECONDS", "20")))),
+            api_proxy=os.getenv("API_PROXY") or None,
+            spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID") or None,
+            spotify_client_secret=os.getenv("SPOTIFY_CLIENT_SECRET") or None,
             donations_token=os.getenv("DONATIONS_TOKEN"),
             donations_client_id=os.getenv("DONATIONS_CLIENT_ID"),
             donations_refresh_token=os.getenv("DONATIONS_REFRESH_TOKEN"),
@@ -248,6 +271,9 @@ class Config:
             panel_host=os.getenv("PANEL_HOST", "127.0.0.1"),
             panel_port=_single_int(os.getenv("PANEL_PORT")),
             panel_password=os.getenv("PANEL_PASSWORD"),
+            panel_admin_password=os.getenv("PANEL_ADMIN_PASSWORD"),
+            panel_moderator_password=os.getenv("PANEL_MODERATOR_PASSWORD"),
+            panel_viewer_password=os.getenv("PANEL_VIEWER_PASSWORD"),
             panel_public_url=os.getenv("PANEL_PUBLIC_URL"),
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
@@ -316,6 +342,14 @@ class Config:
             automod_ban_window_seconds=max(1, int(os.getenv("AUTOMOD_BAN_WINDOW_SECONDS", "300"))),
             automod_ignore_roles=_strs(os.getenv("AUTOMOD_IGNORE_ROLES")),
             automod_ignored_channels=_ints(os.getenv("AUTOMOD_IGNORED_CHANNELS")),
+            automod_antiraid_enabled=_bool(os.getenv("AUTOMOD_ANTIRAID_ENABLED", "0")),
+            automod_antiraid_window_seconds=max(10, int(os.getenv("AUTOMOD_ANTIRAID_WINDOW_SECONDS", "60"))),
+            automod_antiraid_join_threshold=max(2, int(os.getenv("AUTOMOD_ANTIRAID_JOIN_THRESHOLD", "8"))),
+            automod_antiraid_slowmode_seconds=max(0, int(os.getenv("AUTOMOD_ANTIRAID_SLOWMODE_SECONDS", "10"))),
+            automod_antiraid_cooldown_seconds=max(30, int(os.getenv("AUTOMOD_ANTIRAID_COOLDOWN_SECONDS", "300"))),
+            automod_min_account_age_days=max(0, int(os.getenv("AUTOMOD_MIN_ACCOUNT_AGE_DAYS", "0"))),
+            automod_exempt_regex=os.getenv("AUTOMOD_EXEMPT_REGEX", ""),
+            automod_lockdown_seconds=max(30, int(os.getenv("AUTOMOD_LOCKDOWN_SECONDS", "300"))),
             season_enabled=_bool(os.getenv("SEASON_ENABLED")),
             season_reward_roles=_strs(os.getenv("SEASON_REWARD_ROLES")),
             season_announce_channel_id=_single_int(os.getenv("SEASON_ANNOUNCE_CHANNEL_ID")),

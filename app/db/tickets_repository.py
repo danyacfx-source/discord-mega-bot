@@ -1,9 +1,10 @@
 """Репозиторий тикетов."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from app.db.base_repository import BaseRepository
+from app.types import TicketRow
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -15,11 +16,13 @@ class TicketsRepository(BaseRepository):
             "INSERT INTO tickets (guild_id, channel_id, creator_id, created_at) VALUES (?, ?, ?, ?)",
             (guild_id, channel_id, creator_id, created_at.isoformat()),
         )
-        return cursor.lastrowid
+        if cursor.lastrowid is None:
+            raise RuntimeError("SQLite не вернул ID тикета")
+        return int(cursor.lastrowid)
 
-    async def by_channel(self, channel_id: int) -> dict | None:
+    async def by_channel(self, channel_id: int) -> TicketRow | None:
         row = await self.db.fetchone("SELECT * FROM tickets WHERE channel_id = ?", (channel_id,))
-        return dict(row) if row else None
+        return cast(TicketRow, dict(row)) if row else None
 
     async def has_open_by_creator(self, guild_id: int, creator_id: int) -> bool:
         row = await self.db.fetchone(
@@ -34,9 +37,9 @@ class TicketsRepository(BaseRepository):
             (closed_at.isoformat(), ticket_id),
         )
 
-    async def get(self, ticket_id: int) -> dict | None:
+    async def get(self, ticket_id: int) -> TicketRow | None:
         row = await self.db.fetchone("SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,))
-        return dict(row) if row else None
+        return cast(TicketRow, dict(row)) if row else None
 
     async def save_transcript(self, ticket_id: int, transcript: str) -> None:
         await self.db.execute(
@@ -44,9 +47,9 @@ class TicketsRepository(BaseRepository):
             (transcript, ticket_id),
         )
 
-    async def list_for_guild(self, guild_id: int, limit: int = 100) -> list[dict]:
+    async def list_for_guild(self, guild_id: int, limit: int = 100) -> list[TicketRow]:
         rows = await self.db.fetchall(
             "SELECT * FROM tickets WHERE guild_id = ? ORDER BY ticket_id DESC LIMIT ?",
             (guild_id, limit),
         )
-        return [dict(row) for row in rows]
+        return [cast(TicketRow, dict(row)) for row in rows]

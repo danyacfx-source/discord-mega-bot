@@ -27,14 +27,30 @@ _CATEGORIES = (
         "Основное",
         "⌁",
         "Информация, профиль и полезные команды.",
-        frozenset({"help", "ping", "about", "serverinfo", "userinfo"}),
+        frozenset({"help", "ping", "health", "about", "serverinfo", "userinfo"}),
     ),
     HelpCategory(
         "moderation",
         "Модерация",
         "🛡️",
         "Порядок и управление участниками.",
-        frozenset({"moderation", "warn", "warns", "clearwarns", "automod", "kick", "ban", "unban", "timeout", "purge", "slowmode"}),
+        frozenset(
+            {
+                "moderation",
+                "warn",
+                "warns",
+                "clearwarns",
+                "cases",
+                "case",
+                "automod",
+                "kick",
+                "ban",
+                "unban",
+                "timeout",
+                "purge",
+                "slowmode",
+            }
+        ),
     ),
     HelpCategory(
         "community",
@@ -64,6 +80,8 @@ _CATEGORIES = (
                 "pause",
                 "resume",
                 "queue",
+                "shuffle",
+                "remove",
                 "nowplaying",
                 "volume",
                 "loop",
@@ -169,7 +187,7 @@ class HelpView(discord.ui.View):
             ],
         ]
         select = discord.ui.Select(placeholder="Выберите раздел", options=options)
-        select.callback = self._select  # type: ignore[method-assign]
+        select.callback = self._select
         self.add_item(select)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -183,7 +201,12 @@ class HelpView(discord.ui.View):
 
     async def _select(self, interaction: discord.Interaction) -> None:
         select = self.children[0]
-        assert isinstance(select, discord.ui.Select)
+        if not isinstance(select, discord.ui.Select) or not select.values:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Меню справки больше недоступно."),
+                ephemeral=True,
+            )
+            return
         key = select.values[0]
         embed = _overview(self.bot, self.entries)
         if key != "overview":
@@ -203,7 +226,6 @@ class HelpView(discord.ui.View):
 
 class HelpCog(MegaCog, name="Справка"):
     @app_commands.command(name="help", description="Открыть каталог команд бота")
-    @app_commands.guild_only()
     async def help_command(self, interaction: discord.Interaction) -> None:
         entries = _flatten(self.bot)
         view = HelpView(self.bot, interaction.user.id, entries)

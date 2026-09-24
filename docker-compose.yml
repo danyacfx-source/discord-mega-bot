@@ -2,10 +2,19 @@ services:
   bot:
     build: .
     restart: unless-stopped
+    init: true
     env_file: .env
+    environment:
+      # Контейнер должен слушать интерфейс Docker-сети, иначе Traefik
+      # не сможет достучаться до веб-панели.
+      PANEL_HOST: 0.0.0.0
+      OVERLAY_HOST: 0.0.0.0
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
     expose:
       - "3000"
     labels:

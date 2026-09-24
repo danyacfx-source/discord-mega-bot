@@ -48,6 +48,8 @@ def test_config_new_options(tmp_path):
         "\n".join(
             [
                 "BOT_TOKEN=t",
+                    "API_TIMEOUT_SECONDS=37",
+                    "API_PROXY=http://127.0.0.1:8080",
                 "TWITCH_CHANNELS=a,b",
                 "TEMP_VOICE_TRIGGER_IDS=111,222",
                 "LOGS_IGNORE_CHANNEL_IDS=5",
@@ -110,6 +112,8 @@ def test_config_new_options(tmp_path):
         encoding="utf-8",
     )
     config = Config.from_env(env)
+    assert config.api_timeout_seconds == 37.0
+    assert config.api_proxy == "http://127.0.0.1:8080"
     assert config.twitch_channels == ("a", "b")
     assert config.temp_voice_trigger_ids == (111, 222)
     assert config.logs_ignore_channel_ids == (5,)
@@ -120,7 +124,7 @@ def test_config_new_options(tmp_path):
     assert config.donation_role_id == 7331
     assert config.donate_button_channel_id == 2311
     assert config.donate_bonuses == ("Смотреть раньше", "Проверка")
-    assert config.version == "3.2.0"
+    assert config.version == "3.3.0"
     assert config.panel_port == 17890
     assert config.panel_host == "127.0.0.1"
     assert config.overlay_port == 8765
@@ -514,6 +518,16 @@ async def test_webpanel_auth_and_status(tmp_path):
             bad_url = await client.post("/api/webhook/send", headers=headers, json={"webhook_url": "https://example.com/1/2"})
             assert bad_url.status == 400
             assert (await bad_url.json())["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_webpanel_requires_password_when_public(tmp_path):
+    bot = _panel_bot(tmp_path, panel_host="0.0.0.0")
+    panel = WebPanel(bot)
+    with pytest.raises(RuntimeError, match="PANEL_PASSWORD"):
+        await panel.start()
+    assert panel._runner is None
+    assert panel._http is None
 
 
 @pytest.mark.asyncio

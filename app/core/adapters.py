@@ -27,7 +27,8 @@ PORT_MAP: tuple[tuple[type, type], ...] = (
 def assert_ports() -> None:
     """Падает, если реальный класс перестал соответствовать своему порту."""
     for concrete, port in PORT_MAP:
-        assert isinstance(concrete, port), (
-            f"{concrete.__name__} не реализует {port.__name__} "
-            "(методы порта перестали совпадать с реальным классом)"
-        )
+        if not isinstance(concrete, port):
+            raise RuntimeError(
+                f"{concrete.__name__} не реализует {port.__name__} "
+                "(методы порта перестали совпадать с реальным классом)"
+            )

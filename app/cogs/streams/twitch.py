@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -35,7 +35,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
 
     @tasks.loop(seconds=300.0)
     async def poll_loop(self) -> None:
-        live: dict[str, dict] = {}
+        live: dict[str, dict[str, Any]] = {}
         for channel in self.bot.config.twitch_channels:
             try:
                 status = await self._check(channel)
@@ -58,7 +58,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
     async def _before_poll(self) -> None:
         await self.bot.wait_until_ready()
 
-    async def _check(self, channel: str) -> dict | None:
+    async def _check(self, channel: str) -> dict[str, Any] | None:
         status = await self.twitch.channel_status(channel)
         if status is not None:
             await self._sticky_live(status)
@@ -66,7 +66,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
         await self._sticky_offline(channel)
         return None
 
-    async def _sticky_live(self, status: dict) -> None:
+    async def _sticky_live(self, status: dict[str, Any]) -> None:
         config = self.bot.config
         channel = self._notify_channel()
         if channel is None:
@@ -118,7 +118,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
             logger.debug("Twitch: не удалось сменить присутствие", exc_info=True)
 
     @staticmethod
-    def _status_embed(status: dict) -> discord.Embed:
+    def _status_embed(status: dict[str, Any]) -> discord.Embed:
         embed = embeds.info("🔴 Twitch: стрим начался", f"**[{status['title']}](https://www.twitch.tv/{status['login']})**")
         embed.set_thumbnail(url=status["thumbnail"])
         embed.add_field(name="Зрители", value=str(status["viewers"]), inline=True)

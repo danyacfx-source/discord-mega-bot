@@ -20,3 +20,29 @@ class PingCog(MegaCog, name="General"):
         embed.add_field(name="АПТАЙМ", value=f"`{format_duration(int(self.bot.uptime.total_seconds()))}`", inline=True)
         embed.add_field(name="ВЕРСИЯ", value=f"`v{self.config.version}`", inline=True)
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="health", description="Подробная диагностика состояния бота")
+    async def health(self, interaction: discord.Interaction) -> None:
+        db = self.bot.db
+        db_ready = db is not None and getattr(db, "_conn", None) is not None
+        enabled = [
+            label
+            for label, value in (
+                ("AI", self.config.ai_enabled),
+                ("панель", self.config.panel_port is not None),
+                ("OBS", self.config.overlay_port is not None),
+                ("Twitch", bool(self.config.twitch_channels)),
+                ("Kick", bool(self.config.kick_channel_slug)),
+                ("VK", bool(self.config.vk_channel_slug)),
+            )
+            if value
+        ]
+        embed = embeds.brand("Диагностика", "Сводка состояния основных компонентов бота.")
+        embed.add_field(name="Discord", value="🟢 подключён" if self.bot.is_ready() else "🟡 подключается", inline=True)
+        embed.add_field(name="База данных", value="🟢 готова" if db_ready else "🔴 недоступна", inline=True)
+        embed.add_field(name="Задержка", value=f"`{round(self.bot.latency * 1000)} мс`", inline=True)
+        embed.add_field(name="Коги", value=f"`{len(self.bot.cogs)}`", inline=True)
+        embed.add_field(name="Голосовые подключения", value=f"`{len(self.bot.voice_clients)}`", inline=True)
+        embed.add_field(name="Опциональные модули", value=", ".join(enabled) or "не включены", inline=False)
+        embed.set_footer(text=f"Асуна Юки • uptime {format_duration(int(self.bot.uptime.total_seconds()))}")
+        await interaction.response.send_message(embed=embed, ephemeral=True)

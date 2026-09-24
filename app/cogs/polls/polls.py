@@ -35,23 +35,41 @@ class PollsCog(MegaCog, name="Polls"):
     async def poll_create(self, interaction: discord.Interaction, question: str, option1: str,
                           option2: str | None = None, option3: str | None = None,
                           option4: str | None = None, option5: str | None = None) -> None:
-        options = [opt for opt in (option1, option2, option3, option4, option5) if opt and opt.strip().lower() != "нет"]
-        options = [opt.strip()[:100] for opt in options if opt.strip()]
+        question = question.strip()
+        options: list[str] = []
+        seen: set[str] = set()
+        for raw in (option1, option2, option3, option4, option5):
+            if not raw or raw.strip().lower() == "нет":
+                continue
+            option = raw.strip()[:100]
+            key = option.casefold()
+            if option and key not in seen:
+                options.append(option)
+                seen.add(key)
+        if not question:
+            await interaction.response.send_message(
+                embed=embeds.error("Пустой вопрос", "Напишите вопрос для опроса."),
+                ephemeral=True,
+            )
+            return
         if len(options) < 2:
             await interaction.response.send_message(embed=embeds.error("Мало вариантов", "Минимум 2 варианта ответа."), ephemeral=True)
             return
         if len(options) > _MAX_OPTIONS:
             options = options[:_MAX_OPTIONS]
-        if len(question) > 256:
-            question = question[:256]
+        question = question[:256]
 
         poll_id = await self.polls.create(interaction.guild.id, interaction.channel.id, interaction.user.id, question, options)
         embed = await self.polls.embed(poll_id)
         view = PollView(poll_id, len(options))
-        await interaction.response.send_message(embed=embed, view=view)
-        message = await interaction.original_response()
-        await self.polls.bind_message(poll_id, message.id)
-        self.bot.add_view(view, message_id=message.id)
+        try:
+            await interaction.response.send_message(embed=embed, view=view)
+            message = await interaction.original_response()
+            await self.polls.bind_message(poll_id, message.id)
+            self.bot.add_view(view, message_id=message.id)
+        except Exception:
+            await self.polls.end(poll_id)
+            raise
 
     @app_commands.command(name="poll_end", description="Завершить опрос и показать итоги")
     @app_commands.describe(poll_id="ID опроса (в футере сообщения)")
@@ -61,6 +79,12 @@ class PollsCog(MegaCog, name="Polls"):
         poll = await self.polls.get(poll_id)
         if poll is None:
             await interaction.response.send_message(embed=embeds.error("Не найдено", "Опроса с таким ID нет."), ephemeral=True)
+            return
+        if poll["guild_id"] != interaction.guild.id:
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Этот опрос принадлежит другому серверу."),
+                ephemeral=True,
+            )
             return
         if not poll["active"]:
             await interaction.response.send_message(embed=embeds.warning("Уже завершён", "Этот опрос уже закрыт."), ephemeral=True)

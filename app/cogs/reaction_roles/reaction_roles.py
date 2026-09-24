@@ -79,7 +79,12 @@ class ReactionRolesCog(MegaCog, name="ReactionRoles"):
     async def rr_add(self, interaction: discord.Interaction, message_id: int, emoji: str, role: discord.Role,
                      channel: discord.TextChannel | None = None) -> None:
         channel = channel or interaction.channel
-        assert isinstance(channel, discord.TextChannel)
+        if not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Укажите текстовый канал с сообщением."),
+                ephemeral=True,
+            )
+            return
         try:
             await self._resolve_message(message_id, channel)
         except discord.HTTPException:

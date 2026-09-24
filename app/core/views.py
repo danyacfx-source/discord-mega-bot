@@ -51,6 +51,11 @@ class ConfirmView(discord.ui.View):
     def _allowed(self, interaction: discord.Interaction) -> bool:
         return self.user is None or interaction.user.id == self.user.id
 
+    def _disable_all_items(self) -> None:
+        for item in self.children:
+            if hasattr(item, "disabled"):
+                item.disabled = True
+
     async def _default_cancel(self, interaction: discord.Interaction) -> None:
         await interaction.response.edit_message(embed=embeds.info("Действие отменено"), view=None)
 
@@ -59,7 +64,7 @@ class ConfirmView(discord.ui.View):
         if not self._allowed(interaction):
             await interaction.response.defer()
             return
-        self.disable_all_items()
+        self._disable_all_items()
         await interaction.response.edit_message(view=self)
         callback = self.on_confirm or self._default_cancel
         await callback(interaction)
@@ -69,13 +74,13 @@ class ConfirmView(discord.ui.View):
         if not self._allowed(interaction):
             await interaction.response.defer()
             return
-        self.disable_all_items()
+        self._disable_all_items()
         await interaction.response.edit_message(view=self)
         callback = self.on_cancel or self._default_cancel
         await callback(interaction)
 
     async def on_timeout(self) -> None:
-        self.disable_all_items()
+        self._disable_all_items()
 
 
 class _TicketBaseView(discord.ui.View):
@@ -102,13 +107,23 @@ class TicketOpenView(_TicketBaseView):
 
     @discord.ui.button(label="Открыть тикет", style=discord.ButtonStyle.success, custom_id=TICKET_OPEN_ID, emoji="🎫")
     async def open_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
-        assert interaction.guild is not None
-        assert isinstance(interaction.user, discord.Member)
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                embed=embeds.error("Не удалось открыть тикет", "Кнопка работает только на сервере."),
+                ephemeral=True,
+            )
+            return
         result = await self.ticket_service.create(interaction.guild, interaction.user)
         if result.error:
             embed = embeds.error("Не удалось открыть тикет", result.error)
         else:
             channel = result.channel
+            if channel is None:
+                await interaction.response.send_message(
+                    embed=embeds.error("Не удалось открыть тикет", "Канал тикета не был создан."),
+                    ephemeral=True,
+                )
+                return
             embed = embeds.success("Тикет открыт", f"Перейдите в {channel.mention} и опишите вопрос одним сообщением.")
             embed.add_field(name="КАНАЛ ПОДДЕРЖКИ", value=channel.mention, inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -237,8 +252,14 @@ class TicketCloseView(_TicketBaseView):
 
     @discord.ui.button(label="Закрыть тикет", style=discord.ButtonStyle.danger, custom_id=TICKET_CLOSE_ID, emoji="🔒")
     async def close_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
-        assert interaction.guild is not None
-        result = await self.ticket_service.close(interaction.guild, interaction.channel, interaction.user)
+        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message(
+                embed=embeds.error("Не удалось закрыть тикет", "Кнопка работает только на сервере."),
+                ephemeral=True,
+            )
+            return
+        channel = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
+        result = await self.ticket_service.close(interaction.guild, channel, interaction.user)
         if result.error:
             embed = embeds.error("Не удалось закрыть тикет", result.error)
         else:

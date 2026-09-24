@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from app.db.warns_repository import WarnsRepository
     from app.services.settings_service import SettingsService
 
+from app.types import WarnRow
+
 logger = logging.getLogger("bot.services")
 
 SLOWMODE_SUGGESTIONS: tuple[str, ...] = ("off", "5s", "10s", "30s", "1m", "5m", "10m", "1h")
@@ -34,7 +36,7 @@ class ModerationService:
         await self._warns.add(guild_id, user_id, moderator_id, reason, datetime.now(UTC).isoformat())
         return await self._warns.count_for_user(guild_id, user_id)
 
-    async def warns_for_user(self, guild_id: int, user_id: int) -> list[dict]:
+    async def warns_for_user(self, guild_id: int, user_id: int) -> list[WarnRow]:
         return await self._warns.list_for_user(guild_id, user_id)
 
     async def warn_count(self, guild_id: int, user_id: int) -> int:
@@ -46,10 +48,10 @@ class ModerationService:
     async def remove_warn(self, guild_id: int, warn_id: int) -> bool:
         return await self._warns.delete(guild_id, warn_id)
 
-    async def get_warn(self, guild_id: int, warn_id: int) -> dict | None:
+    async def get_warn(self, guild_id: int, warn_id: int) -> WarnRow | None:
         return await self._warns.get(guild_id, warn_id)
 
-    async def all_warns(self, guild_id: int, limit: int = 300) -> list[dict]:
+    async def all_warns(self, guild_id: int, limit: int = 300) -> list[WarnRow]:
         return await self._warns.list_for_guild(guild_id, limit)
 
     @staticmethod

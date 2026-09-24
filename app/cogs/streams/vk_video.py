@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -61,7 +61,7 @@ class VkVideoCog(MegaCog, name="VkVideo"):
         except Exception:
             logger.debug("VK Видео: не удалось сменить присутствие", exc_info=True)
 
-    async def _sticky_live(self, status: dict) -> None:
+    async def _sticky_live(self, status: dict[str, Any]) -> None:
         config = self.bot.config
         channel = self._notify_channel()
         if channel is None:
@@ -107,7 +107,7 @@ class VkVideoCog(MegaCog, name="VkVideo"):
         return None
 
     @staticmethod
-    def _status_embed(status: dict) -> discord.Embed:
+    def _status_embed(status: dict[str, Any]) -> discord.Embed:
         embed = embeds.info("🔴 VK Видео: трансляция идёт", f"**[{status['title']}]({status['url']})**")
         if status.get("description"):
             embed.add_field(name="Описание", value=status["description"][:1024], inline=False)

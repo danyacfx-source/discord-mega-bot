@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from app.core.api_client import ApiClient, ApiRequestError
+
 if TYPE_CHECKING:
     from app.config import Config
     from app.db.donations_repository import DonationsRepository
@@ -29,38 +31,37 @@ class DonationService:
         self._repo = repo
         self._kv = kv
         self._config = config
-        self._session: aiohttp.ClientSession | None = None
+        self._http = ApiClient(
+            "DonationAlerts",
+            timeout=config.api_timeout_seconds,
+            user_agent="DiscordMegaBot/3.3 DonationAlerts",
+            proxy=config.api_proxy,
+        )
         self._token: str | None = config.donations_token
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-        return self._session
+        return self._http.session
 
     async def aclose(self) -> None:
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        await self._http.close()
 
     async def _refresh_token(self) -> bool:
         config = self._config
         if not (config.donations_client_id and config.donations_refresh_token):
             return False
         try:
-            async with self.session.post(
+            _, body, _ = await self._http.json(
+                "POST",
                 _TOKEN_URL,
+                attempts=2,
                 data={
                     "grant_type": "refresh_token",
                     "client_id": config.donations_client_id,
                     "refresh_token": config.donations_refresh_token,
                 },
-            ) as response:
-                if response.status != 200:
-                    logger.warning("DonationAlerts: обновление токена вернуло %s", response.status)
-                    return False
-                body = await response.json(content_type=None)
-        except aiohttp.ClientError:
+            )
+        except ApiRequestError:
             logger.exception("DonationAlerts: сеть при обновлении токена")
             return False
         token = body.get("access_token")
@@ -76,18 +77,19 @@ class DonationService:
             return []
         for attempt in (1, 2):
             try:
-                async with self.session.get(
+                status, body, _ = await self._http.json(
+                    "GET",
                     _DONATIONS_URL,
+                    attempts=2,
+                    acceptable=(200, 401),
                     params={"limit": limit},
                     headers={"Authorization": f"Bearer {self._token}"},
-                    timeout=aiohttp.ClientTimeout(total=20),
-                ) as response:
-                    if response.status == 401 and attempt == 1 and await self._refresh_token():
-                        continue
-                    if response.status != 200:
-                        raise RuntimeError(f"DonationAlerts API вернул {response.status}")
-                    body = await response.json(content_type=None)
-            except aiohttp.ClientError as exc:
+                )
+                if status == 401 and attempt == 1 and await self._refresh_token():
+                    continue
+                if status != 200:
+                    raise RuntimeError(f"DonationAlerts API вернул {status}")
+            except (ApiRequestError, aiohttp.ClientError) as exc:
                 raise RuntimeError(f"DonationAlerts: сеть ({exc})") from exc
             return [self._normalize(item) for item in (body or {}).get("data", [])]
         return []
@@ -113,7 +115,11 @@ class DonationService:
             message = item["message"]
             match = pattern.search(message) if pattern else None
             code = match.group(0).upper() if match else None
-            await self._repo.record(item["da_id"], item["username"], item["amount"], item["currency"], message, bool(code))
+            inserted = await self._repo.record(
+                item["da_id"], item["username"], item["amount"], item["currency"], message, bool(code)
+            )
+            if not inserted:
+                continue
             item["code"] = code
             item["created_at"] = None
             new_donations.append(item)

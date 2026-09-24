@@ -17,11 +17,12 @@ if TYPE_CHECKING:
 
 
 class UtilityCog(MegaCog, name="Utility"):
-    async def _channel_or_current(self, interaction: discord.Interaction, channel: discord.TextChannel | None) -> discord.TextChannel:
+    async def _channel_or_current(
+        self, interaction: discord.Interaction, channel: discord.TextChannel | None
+    ) -> discord.TextChannel | None:
         if channel is not None:
             return channel
-        assert isinstance(interaction.channel, discord.TextChannel)
-        return interaction.channel
+        return interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
 
     @app_commands.command(name="lock", description="Запретить @everyone писать в канал")
     @app_commands.describe(channel="Канал (по умолчанию текущий)")
@@ -30,6 +31,12 @@ class UtilityCog(MegaCog, name="Utility"):
     @bot_has_permissions(manage_channels=True, manage_roles=True)
     async def lock(self, interaction: discord.Interaction, channel: discord.TextChannel | None = None) -> None:
         target = await self._channel_or_current(interaction, channel)
+        if target is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Команда работает только в текстовом канале."),
+                ephemeral=True,
+            )
+            return
         everyone = interaction.guild.default_role
         await target.set_permissions(everyone, send_messages=False, reason=f"Lock by {interaction.user}")
         await interaction.response.send_message(embed=embeds.success("Канал закрыт", target.mention))
@@ -41,6 +48,12 @@ class UtilityCog(MegaCog, name="Utility"):
     @bot_has_permissions(manage_channels=True, manage_roles=True)
     async def unlock(self, interaction: discord.Interaction, channel: discord.TextChannel | None = None) -> None:
         target = await self._channel_or_current(interaction, channel)
+        if target is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Команда работает только в текстовом канале."),
+                ephemeral=True,
+            )
+            return
         everyone = interaction.guild.default_role
         await target.set_permissions(everyone, send_messages=None, reason=f"Unlock by {interaction.user}")
         await interaction.response.send_message(embed=embeds.success("Канал открыт", target.mention))
@@ -106,6 +119,12 @@ class UtilityCog(MegaCog, name="Utility"):
     @app_commands.guild_only()
     async def channel_info(self, interaction: discord.Interaction, channel: discord.TextChannel | None = None) -> None:
         target = await self._channel_or_current(interaction, channel)
+        if target is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Команда работает только в текстовом канале."),
+                ephemeral=True,
+            )
+            return
         embed = embeds.info(f"Канал: #{target.name}", target.mention)
         embed.add_field(name="ID", value=target.id, inline=True)
         embed.add_field(name="Категория", value=target.category.name if target.category else "—", inline=True)

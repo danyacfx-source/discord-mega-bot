@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import random
+import secrets
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
 
 import discord
 
 from app.core.base import BaseService
+from app.db.giveaways_repository import GiveawaysRepository
+from app.types import GiveawayRow
 
-if TYPE_CHECKING:
-    from app.db.giveaways_repository import GiveawaysRepository
 
-
-class GiveawayService(BaseService):
+class GiveawayService(BaseService[GiveawaysRepository]):
     repo: GiveawaysRepository
 
     def __init__(self, repo: GiveawaysRepository) -> None:
@@ -32,19 +30,22 @@ class GiveawayService(BaseService):
     async def bind_message(self, giveaway_id: int, message_id: int) -> None:
         await self._repo.set_message_id(giveaway_id, message_id)
 
-    async def get_by_message(self, message_id: int) -> dict[str, Any] | None:
+    async def get(self, giveaway_id: int) -> GiveawayRow | None:
+        return await self._repo.get(giveaway_id)
+
+    async def get_by_message(self, message_id: int) -> GiveawayRow | None:
         return await self._repo.get_by_message(message_id)
 
-    async def expired(self, moment: datetime) -> list[dict[str, Any]]:
+    async def expired(self, moment: datetime) -> list[GiveawayRow]:
         return await self._repo.active_expired(moment)
 
-    async def active_with_message(self) -> list[dict[str, Any]]:
+    async def active_with_message(self) -> list[GiveawayRow]:
         return await self._repo.active_with_message()
 
-    async def recent_for_guild(self, guild_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    async def recent_for_guild(self, guild_id: int, limit: int = 50) -> list[GiveawayRow]:
         return await self._repo.recent_for_guild(guild_id, limit)
 
-    async def embed(self, giveaway: dict[str, Any]) -> discord.Embed:
+    async def embed(self, giveaway: GiveawayRow) -> discord.Embed:
         from datetime import datetime
 
         from app.core import embeds
@@ -65,6 +66,9 @@ class GiveawayService(BaseService):
         return embed
 
     async def join(self, giveaway_id: int, user_id: int) -> bool:
+        giveaway = await self._repo.get(giveaway_id)
+        if giveaway is None or not giveaway["active"]:
+            return False
         return await self._repo.add_entry(giveaway_id, user_id)
 
     async def entries(self, giveaway_id: int) -> list[int]:
@@ -73,10 +77,11 @@ class GiveawayService(BaseService):
     async def finish(self, giveaway_id: int) -> None:
         await self._repo.end(giveaway_id)
 
+    async def claim(self, giveaway_id: int, lease_seconds: int = 120) -> GiveawayRow | None:
+        return await self._repo.claim(giveaway_id, lease_seconds)
+
     @staticmethod
     def draw(entries: list[int], winners: int) -> list[int]:
         if not entries:
             return []
-        pool = list(entries)
-        random.shuffle(pool)
-        return pool[:winners]
+        return secrets.SystemRandom().sample(entries, k=min(max(0, winners), len(entries)))

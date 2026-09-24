@@ -12,6 +12,7 @@ from discord.ext import tasks
 from app.core import embeds
 from app.core.base import MegaCog
 from app.services.reminder_service import ReminderService
+from app.types import ReminderRow
 from app.utils.format import plural, relative
 from app.utils.time import parse_duration
 
@@ -37,20 +38,23 @@ class RemindersCog(MegaCog, name="Reminders"):
 
     @tasks.loop(seconds=30.0)
     async def check_loop(self) -> None:
-        try:
-            due = await self.reminders.due_up_to(datetime.now(UTC))
-        except Exception:
-            logger.exception("Ошибка при выборке напоминаний")
-            return
-        for item in due:
+        for _ in range(100):
+            try:
+                item = await self.reminders.claim_due(datetime.now(UTC))
+            except Exception:
+                logger.exception("Ошибка при claim напоминания")
+                return
+            if item is None:
+                return
             try:
                 await self._deliver(item)
             except Exception:
                 logger.exception("Не удалось доставить напоминание #%s", item["id"])
-            finally:
+                await self.reminders.release_claim(item["id"])
+            else:
                 await self.reminders.mark_done(item["id"])
 
-    async def _deliver(self, item: dict) -> None:
+    async def _deliver(self, item: ReminderRow) -> None:
         user = self.bot.get_user(item["user_id"])
         embed = embeds.info("⏰ Напоминание", item["message"])
         embed.set_footer(text=f"ID напоминания: {item['id']}")
@@ -65,7 +69,6 @@ class RemindersCog(MegaCog, name="Reminders"):
 
     @app_commands.command(name="remindme", description="Напомнить вам о чём-либо через некоторое время")
     @app_commands.describe(duration="Срок, например: 30s, 5m, 2h, 1d", text="Текст напоминания")
-    @app_commands.guild_only()
     async def remindme(self, interaction: discord.Interaction, duration: str, text: str) -> None:
         seconds = parse_duration(duration)
         if seconds is None or seconds <= 0:
@@ -92,18 +95,17 @@ class RemindersCog(MegaCog, name="Reminders"):
             channel = interaction.channel
         reminder_id = await self.reminders.schedule(
             interaction.user.id,
-            interaction.guild.id,
+            interaction.guild.id if interaction.guild else None,
             channel.id if channel else None,
             text,
             remind_at,
         )
         embed = embeds.success("Напоминание создано", text)
-        embed.add_field(name="О напомню", value=relative(remind_at), inline=True)
+        embed.add_field(name="Напомнить", value=relative(remind_at), inline=True)
         embed.set_footer(text=f"ID: {reminder_id} • Место: {channel.mention if channel else 'Личные сообщения'}")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="remind", description="Список ваших напоминаний")
-    @app_commands.guild_only()
     async def remind_list(self, interaction: discord.Interaction) -> None:
         items = await self.reminders.active_for_user(interaction.user.id)
         if not items:
@@ -117,7 +119,6 @@ class RemindersCog(MegaCog, name="Reminders"):
 
     @app_commands.command(name="remind_cancel", description="Отменить конкретное напоминание")
     @app_commands.describe(reminder_id="ID из списка /remind")
-    @app_commands.guild_only()
     async def remind_cancel(self, interaction: discord.Interaction, reminder_id: int) -> None:
         if await self.reminders.cancel(interaction.user.id, reminder_id):
             embed = embeds.success("Удалено", f"Напоминание `#{reminder_id}` отменено.")
@@ -126,7 +127,6 @@ class RemindersCog(MegaCog, name="Reminders"):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="remind_clear", description="Удалить все ваши напоминания")
-    @app_commands.guild_only()
     async def remind_clear(self, interaction: discord.Interaction) -> None:
         count = await self.reminders.count_for_user(interaction.user.id)
         if count == 0:

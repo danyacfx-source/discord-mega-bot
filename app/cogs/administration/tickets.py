@@ -22,6 +22,9 @@ class TicketCog(MegaCog, name="Tickets"):
         super().__init__(bot)
         self.tickets = tickets
 
+    async def cog_unload(self) -> None:
+        await self.tickets.aclose()
+
     @ticket_group.command(name="panel", description="Отправить панель открытия тикета")
     @app_commands.describe(channel="Куда отправить панель (по умолчанию — текущий канал)")
     @app_commands.default_permissions(manage_guild=True)

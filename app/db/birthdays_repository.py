@@ -1,7 +1,10 @@
 """Дни рождения участников: дата (месяц, день) одного человека."""
 from __future__ import annotations
 
+from typing import cast
+
 from app.db.base_repository import BaseRepository
+from app.types import BirthdayRow
 
 
 class BirthdaysRepository(BaseRepository):
@@ -20,8 +23,12 @@ class BirthdaysRepository(BaseRepository):
         cursor = await self.db.execute("DELETE FROM birthdays WHERE user_id = ?", (user_id,))
         return cursor.rowcount > 0
 
-    async def all(self) -> list[dict]:
-        return await self.db.fetchall("SELECT user_id, month, day FROM birthdays ORDER BY month, day")
+    async def all(self) -> list[BirthdayRow]:
+        rows = await self.db.fetchall("SELECT user_id, month, day FROM birthdays ORDER BY month, day")
+        return [cast(BirthdayRow, dict(row)) for row in rows]
 
-    async def with_date(self, month: int, day: int) -> list[dict]:
-        return await self.db.fetchall("SELECT user_id, month, day FROM birthdays WHERE month = ? AND day = ?", (month, day))
+    async def with_date(self, month: int, day: int) -> list[BirthdayRow]:
+        rows = await self.db.fetchall(
+            "SELECT user_id, month, day FROM birthdays WHERE month = ? AND day = ?", (month, day)
+        )
+        return [cast(BirthdayRow, dict(row)) for row in rows]

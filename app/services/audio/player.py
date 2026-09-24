@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -33,6 +34,9 @@ class GuildPlayer:
         self.notify_channel_id: int | None = None
         self.volume = 1.0
         self.loop_one = False
+        self.skip_votes: set[int] = set()
+        self.position_seconds = 0
+        self._seeking = False
         self._idle_task: asyncio.Task[None] | None = None
 
     @property
@@ -45,11 +49,24 @@ class GuildPlayer:
     def requeue(self, track: Track) -> None:
         self.queue.appendleft(track)
 
+    def shuffle(self) -> None:
+        entries = list(self.queue)
+        secrets.SystemRandom().shuffle(entries)
+        self.queue = deque(entries)
+
+    def remove(self, position: int) -> Track | None:
+        if position < 1 or position > len(self.queue):
+            return None
+        entries = list(self.queue)
+        removed = entries.pop(position - 1)
+        self.queue = deque(entries)
+        return removed
+
     async def notify(self, text: str) -> None:
         if self.notify_channel_id is None:
             return
         channel = self.bot.get_channel(self.notify_channel_id)
-        if channel is None:
+        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
             return
         try:
             await channel.send(text)
@@ -67,7 +84,13 @@ class GuildPlayer:
         if self.voice.is_playing():
             return
         source = discord.PCMVolumeTransformer(
-            discord.FFmpegPCMAudio(track.stream_url, before_options=_BEFORE_OPTIONS, options=_AFTER_OPTIONS),
+            discord.FFmpegPCMAudio(
+                track.stream_url,
+                before_options=(
+                    f"-ss {self.position_seconds} {_BEFORE_OPTIONS}" if self.position_seconds > 0 else _BEFORE_OPTIONS
+                ),
+                options=_AFTER_OPTIONS,
+            ),
             volume=self.volume,
         )
         self.voice.play(source, after=self._on_finished)
@@ -76,9 +99,28 @@ class GuildPlayer:
         if error and not isinstance(error, asyncio.CancelledError):
             logger.warning("Ошибка воспроизведения: %s", error)
         try:
-            asyncio.run_coroutine_threadsafe(self.play_next(), self.loop).result(10)
+            coroutine = self._restart_after_seek() if self._seeking else self.play_next()
+            asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(10)
         except Exception:
             logger.exception("Сбой при переключении трека")
+
+    async def _restart_after_seek(self) -> None:
+        self._seeking = False
+        if self.current is not None:
+            await self._start(self.current)
+
+    async def seek(self, seconds: int) -> bool:
+        if self.current is None or self.voice is None or not self.voice.is_connected():
+            return False
+        duration = self.current.duration
+        upper = max(0, (duration - 1) if duration else seconds)
+        self.position_seconds = max(0, min(seconds, upper))
+        if self.voice.is_playing() or self.voice.is_paused():
+            self._seeking = True
+            self.voice.stop()
+        else:
+            await self._start(self.current)
+        return True
 
     async def play_next(self) -> None:
         if self.loop_one and self.current is not None:
@@ -86,12 +128,15 @@ class GuildPlayer:
             await self.notify(f"🔁 Повтор: **{self.current}**")
             return
         if self.queue:
+            self.position_seconds = 0
             await self.play(self.queue.popleft())
             return
         self.current = None
+        self.position_seconds = 0
         await self._schedule_idle_disconnect()
 
     async def skip(self, amount: int = 1) -> Track | None:
+        self.skip_votes.clear()
         skipped = self.current
         for _ in range(max(1, amount) - 1):
             if self.queue:
@@ -106,27 +151,34 @@ class GuildPlayer:
     async def stop(self) -> None:
         self._cancel_idle()
         self.queue.clear()
+        self.skip_votes.clear()
         self.current = None
+        self.position_seconds = 0
         if self.voice is not None:
             self.voice.stop()
 
-    def pause(self) -> None:
+    def pause(self) -> bool:
         if self.voice is not None and self.voice.is_playing():
             self.voice.pause()
+            return True
+        return False
 
-    def resume(self) -> None:
+    def resume(self) -> bool:
         if self.voice is not None and self.voice.is_paused():
             self.voice.resume()
+            return True
+        return False
 
     def set_volume(self, volume: float) -> None:
         self.volume = max(0.0, min(2.0, volume))
-        if self.voice is not None and self.voice.source is not None:
+        if self.voice is not None and isinstance(self.voice.source, discord.PCMVolumeTransformer):
             self.voice.source.volume = self.volume
 
     async def disconnect(self) -> None:
         self._cancel_idle()
         self.queue.clear()
         self.current = None
+        self.position_seconds = 0
         if self.voice is not None and self.voice.is_connected():
             await self.voice.disconnect()
         self.voice = None

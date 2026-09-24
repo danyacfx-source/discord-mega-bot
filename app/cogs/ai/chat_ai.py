@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+from app.core.api_client import ApiClient, ApiRequestError
 from app.core.base import MegaCog
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ class ChatAICog(MegaCog, name="ChatAI"):
         super().__init__(bot)
         self._last_reply: dict[int, float] = {}
         self._pending: dict[int, asyncio.Task[None]] = {}
-        self._session: aiohttp.ClientSession | None = None
+        self._api: ApiClient | None = None
         # Пауза, переключаемая из веб-панели без рестарта (сбрасывается при рестарте).
         self._paused = False
 
@@ -81,22 +81,26 @@ class ChatAICog(MegaCog, name="ChatAI"):
         now = _now()
         return now - last >= self.bot.config.ai_cooldown_seconds
 
-    async def _session_get(self) -> aiohttp.ClientSession:
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(proxy=self.bot.config.ai_proxy or None)
-        return self._session
+    def _api_client(self) -> ApiClient:
+        if self._api is None:
+            self._api = ApiClient(
+                "Gemini",
+                timeout=self.bot.config.ai_timeout_seconds,
+                proxy=self.bot.config.ai_proxy or None,
+            )
+        return self._api
 
     async def cog_unload(self) -> None:
         for task in self._pending.values():
             task.cancel()
-        if self._session is not None and not self._session.closed:
-            await self._session.close()
+        if self._api is not None:
+            await self._api.close()
 
     # ------------------------------------------------------------------ Gemini
 
-    def _payload(self, messages: list[dict]) -> dict:
+    def _payload(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         system = ""
-        contents: list[dict] = []
+        contents: list[dict[str, Any]] = []
         for message in messages:
             if message.get("role") == "system" and not system:
                 system = str(message.get("content") or "")
@@ -108,7 +112,7 @@ class ChatAICog(MegaCog, name="ChatAI"):
             contents.append({"role": role, "parts": [{"text": text}]})
         if not contents:
             contents.append({"role": "user", "parts": [{"text": "Привет"}]})
-        body: dict = {
+        body: dict[str, Any] = {
             "contents": contents,
             "generationConfig": {
                 "maxOutputTokens": self.bot.config.ai_max_tokens,
@@ -119,7 +123,7 @@ class ChatAICog(MegaCog, name="ChatAI"):
             body["systemInstruction"] = {"parts": [{"text": system}]}
         return body
 
-    async def _ask(self, messages: list[dict]) -> str:
+    async def _ask(self, messages: list[dict[str, Any]]) -> str:
         config = self.bot.config
         key = config.ai_api_key or ""
         if not key:
@@ -128,39 +132,27 @@ class ChatAICog(MegaCog, name="ChatAI"):
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{config.ai_model}:generateContent?key={key}"
         )
-        session = await self._session_get()
-        last_error: Exception | None = None
-        for attempt in range(3):
-            try:
-                timeout = aiohttp.ClientTimeout(total=config.ai_timeout_seconds)
-                async with session.post(url, json=self._payload(messages), timeout=timeout) as resp:
-                    data = await resp.json(content_type=None)
-                    if resp.status == 429 and attempt < 2:
-                        retry = 5
-                        logger.warning("Gemini rate limit (429), повтор через %dс", retry)
-                        await asyncio.sleep(retry)
-                        continue
-                    if resp.status >= 500 and attempt < 2:
-                        backoff = 2 ** (attempt + 1)
-                        logger.warning("Gemini server error %d, повтор через %dс", resp.status, backoff)
-                        await asyncio.sleep(backoff)
-                        continue
-                    if not resp.ok:
-                        message = (data.get("error") or {}).get("message") or f"HTTP {resp.status}"
-                        raise RuntimeError(str(message))
-                    text = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
-                    if isinstance(text, str) and text.strip():
-                        return text.strip()
-                    block = (data.get("promptFeedback") or {}).get("blockReason")
-                    finish = (data.get("candidates") or [{}])[0].get("finishReason")
-                    raise RuntimeError(f"Заблокировано: {block or finish or 'Пустой ответ Gemini'}")
-            except (TimeoutError, aiohttp.ClientError) as exc:
-                last_error = exc
-                if attempt >= 2:
-                    break
-                logger.warning("Gemini сеть: %s, повтор %d/3", exc, attempt + 1)
-                await asyncio.sleep(2 ** (attempt + 1))
-        raise RuntimeError(str(last_error) or "Gemini недоступен")
+        try:
+            _, data, _ = await self._api_client().json(
+                "POST",
+                url,
+                attempts=3,
+                json=self._payload(messages),
+            )
+        except ApiRequestError as exc:
+            if isinstance(exc.body, dict):
+                message = (exc.body.get("error") or {}).get("message")
+                if message:
+                    raise RuntimeError(str(message)) from exc
+            raise RuntimeError(str(exc)) from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("Gemini вернул некорректный JSON")
+        text = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+        block = (data.get("promptFeedback") or {}).get("blockReason")
+        finish = (data.get("candidates") or [{}])[0].get("finishReason")
+        raise RuntimeError(f"Заблокировано: {block or finish or 'Пустой ответ Gemini'}")
 
     # ------------------------------------------------------------------ messages
 
@@ -219,8 +211,10 @@ class ChatAICog(MegaCog, name="ChatAI"):
         self._last_reply[channel.id] = _now()
         logger.info("Gemini ответ в #%s (%d символов)", getattr(channel, "name", channel.id), len(text))
 
-    async def _build_context(self, channel: discord.TextChannel | discord.Thread, current_id: int) -> list[dict]:
-        messages: list[dict] = []
+    async def _build_context(
+        self, channel: discord.TextChannel | discord.Thread, current_id: int
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
         try:
             async for fetched in channel.history(limit=self.bot.config.ai_history_size):
                 if fetched.id == current_id or fetched.author.bot:

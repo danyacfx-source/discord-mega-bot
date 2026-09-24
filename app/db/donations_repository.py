@@ -17,9 +17,10 @@ class DonationsRepository(BaseRepository):
         currency: str,
         message: str,
         vip: bool,
-    ) -> None:
-        await self.db.execute(
+    ) -> bool:
+        cursor = await self.db.execute(
             "INSERT OR IGNORE INTO donations (da_id, user_name, amount, currency, message, vip, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
             (da_id, user_name, amount, currency, message, int(vip)),
         )
+        return cursor.rowcount > 0

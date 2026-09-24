@@ -1,9 +1,10 @@
 const fs = require("fs");
+const path = require("path");
 const vm = require("vm");
 
 // All element ids referenced in panel.js via $("...") — verify against index.html
-const htmlPath = "C:/Users/Admin/Documents/Default Project/discord-mega-bot/app/core/webpanel/index.html";
-const jsPath = "C:/Users/Admin/Documents/Default Project/discord-mega-bot/app/core/webpanel/panel.js";
+const htmlPath = path.join(__dirname, "index.html");
+const jsPath = path.join(__dirname, "panel.js");
 const src = fs.readFileSync(jsPath, "utf8");
 const html = fs.readFileSync(htmlPath, "utf8");
 

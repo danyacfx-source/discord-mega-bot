@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.core.base import BaseService
+from app.db.temp_voices_repository import TempVoicesRepository
+from app.types import TempVoiceRow
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -12,7 +14,7 @@ if TYPE_CHECKING:
     from app.db.temp_voices_repository import TempVoicesRepository
 
 
-class TempVoiceService(BaseService):
+class TempVoiceService(BaseService[TempVoicesRepository]):
     repo: TempVoicesRepository
 
     def __init__(self, repo: TempVoicesRepository) -> None:
@@ -34,5 +36,5 @@ class TempVoiceService(BaseService):
         await self._repo.delete_by_channel(channel_id)
         await self._repo.create(new_owner_id, channel_id, datetime.now(UTC))
 
-    async def all(self) -> list[dict]:
+    async def all(self) -> list[TempVoiceRow]:
         return await self._repo.all()

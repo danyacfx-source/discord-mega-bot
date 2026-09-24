@@ -20,6 +20,8 @@ from app.core import embeds
 from app.core.stream_state import stream_activity
 
 if TYPE_CHECKING:
+    from app.core.overlay import Overlay
+    from app.core.webpanel import WebPanel
     from app.db.database import Database
     from app.services import Services
     from rewrite.root import Root
@@ -34,6 +36,8 @@ class Bot(commands.Bot):
     db: Database | None
     services: Services | None
     root: Root | None
+    webpanel: WebPanel | None
+    overlay: Overlay | None
 
     def __init__(self, config: Config) -> None:
         super().__init__(
@@ -131,7 +135,7 @@ class Bot(commands.Bot):
         elif isinstance(original, app_commands.MissingPermissions):
             names = ", ".join(f"`{name}`" for name in original.missing_permissions)
             embed = embeds.error("Недостаточно прав", f"Вам нужны права: {names}.")
-        elif isinstance(original, app_commands.NotOwner):
+        elif isinstance(original, commands.NotOwner):
             embed = embeds.error("Только для владельца", "Эта команда доступна владельцу бота.")
         elif isinstance(original, app_commands.CommandOnCooldown):
             embed = embeds.warning("Подождите", f"Команда на перезарядке: {original.retry_after:.1f} сек.")

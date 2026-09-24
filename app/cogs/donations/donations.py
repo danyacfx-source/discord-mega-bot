@@ -210,6 +210,8 @@ class DonationsCog(MegaCog, name="Donations"):
         config = self.bot.config
         if guild_id:
             try:
+                if self.bot.services is None:
+                    return None
                 settings = await self.bot.services.settings.get(guild_id)
             except Exception:
                 logger.debug("Donations: не удалось получить настройки гильдии %s", guild_id, exc_info=True)

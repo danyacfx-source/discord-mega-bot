@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # ffmpeg и libopus — обязательны для музыки и голосовых каналов (py-nacl, discordsrv)
 # curl + ca-certificates — для загрузки sing-box
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # sing-box — опциональный прокси только для Gemini (если хост в EEA/NL, где API недоступен).
@@ -20,13 +20,18 @@ RUN curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBO
 
 WORKDIR /app
 
+RUN addgroup --system bot \
+    && adduser --system --ingroup bot --home /app --no-create-home bot
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 RUN sed -i 's/\r$//' /app/scripts/docker-entrypoint.sh \
-    && chmod +x /app/scripts/docker-entrypoint.sh
+    && chmod +x /app/scripts/docker-entrypoint.sh \
+    && mkdir -p /app/data /app/logs \
+    && chown -R bot:bot /app
 
 # БД, токены и логи должны жить в volume (см. docker-compose.yml / хост)
 VOLUME ["/app/data", "/app/logs"]

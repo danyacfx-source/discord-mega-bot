@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
@@ -256,7 +256,7 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
 
     async def _apply_role_settings(self, guild: discord.Guild, bot_top: discord.Role) -> list[str]:
         reports: list[str] = []
-        ordered = sorted(ROLE_SETTINGS.items(), key=lambda item: (item[1].get("order") or 999))
+        ordered = sorted(ROLE_SETTINGS.items(), key=lambda item: int(str(item[1].get("order") or 999)))
         position = bot_top.position - 1
 
         for name, spec in ordered:
@@ -294,7 +294,7 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
             position -= 1
         return reports
 
-    async def _sponsor_roles(self, guild: discord.Guild, spec: dict) -> list[discord.Role]:
+    async def _sponsor_roles(self, guild: discord.Guild, spec: dict[str, Any]) -> list[discord.Role]:
         roles: list[discord.Role] = []
         for name in spec.get("roles") or []:
             role = discord.utils.get(guild.roles, name=name)
@@ -313,7 +313,11 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
     @app_commands.default_permissions(manage_guild=True)
     async def setup_roles(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "Команда работает только на сервере.", ephemeral=True
+            )
+            return
         await interaction.response.defer(ephemeral=True)
         bot_top = await self._bot_top_role(guild)
         if bot_top is None:
@@ -347,7 +351,11 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
     @app_commands.default_permissions(manage_guild=True)
     async def apply_role_settings(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "Команда работает только на сервере.", ephemeral=True
+            )
+            return
         await interaction.response.defer(ephemeral=True)
         bot_top = await self._bot_top_role(guild)
         if bot_top is None:
@@ -364,7 +372,11 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
     @app_commands.default_permissions(manage_guild=True)
     async def setup_channels(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "Команда работает только на сервере.", ephemeral=True
+            )
+            return
         await interaction.response.defer(ephemeral=True)
 
         created: list[str] = []
@@ -385,7 +397,7 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
 
             category_type = spec.get("type")
             if category_type == "temp":
-                create_name = spec.get("create") or "➕ Создать канал"
+                create_name = str(spec.get("create") or "➕ Создать канал")
                 channel = _find_channel([c for c in category.channels if isinstance(c, discord.VoiceChannel)], create_name)
                 if channel is not None:
                     existing.append(f"🔊 {create_name}")
@@ -397,8 +409,10 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
                         pass
                 continue
 
-            text_names = list(spec.get("text_channels") or []) if category_type == "sponsor" else list(spec.get("channels") or [])
-            voice_names = list(spec.get("voice_channels") or [])
+            text_value = spec.get("text_channels") if category_type == "sponsor" else spec.get("channels")
+            voice_value = spec.get("voice_channels")
+            text_names = [str(item) for item in text_value] if isinstance(text_value, list) else []
+            voice_names = [str(item) for item in voice_value] if isinstance(voice_value, list) else []
 
             for name in text_names:
                 channel = _find_channel([c for c in category.channels if isinstance(c, discord.TextChannel)], name)
@@ -440,7 +454,11 @@ class ServerSetupCog(MegaCog, name="ServerSetup"):
     @app_commands.default_permissions(manage_guild=True)
     async def debug_channels(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                "Команда работает только на сервере.", ephemeral=True
+            )
+            return
         await interaction.response.defer(ephemeral=True)
 
         lines: list[str] = []

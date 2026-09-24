@@ -28,7 +28,8 @@ def _can_moderate(interaction: discord.Interaction) -> bool:
     perms = getattr(user, "guild_permissions", None)
     if perms is not None and (perms.administrator or perms.manage_messages):
         return True
-    owner_id = getattr(interaction.client, "config", None).owner_id
+    config = getattr(interaction.client, "config", None)
+    owner_id = getattr(config, "owner_id", None)
     return owner_id is not None and user.id == owner_id
 
 
@@ -36,7 +37,7 @@ class KickCog(MegaCog, name="Kick"):
     def __init__(self, bot: MegaBot, kick: KickService) -> None:
         super().__init__(bot)
         self.kick = kick
-        self._chat_task: asyncio.Task | None = None
+        self._chat_task: asyncio.Task[None] | None = None
 
     async def cog_load(self) -> None:
         if self.bot.config.kick_channel_slug:
@@ -83,7 +84,7 @@ class KickCog(MegaCog, name="Kick"):
         except Exception:
             logger.debug("Kick: не удалось сменить присутствие", exc_info=True)
 
-    async def _sticky_live(self, status: dict) -> None:
+    async def _sticky_live(self, status: dict[str, Any]) -> None:
         config = self.bot.config
         channel = self._notify_channel()
         if channel is None:
@@ -129,7 +130,7 @@ class KickCog(MegaCog, name="Kick"):
         return None
 
     @staticmethod
-    def _status_embed(status: dict) -> discord.Embed:
+    def _status_embed(status: dict[str, Any]) -> discord.Embed:
         embed = embeds.info("🔴 Kick: стрим начался", f"**[{status['title']}](https://kick.com/{status['slug']})**")
         if status["thumbnail"]:
             embed.set_thumbnail(url=status["thumbnail"])
@@ -185,8 +186,13 @@ class KickCog(MegaCog, name="Kick"):
     @app_commands.describe(username="Ник на Kick", minutes="Длительность, 1–10080 минут", reason="Причина")
     @app_commands.guild_only()
     @app_commands.check(_can_moderate)
-    async def kick_timeout(self, interaction: discord.Interaction, username: str, minutes: int = 10, reason: str = "") -> None:
-        minutes = max(1, min(minutes, 10080))
+    async def kick_timeout(
+        self,
+        interaction: discord.Interaction,
+        username: str,
+        minutes: app_commands.Range[int, 1, 10080] = 10,
+        reason: str = "",
+    ) -> None:
         user = await self._mod_target(interaction, username)
         if user is None:
             return

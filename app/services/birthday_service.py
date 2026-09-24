@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from app.core.base import BaseService
 from app.db.birthdays_repository import BirthdaysRepository
+from app.types import BirthdayRow
 
 
-class BirthdayService(BaseService):
+class BirthdayService(BaseService[BirthdaysRepository]):
     def __init__(self, repo: BirthdaysRepository) -> None:
         super().__init__(repo)
     async def set(self, user_id: int, month: int, day: int) -> None:
@@ -17,8 +18,8 @@ class BirthdayService(BaseService):
     async def remove(self, user_id: int) -> bool:
         return await self._repo.remove(user_id)
 
-    async def all(self) -> list[dict]:
+    async def all(self) -> list[BirthdayRow]:
         return await self._repo.all()
 
-    async def with_date(self, month: int, day: int) -> list[dict]:
+    async def with_date(self, month: int, day: int) -> list[BirthdayRow]:
         return await self._repo.with_date(month, day)

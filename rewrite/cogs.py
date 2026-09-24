@@ -26,6 +26,7 @@ logger = logging.getLogger("bot")
 COG_PROVIDERS: dict[str, Callable[[Root], object]] = {
     "settings": lambda r: r.services.settings,
     "moderation": lambda r: r.services.moderation,
+    "cases": lambda r: r.services.cases,
     "music": lambda r: r.services.music,
     "tickets": lambda r: r.services.tickets,
     "logging": lambda r: r.services.logging,
@@ -50,7 +51,7 @@ def _build_cog(root: Root, cls: type) -> object:
     Если все необязательные зависимости резолвятся — ``cls(bot, **kwargs)``.
     Иначе (неизвестный обязательный параметр) — откат к ``cls(bot)``, как в loader.
     """
-    params = list(inspect.signature(cls.__init__).parameters.values())[1:]
+    params = list(inspect.signature(cls).parameters.values())
     kwargs: dict[str, object] = {}
     resolvable = True
     for param in params:

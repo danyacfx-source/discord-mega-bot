@@ -4,9 +4,9 @@
 
 ## Возможности
 
-- **Модерация**: kick, ban, unban, timeout, purge, warn-система, роли, slowmode, точечное снятие варнов.
+- **Модерация**: kick, ban, unban, timeout, purge, warn-система, moderation cases, роли, slowmode, точечное снятие варнов.
 - **Авто-мод**: стоп-слова, приглашения, флуд упоминаниями, CAPS-детектор.
-- **Музыка**: поиск/воспроизведение (yt-dlp + FFmpeg), очередь, skip/stop/pause/volume/loop.
+- **Музыка**: поиск/воспроизведение (yt-dlp + FFmpeg), очередь, skip/skipvote/seek/history/stop/pause/resume/shuffle/remove/volume/loop, импорт YouTube/Spotify Playlist и SQLite-плейлисты.
 - **Администрирование**: тикеты с транскриптами, настройка приветствий/прощаний, логирование событий.
 - **Напоминания**: `/remindme`, список, отмена, чистка (фоновая доставка).
 - **Опросы**: до 5 вариантов, голосование кнопками, подведение итогов.
@@ -14,9 +14,11 @@
 - **Reaction-роли**: выдача ролей по реакции, устойчивые к рестарту.
 - **Утилиты**: lock/unlock каналов, avatar, servericon, emoji, roleinfo, channelinfo, whois.
 - **Snipe**: удалённые и изменённые сообщения.
-- **Общее**: ping, serverinfo, userinfo, справка, пагинация, embed-фабрика.
+- **Общее**: ping, health-диагностика, serverinfo, userinfo, справка, пагинация, embed-фабрика.
+- **Backup/restore**: проверка SQLite integrity и безопасное восстановление через `scripts/restore_db.py`.
 - **Донаты (DonationAlerts)**: роль «Спонсор» за донат, VIP-код в сообщении, `/donate`, спонсор-кнопка (генерирует персональный код и выдаёт роль по сумме).
 - **Стримы**: Twitch, Kick и VK Видео Live — автоуведомления о старте/конце (sticky-сообщение, пинг роли), статусы командой, присутствие бота «🔴 стрим: …» во время эфира.
+- **API-слой**: общий aiohttp-клиент для Twitch/Kick/VK/DonationAlerts с таймаутами, retry для 429/5xx, `Retry-After`, User-Agent и прокси через `API_PROXY`.
 - **Kick-модерация**: `/kick_ban`, `/kick_timeout`, `/kick_unban`, автомод чата через Pusher.
 - **Расширенные логи**: join/leave, голосовые, изменение сообщений/ролей/никнов, старт бота (embed «🚀 Бот запущен и готов к работе»).
 - **Правила-гейт**: реакция ✅ на правилах выдаёт роль.

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import random
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -43,6 +42,23 @@ async def test_reminders_due_up_to(db):
 
 
 @pytest.mark.asyncio
+async def test_reminder_claim_is_single_consumer(db):
+    repo = RemindersRepository(db)
+    past = datetime.now(UTC) - timedelta(seconds=5)
+    reminder_id = await repo.add(100, 1, 2, "Один раз", past)
+
+    first = await repo.claim_due(datetime.now(UTC))
+    second = await repo.claim_due(datetime.now(UTC))
+    assert first is not None and first["id"] == reminder_id
+    assert second is None
+
+    await repo.release_claim(reminder_id)
+    third = await repo.claim_due(datetime.now(UTC))
+    assert third is not None and third["id"] == reminder_id
+    await repo.deactivate(reminder_id)
+
+
+@pytest.mark.asyncio
 async def test_polls_votes_and_results(db):
     repo = PollsRepository(db)
     poll_id = await repo.create(1, 2, 3, "Чай или кофе?", ["Чай", "Кофе"])
@@ -71,12 +87,14 @@ async def test_giveaways_join_draw_and_expire(db):
     entries = await repo.entries(gid)
     assert len(entries) == 5
 
-    random.seed(42)
     from app.services.giveaway_service import GiveawayService
 
     service = GiveawayService(repo)
     winners = service.draw(entries, 2)
     assert len(winners) == 2 and set(winners) <= set(entries)
+    all_winners = service.draw(entries, 99)
+    assert len(all_winners) == len(entries)
+    assert len(all_winners) == len(set(all_winners))
 
     expired = await repo.active_expired(datetime.now(UTC) + timedelta(minutes=10))
     assert len(expired) == 1

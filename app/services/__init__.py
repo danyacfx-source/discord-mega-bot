@@ -15,6 +15,7 @@ from app.services.donation_service import DonationService
 from app.services.giveaway_service import GiveawayService
 from app.services.kick_service import KickService
 from app.services.logging_service import LoggingService
+from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import ModerationService
 from app.services.music_service import MusicService
 from app.services.poll_service import PollService
@@ -33,6 +34,7 @@ from app.services.vk_video_service import VkVideoService
 class Services:
     settings: SettingsService
     moderation: ModerationService
+    cases: ModerationCaseService
     music: MusicService
     tickets: TicketService
     logging: LoggingService

@@ -227,6 +227,32 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
 }
 @media(max-width:560px){.cols,.three{grid-template-columns:1fr}.cols4{gap:10px}.card{padding:16px}.stat{min-height:98px}.stat .val{font-size:21px}.pill{max-width:35vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-inline>.btn{flex:1}.topbar h1:before{display:none}.overview-hero h2{font-size:23px}.quick-grid{grid-template-columns:1fr 1fr}.quick-card{padding:11px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* Final polish: a calmer, more tactile control-center surface. */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.22;background-image:linear-gradient(color-mix(in srgb,var(--border) 22%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--border) 22%,transparent) 1px,transparent 1px);background-size:40px 40px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.7),transparent 68%)}
+body[data-theme="light"]::before{opacity:.15}
+.app{position:relative;z-index:1}
+.sidebar{background:linear-gradient(180deg,color-mix(in srgb,var(--bg2) 94%,var(--accent) 6%),var(--bg2));border-right-color:color-mix(in srgb,var(--border) 78%,var(--accent) 22%)}
+.sidebar:after{content:"";position:absolute;top:0;right:-1px;width:1px;height:140px;background:linear-gradient(var(--accent),transparent);opacity:.75}
+.topbar{box-shadow:0 1px 0 color-mix(in srgb,var(--border) 75%,transparent),0 10px 30px rgba(0,0,0,.08)}
+.topbar-title h1{min-width:0}
+.mobile-menu{font-size:0;position:relative}
+.mobile-menu:before{content:"";position:absolute;left:10px;top:11px;width:16px;height:2px;border-radius:2px;background:currentColor;box-shadow:0 5px 0 currentColor,0 10px 0 currentColor}
+.card{transition:transform .22s var(--ease),border-color .22s var(--ease),box-shadow .22s var(--ease)}
+.card:hover{box-shadow:0 16px 40px rgba(0,0,0,.08)}
+.stat{background:linear-gradient(145deg,color-mix(in srgb,var(--card) 96%,var(--accent) 4%),var(--card))}
+.stat:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 38%,var(--border));box-shadow:0 14px 32px color-mix(in srgb,var(--accent) 10%,transparent)}
+.stat .val{position:relative;z-index:1}
+.overview-hero{box-shadow:0 20px 52px color-mix(in srgb,var(--accent) 10%,transparent)}
+.overview-hero:before{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 0 54%,color-mix(in srgb,var(--accent) 8%,transparent),transparent 82%);pointer-events:none}
+.overview-hero:after{right:24px;bottom:0}
+.stat:after{right:0;bottom:0}
+.quick-card{background:linear-gradient(145deg,var(--card),color-mix(in srgb,var(--card) 92%,var(--accent) 8%))}
+.quick-card span{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.btn:focus-visible,.nav-item:focus-visible,.quick-card:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 38%,transparent);outline-offset:3px}
+.scroll{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.scroll::-webkit-scrollbar{width:10px}.scroll::-webkit-scrollbar-thumb{background:var(--border);border:3px solid transparent;background-clip:padding-box;border-radius:999px}
+@media(max-width:900px){.sidebar:after{display:none}.card:hover,.stat:hover{transform:none}.topbar{box-shadow:0 8px 24px rgba(0,0,0,.12)}}
 </style>
 </head>
 <body data-theme="dark">
@@ -324,7 +350,7 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
           <a class="quick-card quick-link" data-goto="moderation"><span>🛡</span><b>Модерация</b></a>
           <a class="quick-card quick-link" data-goto="tickets"><span>🎫</span><b>Тикеты</b></a>
           <a class="quick-card quick-link" data-goto="scheduler"><span>⏰</span><b>Планировщик</b></a>
-          <a class="quick-card quick-link" data-goto="logs"><span>⌁</span><b>Живые логи</b></a>
+          <a class="quick-card quick-link" data-goto="logs"><span>◉</span><b>Живые логи</b></a>
         </div>
       </section>
 
@@ -384,8 +410,6 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
                 <button id="btn_clear" class="btn op" type="button" onclick="clearBuilder()">🧹 Очистить</button>
               </div>
             </div>
-          </div>
-
           </div>
       </section>
 
@@ -724,6 +748,7 @@ input[type=text],input[type=password],input[type=url],select,textarea{min-height
               <textarea id="am_words" rows="6" placeholder="слово1&#10;слово2"></textarea>
               <div class="row-inline" style="margin-top:8px">
                 <button class="btn primary" type="button" onclick="saveAutomod()">💾 Сохранить</button>
+                <button class="btn danger" type="button" onclick="activateLockdown()">🔒 Lockdown</button>
                 <span class="muted small">Совпадают с настройками в Discord (`/setup`), включая регистр.</span>
               </div>
             </div>

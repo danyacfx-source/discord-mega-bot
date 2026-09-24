@@ -31,7 +31,7 @@ def setup_logging(level: str = "INFO", log_dir: str | Path | None = None, *, to_
             file_handler.setFormatter(logging.Formatter(_FORMAT))
             root.addHandler(file_handler)
 
-        root._mega_bot_configured = True
+        setattr(root, "_mega_bot_configured", True)
 
     for name in _NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)

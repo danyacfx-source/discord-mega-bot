@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
+from app.core.api_client import ApiClient, ApiRequestError
+
 if TYPE_CHECKING:
     from app.config import Config
     from app.db.kv_repository import KvRepository
@@ -48,18 +50,19 @@ class VkVideoService:
     def __init__(self, repo: KvRepository, config: Config) -> None:
         self._repo = repo
         self._config = config
-        self._session: aiohttp.ClientSession | None = None
+        self._http = ApiClient(
+            "VK Видео",
+            timeout=config.api_timeout_seconds,
+            user_agent=_USER_AGENT,
+            proxy=config.api_proxy,
+        )
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-        return self._session
+        return self._http.session
 
     async def aclose(self) -> None:
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        await self._http.close()
 
     # ------------------------------------------------------------------ стримы
 
@@ -81,13 +84,12 @@ class VkVideoService:
 
     async def _channel_status_url(self, url: str, slug: str) -> dict[str, Any] | None:
         try:
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with self.session.get(url, timeout=timeout, headers={"User-Agent": _USER_AGENT}) as response:
-                if response.status != 200:
-                    logger.warning("VK Видео %s: статус %s", url, response.status)
-                    return None
-                page = await response.text()
-        except aiohttp.ClientError:
+            status, page, _ = await self._http.text(
+                "GET", url, attempts=2, acceptable=(200, 404), headers={"User-Agent": _USER_AGENT}
+            )
+            if status == 404:
+                return None
+        except ApiRequestError:
             logger.exception("VK Видео: сеть при статусе канала %s", slug)
             return None
 

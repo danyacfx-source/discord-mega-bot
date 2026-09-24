@@ -7,6 +7,7 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 from discord import app_commands
+from discord.ext import commands
 
 from app.config import Config
 from app.core.bot import MegaBot
@@ -64,3 +65,16 @@ async def test_known_error_logs_warning_only(caplog):
     assert any("Ошибка команды /testcmd" in rec.getMessage() for rec in caplog.records)
     assert not any(rec.levelname == "ERROR" for rec in caplog.records)
     interaction.response.send_message.assert_awaited_once()
+
+
+async def test_not_owner_error_is_user_facing(caplog):
+    bot = _bot()
+    interaction = _interaction()
+    error = commands.NotOwner("owner only")
+    with caplog.at_level(logging.WARNING, logger=_bot_logger):
+        await bot.on_app_command_error(interaction, error)
+
+    interaction.response.send_message.assert_awaited_once()
+    embed = interaction.response.send_message.await_args.kwargs["embed"]
+    assert embed.title == "Только для владельца"
+    assert not any(rec.levelname == "ERROR" for rec in caplog.records)

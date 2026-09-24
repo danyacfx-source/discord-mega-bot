@@ -1,6 +1,9 @@
 """Вебпанель конструктора эмбедов: браузерный редактор, отправка через бота и прокси вебхуков."""
 from __future__ import annotations
 
+import asyncio
+import csv
+import io
 import json
 import logging
 import re
@@ -11,7 +14,7 @@ import uuid
 from collections import defaultdict, deque
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.parse import urlparse
 
 import aiohttp
@@ -24,8 +27,18 @@ from app.core.webpanel.log_ring import RingBufferHandler
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
+    from app.services import Services
+    from app.types import GiveawayRow
 
 logger = logging.getLogger("bot.webpanel")
+
+
+class _PanelSession(TypedDict):
+    expires: float
+    role: str
+
+
+_PANEL_ROLE_KEY = web.RequestKey("panel_role", str)
 
 _INDEX_PATH = Path(__file__).parent / "index.html"
 _SCRIPT_PATH = Path(__file__).parent / "panel.js"
@@ -44,6 +57,7 @@ _TOKEN_FILE = ".panel-token"
 _UPLOAD_DIRNAME = "uploads"
 _UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 _MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+_MAX_REQUEST_BYTES = _MAX_UPLOAD_BYTES + 256 * 1024
 _UPLOAD_NAME_RE = re.compile(r"^[0-9a-fA-F]{32}\.(?:png|jpg|jpeg|gif|webp)$")
 _MAGIC: dict[str, tuple[bytes, ...]] = {
     ".png": (b"\x89PNG\r\n\x1a\n",),
@@ -358,7 +372,8 @@ class WebPanel:
     def __init__(self, bot: MegaBot) -> None:
         self.bot = bot
         config = bot.config
-        assert config.panel_port is not None
+        if config.panel_port is None:
+            raise RuntimeError("Веб-панель включена без PANEL_PORT")
         self.host = config.panel_host or "127.0.0.1"
         self.port = config.panel_port
         self.password = config.panel_password
@@ -369,7 +384,15 @@ class WebPanel:
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
         self._static_token: str | None = None if self.password else self._load_static_token()
-        self._sessions: dict[str, float] = {}
+        self._sessions: dict[str, _PanelSession] = {}
+        self._panel_passwords: dict[str, str] = {}
+        if self.password:
+            self._panel_passwords["owner"] = self.password
+        for role in ("admin", "moderator", "viewer"):
+            value = getattr(config, f"panel_{role}_password", None)
+            if value:
+                self._panel_passwords[role] = value
+        self._password_auth = bool(self._panel_passwords)
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
         self._runner: web.AppRunner | None = None
@@ -378,11 +401,21 @@ class WebPanel:
         self._lat: deque[dict[str, Any]] = deque(maxlen=90)
         self._mem: deque[dict[str, Any]] = deque(maxlen=90)
         self._online: deque[dict[str, Any]] = deque(maxlen=90)
-        self._msg_by_hour: deque[dict[str, int]] = deque(maxlen=24 * 7)
-        self._msg_by_day: deque[dict[str, int]] = deque(maxlen=45)
+        self._msg_by_hour: deque[dict[str, Any]] = deque(maxlen=24 * 7)
+        self._msg_by_day: deque[dict[str, Any]] = deque(maxlen=45)
         self._msg_total: int = 0
         self._msg_unknown_logs: int = 0
         self._listener_registered = False
+        self._analytics_task: asyncio.Task[None] | None = None
+        self._pending_activity: dict[tuple[int, str], int] = defaultdict(int)
+        self._analytics_clients: set[web.WebSocketResponse] = set()
+
+    @property
+    def services(self) -> Services:
+        services = self.services
+        if services is None:
+            raise RuntimeError("Сервисы недоступны до запуска вебпанели")
+        return services
 
     # --- жизненный цикл ---
 
@@ -400,7 +433,12 @@ class WebPanel:
         return token
 
     def _create_app(self) -> web.Application:
-        app = web.Application(middlewares=[self._security_middleware])
+        # aiohttp defaults to a 1 MiB request limit. That made the advertised
+        # 8 MiB image-upload limit unusable for valid uploads.
+        app = web.Application(
+            middlewares=[self._security_middleware],
+            client_max_size=_MAX_REQUEST_BYTES,
+        )
         app.router.add_get("/", self._redirect_index)
         app.router.add_get("/admin", self._serve_index)
         app.router.add_get("/admin/", self._serve_index)
@@ -409,11 +447,16 @@ class WebPanel:
         app.router.add_get("/audit", self._serve_audit_page)
         app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
-        app.router.add_post("/api/logout", self._authorized(self._api_logout))
+        app.router.add_post("/api/logout", self._authorized(self._api_logout, "viewer"))
+        app.router.add_get("/api/session", self._authorized(self._api_session))
         app.router.add_get("/api/status", self._authorized(self._api_status))
+        app.router.add_get("/api/health", self._authorized(self._api_health))
         app.router.add_get("/api/overview", self._authorized(self._api_overview))
         app.router.add_get("/api/monitor", self._authorized(self._api_monitor))
         app.router.add_get("/api/stats", self._authorized(self._api_stats))
+        app.router.add_get("/api/analytics", self._authorized(self._api_analytics))
+        app.router.add_get("/api/analytics/export", self._authorized(self._api_analytics_export, "admin"))
+        app.router.add_get("/ws/analytics", self._ws_analytics)
         app.router.add_get("/api/server", self._authorized(self._api_server))
         app.router.add_get("/api/server/members", self._authorized(self._api_server_members))
         app.router.add_post("/api/server/members/roles", self._authorized(self._api_server_members_roles))
@@ -436,6 +479,7 @@ class WebPanel:
         app.router.add_get("/api/tickets/{ticket_id}/transcript", self._authorized(self._api_ticket_transcript))
         app.router.add_get("/api/automod", self._authorized(self._api_automod_get))
         app.router.add_post("/api/automod", self._authorized(self._api_automod_post))
+        app.router.add_post("/api/automod/lockdown", self._authorized(self._api_automod_lockdown, "admin"))
         app.router.add_get("/api/polls", self._authorized(self._api_polls))
         app.router.add_post("/api/polls/create", self._authorized(self._api_polls_create))
         app.router.add_post("/api/polls/{poll_id}/end", self._authorized(self._api_polls_end))
@@ -467,13 +511,23 @@ class WebPanel:
         app.router.add_post("/api/webhook/edit", self._authorized(self._api_webhook_edit))
         app.router.add_post("/api/webhook/fetch", self._authorized(self._api_webhook_fetch))
         app.router.add_get("/api/logs", self._authorized(self._api_logs))
+        app.router.add_get("/api/admin-audit", self._authorized(self._api_admin_audit, "admin"))
         return app
 
     async def start(self) -> None:
         if self._runner is not None:
             return
+        # A static token is embedded into the page when no password is set.
+        # That is convenient for localhost, but it would expose full admin
+        # access to anyone who can open a public URL. Fail closed instead of
+        # relying on a warning that is easy to miss in deployment logs.
+        if not self._password_auth and (self.host not in _LOCAL_HOSTS or self.public_url):
+            raise RuntimeError(
+                "PANEL_PASSWORD обязателен для публичной веб-панели "
+                "(задайте пароль или оставьте PANEL_HOST локальным без PANEL_PUBLIC_URL)"
+            )
         self._http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5))
-        if self.password is None and self.host not in _LOCAL_HOSTS:
+        if not self._password_auth and self.host not in _LOCAL_HOSTS:
             logger.warning(
                 "Вебпанель без PANEL_PASSWORD слушает %s:%d — страница доступна по статическому токену. "
                 "В открытых сетях задайте PANEL_PASSWORD.",
@@ -481,17 +535,35 @@ class WebPanel:
                 self.port,
             )
         runner = web.AppRunner(self._create_app())
-        await runner.setup()
-        await web.TCPSite(runner, self.host, self.port).start()
+        try:
+            await runner.setup()
+            await web.TCPSite(runner, self.host, self.port).start()
+        except Exception:
+            await runner.cleanup()
+            await self._http.close()
+            self._http = None
+            raise
         self._runner = runner
         if not self._listener_registered:
             self.bot.add_listener(self._on_message_hook, "on_message")
             self._listener_registered = True
+        self._analytics_task = asyncio.create_task(self._analytics_flush_loop())
         self._ring = RingBufferHandler(_LOG_RING_SIZE)
         logging.getLogger().addHandler(self._ring)
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
 
     async def stop(self) -> None:
+        if self._analytics_task is not None:
+            self._analytics_task.cancel()
+            try:
+                await self._analytics_task
+            except asyncio.CancelledError:
+                pass
+            self._analytics_task = None
+        await self._flush_activity()
+        for websocket in tuple(self._analytics_clients):
+            await websocket.close()
+        self._analytics_clients.clear()
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -513,6 +585,9 @@ class WebPanel:
             response = await handler(request)
         except web.HTTPException as exc:
             response = exc
+        except Exception:
+            logger.exception("Необработанная ошибка HTTP %s %s", request.method, request.path)
+            response = self._json({"ok": False, "error": "Внутренняя ошибка сервера"}, status=500)
         headers = {
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
@@ -528,11 +603,50 @@ class WebPanel:
         response.headers.update(headers)
         return response
 
-    def _authorized(self, handler):
+    @staticmethod
+    def _role_rank(role: str) -> int:
+        return {"viewer": 10, "moderator": 20, "admin": 30, "owner": 40}.get(role, 0)
+
+    def _required_role(self, request: web.Request) -> str:
+        if request.method == "GET":
+            if request.path in {"/api/backup", "/api/backup/db"}:
+                return "admin"
+            return "viewer"
+        if request.path in {
+            "/api/settings",
+            "/api/automod",
+            "/api/tickets/panel",
+            "/api/server/members/roles",
+        } or request.path.startswith(("/api/upload", "/api/webhook", "/api/bot", "/api/automod/")):
+            return "admin"
+        return "moderator"
+
+    async def _record_admin_audit(self, request: web.Request, role: str, response: web.Response) -> None:
+        if request.method == "GET" or response.status >= 400 or self.bot.db is None:
+            return
+        try:
+            await self.bot.db.record_admin_audit(
+                role,
+                "panel request",
+                request.method,
+                request.path,
+                request.remote or "",
+            )
+        except Exception:
+            logger.exception("Не удалось записать аудит веб-панели")
+
+    def _authorized(self, handler, required_role: str | None = None):
         async def wrapped(request: web.Request) -> web.Response:
-            if not self._rate_ok(request) or not self._allowed_origin(request) or not self._check_token(request):
+            if not self._rate_ok(request) or not self._allowed_origin(request):
                 return self._json({"ok": False, "error": "Unauthorized"}, status=401)
-            return await handler(request)
+            role = self._check_token(request)
+            required = required_role or self._required_role(request)
+            if role is None or self._role_rank(role) < self._role_rank(required):
+                return self._json({"ok": False, "error": "Недостаточно прав"}, status=403 if role else 401)
+            request[_PANEL_ROLE_KEY] = role
+            response = await handler(request)
+            await self._record_admin_audit(request, role, response)
+            return response
 
         return wrapped
 
@@ -574,29 +688,46 @@ class WebPanel:
                 return True
         return False
 
-    def _check_token(self, request: web.Request) -> bool:
-        token = request.headers.get("X-Panel-Token", "")
+    def _check_token(self, request: web.Request) -> str | None:
+        return self._check_token_value(request.headers.get("X-Panel-Token", ""))
+
+    def _check_token_value(self, token: str) -> str | None:
         if not token:
-            return False
-        if self.password is None:
-            return bool(self._static_token) and secrets.compare_digest(token, self._static_token)
+            return None
+        if not self._password_auth:
+            return "owner" if self._static_token and secrets.compare_digest(token, self._static_token) else None
         now = time.time()
-        active: dict[str, float] = {}
-        matches = False
-        for saved, expires in self._sessions.items():
-            if expires > now:
-                active[saved] = expires
+        active: dict[str, _PanelSession] = {}
+        role: str | None = None
+        for saved, session in self._sessions.items():
+            if session["expires"] > now:
+                active[saved] = session
                 if secrets.compare_digest(token, saved):
-                    matches = True
+                    role = session["role"]
         self._sessions = active
         if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1])[:_SESSION_MAX])
-        return matches
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        return role
 
     async def _api_logout(self, request: web.Request) -> web.Response:
         token = request.headers.get("X-Panel-Token", "")
         self._sessions.pop(token, None)
         return self._json({"ok": True})
+
+    async def _api_session(self, request: web.Request) -> web.Response:
+        role = request.get(_PANEL_ROLE_KEY, "viewer")
+        return self._json(
+            {
+                "ok": True,
+                "role": role,
+                "permissions": {
+                    "read": True,
+                    "moderate": self._role_rank(role) >= self._role_rank("moderator"),
+                    "admin": self._role_rank(role) >= self._role_rank("admin"),
+                    "owner": role == "owner",
+                },
+            }
+        )
 
     @staticmethod
     def _json(data: dict[str, Any], status: int = 200) -> web.Response:
@@ -609,7 +740,7 @@ class WebPanel:
 
     async def _serve_index(self, request: web.Request) -> web.Response:
         html = self._index_html
-        if self.password:
+        if self._password_auth:
             html = html.replace("__PANEL_TOKEN__", "")
         else:
             html = html.replace("__PANEL_TOKEN__", self._static_token or "")
@@ -617,7 +748,7 @@ class WebPanel:
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
         html = self._logs_html or "<h1>/logs</h1><p>Файл logs.html не найден.</p>"
-        if self.password:
+        if self._password_auth:
             html = html.replace("__PANEL_TOKEN__", "")
         else:
             html = html.replace("__PANEL_TOKEN__", self._static_token or "")
@@ -625,7 +756,7 @@ class WebPanel:
 
     async def _serve_audit_page(self, request: web.Request) -> web.Response:
         html = self._audit_html or "<h1>/audit</h1><p>Файл audit.html не найден.</p>"
-        if self.password:
+        if self._password_auth:
             html = html.replace("__PANEL_TOKEN__", "")
         else:
             html = html.replace("__PANEL_TOKEN__", self._static_token or "")
@@ -633,7 +764,7 @@ class WebPanel:
 
     async def _serve_script(self, request: web.Request) -> web.Response:
         body = self._index_js
-        if self.password:
+        if self._password_auth:
             body = body.replace("__PANEL_TOKEN__", "").replace("__PANEL_LOGIN__", "1")
         else:
             body = body.replace("__PANEL_TOKEN__", self._static_token or "").replace("__PANEL_LOGIN__", "0")
@@ -642,8 +773,10 @@ class WebPanel:
     # --- API: login / status / channels ---
 
     async def _api_login(self, request: web.Request) -> web.Response:
-        if not self.password:
+        if not self._password_auth:
             return self._json({"ok": False, "error": "Пароль не настроен"}, status=400)
+        if not self._allowed_origin(request):
+            return self._json({"ok": False, "error": "Unauthorized"}, status=401)
         ip = request.remote or "?"
         now = time.time()
         attempts = self._login_attempts[ip]
@@ -655,23 +788,54 @@ class WebPanel:
             payload = await request.json()
         except Exception:
             return self._json({"ok": False, "error": "Некорректный JSON"}, status=400)
-        if not (secrets.compare_digest(str(payload.get("password") or ""), self.password)):
+        role = next(
+            (
+                candidate
+                for candidate, configured in self._panel_passwords.items()
+                if secrets.compare_digest(str(payload.get("password") or ""), configured)
+            ),
+            None,
+        )
+        if role is None:
             attempts.append(now)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
         token = secrets.token_urlsafe(32)
-        self._sessions[token] = now + _SESSION_TTL
+        self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role}
         if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1])[:_SESSION_MAX])
-        return self._json({"ok": True, "token": token})
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        return self._json({"ok": True, "token": token, "role": role})
 
     async def _api_status(self, request: web.Request) -> web.Response:
         online = self.bot.is_ready() and self.bot.user is not None
         data: dict[str, Any] = {"bot_online": online}
-        if online:
-            data["bot_name"] = self.bot.user.name  # type: ignore[union-attr]
+        if online and self.bot.user is not None:
+            data["bot_name"] = self.bot.user.name
         if self.bot.guilds:
             data["guild_name"] = self.bot.guilds[0].name
         return self._json(data)
+
+    async def _api_health(self, request: web.Request) -> web.Response:
+        db = self.bot.db
+        db_ok = False
+        integrity = "not connected"
+        if db is not None:
+            try:
+                integrity = await db.integrity_check()
+                db_ok = integrity == "ok"
+            except Exception:
+                logger.exception("Не удалось проверить целостность БД через /api/health")
+                integrity = "error"
+        ready = self.bot.is_ready() and self.bot.user is not None
+        payload = {
+            "ok": ready and db_ok,
+            "discord": {"ready": ready, "guilds": len(self.bot.guilds)},
+            "database": {"ok": db_ok, "integrity": integrity},
+            "latency_ms": round(self.bot.latency * 1000) if self.bot.latency >= 0 else None,
+            "cogs": len(self.bot.cogs),
+            "voice_clients": len(self.bot.voice_clients),
+            "version": self.bot.config.version,
+        }
+        return self._json(payload, status=200 if payload["ok"] else 503)
 
     async def _api_bot_channels(self, request: web.Request) -> web.Response:
         return self._json({"ok": True, "channels": self._channel_options()})
@@ -730,15 +894,18 @@ class WebPanel:
         roles.sort(key=lambda item: item["name"])
         return roles
 
-    def _effective_log_channels(self, settings: dict[str, Any]) -> dict[str, str | None]:
+    def _effective_log_channels(self, settings: dict[str, Any]) -> dict[str, int | None]:
         config = self.bot.config
+        def channel_id(value: Any) -> int | None:
+            return int(value) if value else None
+
         return {
-            "log": settings.get("log_channel_id"),
-            "member": settings.get("member_log_channel_id") or config.member_log_channel_id,
-            "message": settings.get("message_log_channel_id") or config.message_log_channel_id,
-            "voice": settings.get("voice_log_channel_id") or config.voice_log_channel_id,
-            "mod": settings.get("mod_log_channel_id") or config.mod_log_channel_id,
-            "bot": settings.get("bot_log_channel_id") or config.bot_log_channel_id,
+            "log": channel_id(settings.get("log_channel_id")),
+            "member": channel_id(settings.get("member_log_channel_id") or config.member_log_channel_id),
+            "message": channel_id(settings.get("message_log_channel_id") or config.message_log_channel_id),
+            "voice": channel_id(settings.get("voice_log_channel_id") or config.voice_log_channel_id),
+            "mod": channel_id(settings.get("mod_log_channel_id") or config.mod_log_channel_id),
+            "bot": channel_id(settings.get("bot_log_channel_id") or config.bot_log_channel_id),
         }
 
     def _modules_status(self) -> dict[str, Any]:
@@ -840,8 +1007,8 @@ class WebPanel:
         bot = self.bot
         online = bot.is_ready() and bot.user is not None
         data: dict[str, Any] = {"ok": True, "bot_online": online}
-        if online:
-            data["bot_name"] = bot.user.name  # type: ignore[union-attr]
+        if online and bot.user is not None:
+            data["bot_name"] = bot.user.name
         seconds = int(bot.uptime.total_seconds())
         data["uptime_seconds"] = seconds
         data["uptime"] = self._human_uptime(seconds)
@@ -881,7 +1048,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.settings  # type: ignore[union-attr]
+        service = self.services.settings
         settings = await service.get(guild.id)
         values = {column: (str(settings[column]) if settings.get(column) else "") for column in _SETTING_COLUMNS}
         return self._json(
@@ -905,7 +1072,7 @@ class WebPanel:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         payload = await self._read_json(request)
-        service = self.bot.services.settings  # type: ignore[union-attr]
+        service = self.services.settings
         values: dict[str, Any] = {}
         for column in _SETTING_COLUMNS:
             if column not in payload:
@@ -1083,6 +1250,91 @@ class WebPanel:
             self._msg_by_day[-1]["n"] += 1
         else:
             self._msg_by_day.append({"d": day_key, "n": 1})
+        self._pending_activity[(message.guild.id, hour_key.isoformat())] += 1
+
+    async def _analytics_flush_loop(self) -> None:
+        while True:
+            await asyncio.sleep(10)
+            await self._flush_activity()
+
+    async def _flush_activity(self) -> None:
+        if self.bot.db is None or not self._pending_activity:
+            return
+        pending = self._pending_activity
+        self._pending_activity = defaultdict(int)
+        for (guild_id, bucket), amount in pending.items():
+            try:
+                await self.bot.db.increment_activity(guild_id, bucket, amount)
+            except Exception:
+                self._pending_activity[(guild_id, bucket)] += amount
+                logger.exception("Не удалось сохранить activity metric")
+        if self._analytics_clients:
+            payload = await self._analytics_payload()
+            dead: list[web.WebSocketResponse] = []
+            for websocket in self._analytics_clients:
+                try:
+                    await websocket.send_json({"type": "analytics", "data": payload})
+                except (ConnectionResetError, RuntimeError, aiohttp.ClientConnectionError):
+                    dead.append(websocket)
+            for websocket in dead:
+                self._analytics_clients.discard(websocket)
+
+    async def _analytics_payload(self) -> dict[str, Any]:
+        guild = self._primary_guild()
+        if guild is None or self.bot.db is None:
+            return {"guild_id": None, "rows": []}
+        rows = await self.bot.db.list_activity(guild.id, 1000)
+        return {"guild_id": str(guild.id), "rows": rows}
+
+    async def _api_analytics(self, request: web.Request) -> web.Response:
+        await self._flush_activity()
+        return self._json({"ok": True, **(await self._analytics_payload())})
+
+    async def _api_analytics_export(self, request: web.Request) -> web.Response:
+        await self._flush_activity()
+        payload = await self._analytics_payload()
+        rows = payload["rows"]
+        if request.query.get("format", "json").lower() == "csv":
+            output = io.StringIO()
+            writer = csv.DictWriter(output, fieldnames=["bucket", "messages"])
+            writer.writeheader()
+            writer.writerows(rows)
+            return web.Response(
+                text=output.getvalue(),
+                content_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=activity.csv"},
+            )
+        return self._json({"ok": True, **payload})
+
+    async def _ws_analytics(self, request: web.Request) -> web.StreamResponse:
+        if not self._rate_ok(request) or not self._allowed_origin(request):
+            return self._json({"ok": False, "error": "Unauthorized"}, status=401)
+        websocket = web.WebSocketResponse(heartbeat=30)
+        await websocket.prepare(request)
+        try:
+            first = await websocket.receive(timeout=5)
+        except TimeoutError:
+            await websocket.close(code=4401, message=b"Unauthorized")
+            return websocket
+        token = ""
+        if first.type == web.WSMsgType.TEXT:
+            try:
+                token = str(json.loads(first.data).get("token") or "")
+            except (TypeError, ValueError):
+                token = ""
+        role = self._check_token_value(token)
+        if role is None or self._role_rank(role) < self._role_rank("viewer"):
+            await websocket.close(code=4401, message=b"Unauthorized")
+            return websocket
+        self._analytics_clients.add(websocket)
+        try:
+            await websocket.send_json({"type": "analytics", "data": await self._analytics_payload()})
+            async for message in websocket:
+                if message.type in (web.WSMsgType.CLOSE, web.WSMsgType.ERROR):
+                    break
+        finally:
+            self._analytics_clients.discard(websocket)
+        return websocket
 
     async def _api_monitor(self, request: web.Request) -> web.Response:
         sample = await self._live_sample()
@@ -1328,7 +1580,7 @@ class WebPanel:
                     if query in m.name.lower() or query in m.display_name.lower() or query in str(m).lower()
                 ]
         members.sort(key=lambda m: (m.bot, m.display_name.lower()))
-        service = self.bot.services.moderation  # type: ignore[union-attr]
+        service = self.services.moderation
         payload = []
         for member in members[:25]:
             item = self._member_payload(guild, member)
@@ -1380,7 +1632,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.moderation  # type: ignore[union-attr]
+        service = self.services.moderation
         user_value = request.query.get("user_id") or (request.query.get("q") or "")
         warns = await service.all_warns(guild.id, 300)
         if user_value:
@@ -1406,7 +1658,7 @@ class WebPanel:
         member = guild.get_member(user_id)
         if member is not None:
             return member.display_name
-        if user_id == self.bot.user.id:  # type: ignore[union-attr]
+        if user_id == self.bot.user.id:
             return "Бот (панель)"
         return str(user_id)
 
@@ -1429,10 +1681,10 @@ class WebPanel:
         if guard:
             return self._json({"ok": False, "error": guard}, status=400)
         reason = str(payload.get("reason") or "Без причины")[:500]
-        service = self.bot.services.moderation  # type: ignore[union-attr]
-        count = await service.warn(guild.id, member.id, self.bot.user.id, reason)  # type: ignore[union-attr]
+        service = self.services.moderation
+        count = await service.warn(guild.id, member.id, self.bot.user.id, reason)
         if guild.me is not None:
-            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+            await self.services.logging.log_mod_action(
                 guild, "warn", member, guild.me, reason, description=f"{member.mention} получил предупреждение {count} (панель)"
             )
         return self._json({"ok": True, "count": count, "member": self._member_payload(guild, member)})
@@ -1442,7 +1694,7 @@ class WebPanel:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         warn_id = self._parse_id(request.match_info.get("warn_id"))
-        service = self.bot.services.moderation  # type: ignore[union-attr]
+        service = self.services.moderation
         if warn_id is None or (warn := await service.get_warn(guild.id, warn_id)) is None:
             return self._json({"ok": False, "error": "Предупреждение не найдено"}, status=404)
         await service.remove_warn(guild.id, warn_id)
@@ -1464,7 +1716,7 @@ class WebPanel:
         member = self._resolve_member(guild, payload.get("member"))
         if member is None:
             return self._json({"ok": False, "error": "Участник не найден"}, status=404)
-        service = self.bot.services.moderation  # type: ignore[union-attr]
+        service = self.services.moderation
         cleared = await service.clear_warns(guild.id, member.id)
         return self._json({"ok": True, "cleared": cleared, "member_id": str(member.id)})
 
@@ -1491,7 +1743,7 @@ class WebPanel:
         reason = str(payload.get("reason") or "Разбан из вебпанели")
         await guild.unban(ban_entry.user, reason=f"Вебпанель | {reason}")
         if guild.me is not None:
-            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+            await self.services.logging.log_mod_action(
                 guild, "unban", ban_entry.user, guild.me, reason, description=f"{ban_entry.user} разбанен (панель)"
             )
         return self._json({"ok": True, "user_id": str(user_id), "user_name": str(ban_entry.user)})
@@ -1518,7 +1770,7 @@ class WebPanel:
         end = datetime.now(UTC) + timedelta(seconds=seconds)
         await member.timeout(end, reason=f"Вебпанель | {reason}")
         if guild.me is not None:
-            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+            await self.services.logging.log_mod_action(
                 guild, "timeout", member, guild.me, reason,
                 description=f"{member.mention} получил тайм-аут {seconds // 60} мин (панель)",
             )
@@ -1555,7 +1807,7 @@ class WebPanel:
             await member.ban(reason=f"Вебпанель{': ' + reason if reason else ''}", delete_message_seconds=delete_days_int * 86400)
             extra["delete_days"] = delete_days_int
         if guild.me is not None:
-            await self.bot.services.logging.log_mod_action(  # type: ignore[union-attr]
+            await self.services.logging.log_mod_action(
                 guild, action, member, guild.me, reason, description=f"{member.mention} {fmt} (панель)"
             )
         return self._json(
@@ -1566,9 +1818,10 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        service = self.services.giveaways
         rows = await service.recent_for_guild(guild.id, 60)
-        active, finished = [], []
+        active: list[dict[str, Any]] = []
+        finished: list[dict[str, Any]] = []
         for row in rows:
             item = {
                 "id": row["id"],
@@ -1627,11 +1880,15 @@ class WebPanel:
             min_days = max(0, int(payload.get("min_days") or 0))
         except (TypeError, ValueError):
             min_days = 0
-        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        service = self.services.giveaways
         ends_at = datetime.now(UTC) + timedelta(minutes=minutes)
-        giveaway_id = await service.create(guild.id, channel.id, self.bot.user.id, prize[:256], winners, ends_at, min_days)  # type: ignore[union-attr]
+        if self.bot.user is None:
+            return self._json({"ok": False, "error": "Бот ещё не готов"}, status=503)
+        giveaway_id = await service.create(guild.id, channel.id, self.bot.user.id, prize[:256], winners, ends_at, min_days)
         giveaway = await service.get(giveaway_id)
-        assert giveaway is not None
+        if giveaway is None:
+            await service.finish(giveaway_id)
+            return self._json({"ok": False, "error": "Не удалось загрузить созданный розыгрыш"}, status=500)
         embed = await service.embed(giveaway)
         view = self._giveaway_view()
         try:
@@ -1657,9 +1914,9 @@ class WebPanel:
 
         return GiveawayView()
 
-    async def _finish_giveaway(self, giveaway: dict[str, Any], *, reroll: bool = False) -> str:
+    async def _finish_giveaway(self, giveaway: GiveawayRow, *, reroll: bool = False) -> str:
         """Завершает розыгрыш: розыгрыш победителей, анонс, обновление сообщения."""
-        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        service = self.services.giveaways
         entries = await service.entries(giveaway["id"])
         winners = service.draw(entries, int(giveaway["winners"]))
         await service.finish(giveaway["id"])
@@ -1676,9 +1933,10 @@ class WebPanel:
                 await channel.send(embed=announce)
             except discord.HTTPException:
                 pass
-            if giveaway.get("message_id"):
+            message_id = giveaway.get("message_id")
+            if message_id is not None:
                 try:
-                    message = await channel.fetch_message(int(giveaway["message_id"]))
+                    message = await channel.fetch_message(message_id)
                     embed = await service.embed(giveaway)
                     embed.set_footer(text="Розыгрыш завершён")
                     await message.edit(embed=embed, view=None)
@@ -1692,7 +1950,7 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if guild is None or message_id is None:
             return self._json({"ok": False, "error": "Сервер или ID сообщения неверны"}, status=400)
-        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        service = self.services.giveaways
         giveaway = await service.get_by_message(message_id)
         if giveaway is None or giveaway["guild_id"] != guild.id:
             return self._json({"ok": False, "error": "Розыгрыш не найден"}, status=404)
@@ -1707,7 +1965,7 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if guild is None or message_id is None:
             return self._json({"ok": False, "error": "Сервер или ID сообщения неверны"}, status=400)
-        service = self.bot.services.giveaways  # type: ignore[union-attr]
+        service = self.services.giveaways
         giveaway = await service.get_by_message(message_id)
         if giveaway is None or giveaway["guild_id"] != guild.id:
             return self._json({"ok": False, "error": "Розыгрыш не найден"}, status=404)
@@ -1718,7 +1976,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        settings = await self.bot.services.settings.get(guild.id)  # type: ignore[union-attr]
+        settings = await self.services.settings.get(guild.id)
         category_id = settings.get("ticket_category_id")
         categories = [
             {"id": str(c.id), "name": c.name}
@@ -1740,8 +1998,8 @@ class WebPanel:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         payload = await self._read_json(request)
-        service = self.bot.services.tickets  # type: ignore[union-attr]
-        settings_service = self.bot.services.settings  # type: ignore[union-attr]
+        service = self.services.tickets
+        settings_service = self.services.settings
 
         made: list[str] = []
         raw_category = payload.get("category_id")
@@ -1799,7 +2057,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.tickets  # type: ignore[union-attr]
+        service = self.services.tickets
         rows = await service.list_tickets(guild.id, 300)
         open_items: list[dict[str, Any]] = []
         closed_items: list[dict[str, Any]] = []
@@ -1836,8 +2094,8 @@ class WebPanel:
         ticket_id = self._parse_id(request.match_info.get("ticket_id"))
         if ticket_id is None:
             return self._json({"ok": False, "error": "Неверный № тикета"}, status=400)
-        service = self.bot.services.tickets  # type: ignore[union-attr]
-        closer: discord.Member | discord.ClientUser = guild.me or self.bot.user  # type: ignore[union-attr]
+        service = self.services.tickets
+        closer: discord.Member | discord.ClientUser = guild.me or self.bot.user
         if closer is None:
             return self._json({"ok": False, "error": "Бот не авторизован на сервере"}, status=400)
         result = await service.close_by_id(guild, ticket_id, closer)
@@ -1852,7 +2110,7 @@ class WebPanel:
         ticket_id = self._parse_id(request.match_info.get("ticket_id"))
         if ticket_id is None:
             return self._json({"ok": False, "error": "Неверный № тикета"}, status=400)
-        service = self.bot.services.tickets  # type: ignore[union-attr]
+        service = self.services.tickets
         ticket = await service.get_ticket(ticket_id)
         if ticket is None or ticket["guild_id"] != guild.id:
             return self._json({"ok": False, "error": "Тикет не найден"}, status=404)
@@ -1872,7 +2130,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.settings  # type: ignore[union-attr]
+        service = self.services.settings
         settings = await service.get(guild.id)
         config = self.bot.config
         ignored_channels = [
@@ -1898,6 +2156,15 @@ class WebPanel:
                     "ban_window": config.automod_ban_window_seconds,
                     "ignore_roles": list(config.automod_ignore_roles),
                     "ignored_channels": ignored_channels,
+                    "anti_raid": {
+                        "enabled": config.automod_antiraid_enabled,
+                        "window_seconds": config.automod_antiraid_window_seconds,
+                        "join_threshold": config.automod_antiraid_join_threshold,
+                        "slowmode_seconds": config.automod_antiraid_slowmode_seconds,
+                        "cooldown_seconds": config.automod_antiraid_cooldown_seconds,
+                    },
+                    "exempt_regex": config.automod_exempt_regex,
+                    "lockdown_seconds": config.automod_lockdown_seconds,
                 },
             }
         )
@@ -1907,7 +2174,7 @@ class WebPanel:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         payload = await self._read_json(request)
-        service = self.bot.services.settings  # type: ignore[union-attr]
+        service = self.services.settings
         updates: dict[str, Any] = {}
         if "enabled" in payload:
             updates["automod_enabled"] = 1 if payload.get("enabled") else 0
@@ -1927,13 +2194,28 @@ class WebPanel:
             }
         )
 
+    async def _api_automod_lockdown(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        cog = self.bot.get_cog("AutoMod")
+        if cog is None or not hasattr(cog, "activate_lockdown"):
+            return self._json({"ok": False, "error": "Ког AutoMod не загружен"}, status=503)
+        payload = await self._read_json(request)
+        try:
+            seconds = max(30, min(int(payload.get("seconds") or self.bot.config.automod_lockdown_seconds), 3600))
+        except (TypeError, ValueError):
+            seconds = self.bot.config.automod_lockdown_seconds
+        changed = await cog.activate_lockdown(guild, seconds)
+        return self._json({"ok": True, "seconds": seconds, "channels": changed})
+
     # --- API: опросы ---
 
     async def _api_polls(self, request: web.Request) -> web.Response:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.polls  # type: ignore[union-attr]
+        service = self.services.polls
         rows = await service.list_for_guild(guild.id, 200)
         items: list[dict[str, Any]] = []
         for row in rows:
@@ -1973,7 +2255,7 @@ class WebPanel:
             return self._json({"ok": False, "error": "Минимум 2 варианта ответа"}, status=400)
         options = options[:5]
 
-        service = self.bot.services.polls  # type: ignore[union-attr]
+        service = self.services.polls
         poll_id = await service.create(guild.id, channel.id, guild.me.id if guild.me else 0, question, options)
         embed = await service.embed(poll_id)
         from app.core.views import PollView
@@ -1994,7 +2276,7 @@ class WebPanel:
         poll_id = self._parse_id(request.match_info.get("poll_id"))
         if poll_id is None:
             return self._json({"ok": False, "error": "Неверный ID опроса"}, status=400)
-        service = self.bot.services.polls  # type: ignore[union-attr]
+        service = self.services.polls
         poll = await service.get(poll_id)
         if poll is None or poll["guild_id"] != guild.id:
             return self._json({"ok": False, "error": "Опрос не найден"}, status=404)
@@ -2024,7 +2306,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.birthdays  # type: ignore[union-attr]
+        service = self.services.birthdays
         rows = await service.all()
         items = [
             {
@@ -2035,7 +2317,7 @@ class WebPanel:
             }
             for row in rows
         ]
-        settings = await self.bot.services.settings.get(guild.id)  # type: ignore[union-attr]
+        settings = await self.services.settings.get(guild.id)
         return self._json(
             {
                 "ok": True,
@@ -2055,13 +2337,15 @@ class WebPanel:
             return self._json({"ok": False, "error": "Участник не найден на сервере"}, status=400)
         month = self._parse_id(payload.get("month"))
         day = self._parse_id(payload.get("day"))
+        if month is None or day is None:
+            return self._json({"ok": False, "error": "Некорректная дата: месяц 1–12, день 1–31"}, status=400)
         if not (1 <= month <= 12 and 1 <= day <= 31):
             return self._json({"ok": False, "error": "Некорректная дата: месяц 1–12, день 1–31"}, status=400)
         try:
             datetime(2000, month, day)
         except ValueError:
             return self._json({"ok": False, "error": "Некорректная дата"}, status=400)
-        service = self.bot.services.birthdays  # type: ignore[union-attr]
+        service = self.services.birthdays
         await service.set(user_id, month, day)
         return self._json({"ok": True, "name": self._member_name(guild, user_id)})
 
@@ -2070,7 +2354,7 @@ class WebPanel:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         user_id = self._parse_id(request.match_info.get("user_id"))
-        if user_id is None or not await self.bot.services.birthdays.remove(user_id):  # type: ignore[union-attr]
+        if user_id is None or not await self.services.birthdays.remove(user_id):
             return self._json({"ok": False, "error": "День рождения не найден"}, status=404)
         return self._json({"ok": True})
 
@@ -2080,7 +2364,7 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        service = self.services.tempvoice
         rooms: list[dict[str, Any]] = []
         for row in await service.all():
             channel = guild.get_channel(row["channel_id"])
@@ -2117,7 +2401,7 @@ class WebPanel:
         channel_id = self._parse_id(request.match_info.get("channel_id"))
         if channel_id is None:
             return self._json({"ok": False, "error": "Неверный ID канала"}, status=400)
-        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        service = self.services.tempvoice
         if not await service.owner_of(channel_id):
             return self._json({"ok": False, "error": "Комната не найдена"}, status=404)
         await service.delete(channel_id)
@@ -2138,7 +2422,7 @@ class WebPanel:
         new_owner_id = self._parse_id(payload.get("owner_id"))
         if channel_id is None or new_owner_id is None:
             return self._json({"ok": False, "error": "Неверные параметры"}, status=400)
-        service = self.bot.services.tempvoice  # type: ignore[union-attr]
+        service = self.services.tempvoice
         if not await service.owner_of(channel_id):
             return self._json({"ok": False, "error": "Комната не найдена"}, status=404)
         if guild.get_member(new_owner_id) is None:
@@ -2191,12 +2475,13 @@ class WebPanel:
         return self._json({"ok": True, "paused": bool(cog._paused)})
 
     async def _api_schedule(self, request: web.Request) -> web.Response:
-        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        service = self.services.scheduled
         rows = await service.recent(200)
         guild = self._primary_guild()
-        upcoming, done = [], []
+        upcoming: list[dict[str, Any]] = []
+        done: list[dict[str, Any]] = []
         for row in rows:
-            embed_schema = {}
+            embed_schema: dict[str, Any] = {}
             try:
                 embed_schema = json.loads(row.get("embed_json") or "{}") or {}
             except (TypeError, ValueError):
@@ -2205,7 +2490,9 @@ class WebPanel:
                 "id": row["id"],
                 "guild_id": str(row["guild_id"]),
                 "channel_id": str(row["channel_id"]),
-                "channel_name": self._channel_name(self._primary_guild() or guild, row["channel_id"]),
+                "channel_name": (
+                    self._channel_name(guild, row["channel_id"]) if guild is not None else str(row["channel_id"])
+                ),
                 "content": (row["content"] or "")[:120],
                 "title": (embed_schema.get("title") or "")[:120],
                 "send_at": row["send_at"],
@@ -2240,10 +2527,10 @@ class WebPanel:
         embed = embed if isinstance(embed, dict) else {}
         if not content and not (embed.get("title") or embed.get("description")):
             return self._json({"ok": False, "error": "Укажите текст или эмбед"}, status=400)
-        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        service = self.services.scheduled
         try:
             scheduled_id = await service.create(
-                channel.guild.id, channel.id, self.bot.user.id, send_at, content=content[:2000], embed=embed  # type: ignore[union-attr]
+                channel.guild.id, channel.id, self.bot.user.id, send_at, content=content[:2000], embed=embed
             )
         except ValueError as exc:
             return self._json({"ok": False, "error": str(exc)}, status=400)
@@ -2253,7 +2540,7 @@ class WebPanel:
         message_id = self._parse_id(request.match_info.get("schedule_id"))
         if message_id is None:
             return self._json({"ok": False, "error": "Неверный ID"}, status=400)
-        service = self.bot.services.scheduled  # type: ignore[union-attr]
+        service = self.services.scheduled
         deleted = await service.delete(message_id)
         if not deleted:
             return self._json({"ok": False, "error": "Запись не найдена"}, status=404)
@@ -2263,15 +2550,15 @@ class WebPanel:
         guild = self._primary_guild()
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
-        settings_service = self.bot.services.settings  # type: ignore[union-attr]
+        settings_service = self.services.settings
         settings = await settings_service.get(guild.id)
-        moderation = self.bot.services.moderation  # type: ignore[union-attr]
-        giveaways = self.bot.services.giveaways  # type: ignore[union-attr]
-        scheduled = self.bot.services.scheduled  # type: ignore[union-attr]
+        moderation = self.services.moderation
+        giveaways = self.services.giveaways
+        scheduled = self.services.scheduled
         data = {
             "generated_at": datetime.now(UTC).isoformat(),
             "bot": {
-                "name": self.bot.user.name if self.bot.user else None,  # type: ignore[union-attr]
+                "name": self.bot.user.name if self.bot.user else None,
                 "guild_id": str(guild.id),
                 "guild_name": guild.name,
             },
@@ -2290,15 +2577,11 @@ class WebPanel:
         db_path = Path(self.bot.config.db_path)
         if not db_path.is_file():
             return self._json({"ok": False, "error": "Файл БД не найден"}, status=404)
-        import aiosqlite
-
         snapshot_path = db_path.with_suffix(f".snapshot-{int(time.time())}.db")
         try:
-            conn = await aiosqlite.connect(str(db_path))
-            try:
-                await conn.execute(f"VACUUM INTO '{str(snapshot_path).replace(chr(39), chr(39) + chr(39))}'")
-            finally:
-                await conn.close()
+            if self.bot.db is None:
+                return self._json({"ok": False, "error": "База данных не подключена"}, status=503)
+            await self.bot.db.backup(snapshot_path)
             if not snapshot_path.is_file():
                 return self._json({"ok": False, "error": "Не удалось создать снапшот"}, status=500)
             body = snapshot_path.read_bytes()
@@ -2317,10 +2600,13 @@ class WebPanel:
     def _attachment(self, *, data: bytes | None = None, json_data: dict[str, Any] | None = None, filename: str) -> web.Response:
         if json_data is not None:
             data = json.dumps(json_data, ensure_ascii=False, indent=2).encode("utf-8")
+        # Guild names and other user-controlled labels must not be copied
+        # directly into a response header.
+        safe_filename = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._") or "download"
         return web.Response(
             body=data,
             content_type="application/json",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"', "Cache-Control": "no-store"},
+            headers={"Content-Disposition": f'attachment; filename="{safe_filename}"', "Cache-Control": "no-store"},
         )
 
     # --- API: прокси вебхуков ---
@@ -2361,13 +2647,20 @@ class WebPanel:
         base = self._webhook_base(payload.get("webhook_url"))
         if base is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL"}, status=400)
-        async with self._require_http().post(
-            f"{base}?wait=true", json=self._webhook_body(payload), allow_redirects=False
-        ) as response:
-            data = await response.json()
-            if response.status >= 400:
-                return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
-            return self._json({"ok": True, "data": {"id": str(data.get("id"))}})
+        try:
+            async with self._require_http().post(
+                f"{base}?wait=true", json=self._webhook_body(payload), allow_redirects=False
+            ) as response:
+                data = await self._read_remote_json(response)
+                if response.status >= 400:
+                    return self._json(
+                        {"ok": False, "error": data.get("message") or str(response.status), "data": data},
+                        status=response.status,
+                    )
+                return self._json({"ok": True, "data": {"id": str(data.get("id"))}})
+        except (aiohttp.ClientError, TimeoutError):
+            logger.warning("Не удалось отправить сообщение через webhook", exc_info=True)
+            return self._json({"ok": False, "error": "Discord Webhook недоступен"}, status=502)
 
     async def _api_webhook_edit(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
@@ -2375,13 +2668,20 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
-        async with self._require_http().patch(
-            f"{base}/messages/{message_id}", json=self._webhook_body(payload), allow_redirects=False
-        ) as response:
-            data = await response.json()
-            if response.status >= 400:
-                return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
-            return self._json({"ok": True, "data": {"id": str(data.get("id"))}})
+        try:
+            async with self._require_http().patch(
+                f"{base}/messages/{message_id}", json=self._webhook_body(payload), allow_redirects=False
+            ) as response:
+                data = await self._read_remote_json(response)
+                if response.status >= 400:
+                    return self._json(
+                        {"ok": False, "error": data.get("message") or str(response.status), "data": data},
+                        status=response.status,
+                    )
+                return self._json({"ok": True, "data": {"id": str(data.get("id"))}})
+        except (aiohttp.ClientError, TimeoutError):
+            logger.warning("Не удалось изменить сообщение через webhook", exc_info=True)
+            return self._json({"ok": False, "error": "Discord Webhook недоступен"}, status=502)
 
     async def _api_webhook_fetch(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
@@ -2389,11 +2689,18 @@ class WebPanel:
         message_id = self._parse_id(payload.get("message_id"))
         if base is None or message_id is None:
             return self._json({"ok": False, "error": "Неверный Webhook URL или ID сообщения"}, status=400)
-        async with self._require_http().get(f"{base}/messages/{message_id}", allow_redirects=False) as response:
-            data = await response.json()
-            if response.status >= 400:
-                return self._json({"ok": False, "error": data.get("message") or str(response.status), "data": data}, status=response.status)
-            return self._json({"ok": True, "data": _raw_to_client(data)})
+        try:
+            async with self._require_http().get(f"{base}/messages/{message_id}", allow_redirects=False) as response:
+                data = await self._read_remote_json(response)
+                if response.status >= 400:
+                    return self._json(
+                        {"ok": False, "error": data.get("message") or str(response.status), "data": data},
+                        status=response.status,
+                    )
+                return self._json({"ok": True, "data": _raw_to_client(data)})
+        except (aiohttp.ClientError, TimeoutError):
+            logger.warning("Не удалось получить сообщение через webhook", exc_info=True)
+            return self._json({"ok": False, "error": "Discord Webhook недоступен"}, status=502)
 
     async def _api_logs(self, request: web.Request) -> web.Response:
         limit = request.query.get("n", "200")
@@ -2411,6 +2718,26 @@ class WebPanel:
             else []
         )
         return self._json({"ok": True, "count": len(entries), "logs": entries})
+
+    async def _api_admin_audit(self, request: web.Request) -> web.Response:
+        if self.bot.db is None:
+            return self._json({"ok": False, "error": "База данных недоступна"}, status=503)
+        raw_limit = request.query.get("n", "200")
+        try:
+            limit = max(1, min(int(raw_limit), 1000))
+        except (TypeError, ValueError):
+            limit = 200
+        return self._json({"ok": True, "audit": await self.bot.db.list_admin_audit(limit)})
+
+    @staticmethod
+    async def _read_remote_json(response: aiohttp.ClientResponse) -> dict[str, Any]:
+        """Read Discord responses even when a proxy returns non-JSON content."""
+        try:
+            data = await response.json(content_type=None)
+        except (aiohttp.ContentTypeError, ValueError):
+            text = await response.text()
+            return {"message": text[:200]}
+        return data if isinstance(data, dict) else {"data": data}
 
     def _require_http(self) -> aiohttp.ClientSession:
         if self._http is None:

@@ -1,6 +1,6 @@
 # Discord Mega Bot — структура и возможности
 
-Версия: **3.2.0** · discord.py 2.x · Python 3.11+ · SQLite (aiosqlite)
+Версия: **3.3.0** · discord.py 2.x · Python 3.11+ · SQLite (aiosqlite)
 
 ---
 
@@ -155,6 +155,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 | `/warn_clear` | Снять все (с подтверждением) | moderate_members |
 | `/clearwarns` | Быстрая очистка всех варнов | moderate_members |
 | `/slowmode` | Задержка сообщений (off–1h) | manage_channels |
+| `/case` / `/cases` | Просмотр единой истории модерационных действий | moderate_members |
 | `/roles` | Выдать/снять роль(и) | manage_roles |
 | `/lock` / `/unlock` | Закрыть/открыть канал для @everyone | manage_channels |
 
@@ -190,8 +191,10 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
   обновление каждые `SERVER_STATS_UPDATE_SECONDS`; лишние каналы удаляются
 
 ### Музыка (yt-dlp + FFmpeg, группа `/music`)
-`play` · `skip [n]` · `stop` · `pause` · `resume` · `nowplaying` · `queue` · `volume 0-200` · `loop` · `leave`
+`play` · `skip [n]` · `skipvote` · `seek` · `history` · `stop` · `pause` · `resume` · `nowplaying` · `queue` · `shuffle` · `remove` · `volume 0-200` · `loop` · `leave`
+`playlist save/load/list/delete/import` (YouTube/Spotify при заданных Spotify Client Credentials)
 - Очередь на сервер, повтор трека, авто-выход при пустой очереди через 60 сек
+- Плейлисты хранятся в SQLite, ограничены 100 треками, а stream URL обновляется при загрузке
 
 ### Администрирование
 - Тикеты: `/ticket panel` (кнопка 🎫), закрытие 🔒, транскрипты в отдельный канал
@@ -208,7 +211,9 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 | `/remind_cancel <id>` | Отменить одно |
 | `/remind_clear` | Удалить все |
 
-Фоновая проверка каждые 30 сек: напоминание уходит в канал или в ЛС. Переживает рестарт (хранится в БД).
+Фоновая проверка каждые 30 сек: напоминание уходит в канал или в ЛС. Команды доступны и в личных сообщениях. Переживает рестарт (хранится в БД).
+
+Для защиты от дублей несколько экземпляров бота используют SQLite lease-claim: одно напоминание или scheduled-сообщение в каждый момент обрабатывает только один worker.
 
 ### Опросы (Polls)
 - `/poll <вопрос> <вариант1…5>` — 2–5 вариантов, голосование кнопками, счётчики в реальном времени
@@ -234,7 +239,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 `avatar` · `servericon` · `emoji` (список) · `roleinfo` · `channelinfo` · `whois` — инфо-команды
 
 ### Общее (General)
-`ping` · `serverinfo` · `userinfo` · `about` · `help` — всё в embed, пагинация кнопками
+`ping` · `health` · `serverinfo` · `userinfo` · `about` · `help` — всё в embed, пагинация кнопками
 
 ### Донаты (DonationAlerts)
 - Поллинг API каждые 15 сек: новый донат → роль «Спонсор» + уведомление в канал
@@ -294,6 +299,8 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
   отправка через вебхук (прокси через бота) или от имени бота в выбранный канал,
   загрузка/редактирование сообщения по ID
 - Авторизация: пароль панели (`PANEL_PASSWORD`) или токен из `data/.panel-token`;
+  дополнительные роли `admin`, `moderator`, `viewer` задаются через `PANEL_*_PASSWORD`;
+  изменяющие действия сохраняются в `/api/admin-audit`;
   лимит 5 попыток входа в минуту, Origin-проверка
 - Панель включается переменной `PANEL_PORT`, без неё модуль не стартует
 

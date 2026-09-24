@@ -77,7 +77,9 @@ class MemberSelectView(discord.ui.View):
 
     async def _callback(self, interaction: discord.Interaction) -> None:
         select = self.children[0]
-        assert isinstance(select, discord.ui.Select) and select.values
+        if not isinstance(select, discord.ui.Select) or not select.values:
+            await interaction.response.edit_message(content="Выберите участника.", view=None)
+            return
         member = interaction.guild.get_member(int(select.values[0])) if interaction.guild else None
         if member is None:
             await interaction.response.edit_message(content="Участник не найден.", view=None)

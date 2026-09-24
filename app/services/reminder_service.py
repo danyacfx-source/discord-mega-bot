@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
 
 from app.core.base import BaseService
+from app.db.reminders_repository import RemindersRepository
+from app.types import ReminderRow, ReminderSummary
 
-if TYPE_CHECKING:
-    from app.db.reminders_repository import RemindersRepository
 
-
-class ReminderService(BaseService):
+class ReminderService(BaseService[RemindersRepository]):
     repo: RemindersRepository
 
     def __init__(self, repo: RemindersRepository) -> None:
@@ -21,8 +19,14 @@ class ReminderService(BaseService):
             raise ValueError("Время уже наступило")
         return await self._repo.add(user_id, guild_id, channel_id, message, remind_at)
 
-    async def due_up_to(self, moment: datetime) -> list[dict[str, Any]]:
+    async def due_up_to(self, moment: datetime) -> list[ReminderRow]:
         return await self._repo.due_up_to(moment)
+
+    async def claim_due(self, moment: datetime, lease_seconds: int = 120) -> ReminderRow | None:
+        return await self._repo.claim_due(moment, lease_seconds)
+
+    async def release_claim(self, reminder_id: int) -> None:
+        await self._repo.release_claim(reminder_id)
 
     async def cancel(self, user_id: int, reminder_id: int) -> bool:
         return await self._repo.cancel(user_id, reminder_id)
@@ -30,7 +34,7 @@ class ReminderService(BaseService):
     async def cancel_all(self, user_id: int) -> int:
         return await self._repo.cancel_all(user_id)
 
-    async def active_for_user(self, user_id: int) -> list[dict[str, Any]]:
+    async def active_for_user(self, user_id: int) -> list[ReminderSummary]:
         return await self._repo.active_for_user(user_id)
 
     async def count_for_user(self, user_id: int) -> int:

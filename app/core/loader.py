@@ -20,29 +20,38 @@ from app.cogs import COGS_PACKAGE
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
+    from app.services import Services
 
 logger = logging.getLogger("bot")
 
 #: Источники зависимостей когов: имя параметра → сервис из bot.services.
 #: Параметр ``bot`` подставляется первым позиционным аргументом.
+def _services(bot: MegaBot) -> Services:
+    services = bot.services
+    if services is None:
+        raise RuntimeError("Сервисы не собраны до загрузки когов")
+    return services
+
+
 COG_PROVIDERS: dict[str, Callable[[MegaBot], object]] = {
-    "settings": lambda b: b.services.settings,
-    "moderation": lambda b: b.services.moderation,
-    "music": lambda b: b.services.music,
-    "tickets": lambda b: b.services.tickets,
-    "logging": lambda b: b.services.logging,
-    "reminders": lambda b: b.services.reminders,
-    "polls": lambda b: b.services.polls,
-    "giveaways": lambda b: b.services.giveaways,
-    "reaction_roles": lambda b: b.services.reaction_roles,
-    "scheduled": lambda b: b.services.scheduled,
-    "donations": lambda b: b.services.donations,
-    "twitch": lambda b: b.services.twitch,
-    "kick": lambda b: b.services.kick,
-    "vk_video": lambda b: b.services.vk_video,
-    "tempvoice": lambda b: b.services.tempvoice,
-    "birthdays": lambda b: b.services.birthdays,
-    "seasons": lambda b: b.services.seasons,
+    "settings": lambda b: _services(b).settings,
+    "moderation": lambda b: _services(b).moderation,
+    "cases": lambda b: _services(b).cases,
+    "music": lambda b: _services(b).music,
+    "tickets": lambda b: _services(b).tickets,
+    "logging": lambda b: _services(b).logging,
+    "reminders": lambda b: _services(b).reminders,
+    "polls": lambda b: _services(b).polls,
+    "giveaways": lambda b: _services(b).giveaways,
+    "reaction_roles": lambda b: _services(b).reaction_roles,
+    "scheduled": lambda b: _services(b).scheduled,
+    "donations": lambda b: _services(b).donations,
+    "twitch": lambda b: _services(b).twitch,
+    "kick": lambda b: _services(b).kick,
+    "vk_video": lambda b: _services(b).vk_video,
+    "tempvoice": lambda b: _services(b).tempvoice,
+    "birthdays": lambda b: _services(b).birthdays,
+    "seasons": lambda b: _services(b).seasons,
 }
 
 
@@ -52,7 +61,7 @@ def _build_cog(bot: MegaBot, cls: type) -> object:
     Все обязательные зависимости резолвятся — ``cls(bot, **kwargs)``.
     Иначе (неизвестный обязательный параметр) — откат к ``cls(bot)``.
     """
-    params = list(inspect.signature(cls.__init__).parameters.values())[1:]
+    params = list(inspect.signature(cls).parameters.values())
     kwargs: dict[str, object] = {}
     resolvable = True
     for param in params:
@@ -129,7 +138,8 @@ async def register_persistent_views(bot: MegaBot) -> None:
     from app.core.views import GiveawayView, PollView, TicketCloseView, TicketOpenView
 
     services = bot.services
-    assert services is not None
+    if services is None:
+        raise RuntimeError("Сервисы не собраны до регистрации persistent views")
     bot.add_view(TicketOpenView(services.tickets), message_id=None)
     bot.add_view(TicketCloseView(services.tickets), message_id=None)
 

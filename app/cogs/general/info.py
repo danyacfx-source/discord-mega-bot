@@ -22,7 +22,12 @@ class InfoCog(MegaCog, name="Информация"):
     @app_commands.guild_only()
     async def serverinfo(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
-        assert guild is not None
+        if guild is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Команда работает только на сервере."),
+                ephemeral=True,
+            )
+            return
 
         members = guild.members
         total_members = sum(1 for m in members if not m.bot)

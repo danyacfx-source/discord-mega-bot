@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 
 def bot_has_permissions(**perms: bool):
@@ -33,7 +34,7 @@ def is_owner() -> app_commands.check:
         owner_id = getattr(interaction.client, "config", None) and interaction.client.config.owner_id
         if owner_id and interaction.user.id == owner_id:
             return True
-        raise app_commands.NotOwner("Эта команда доступна владельцу бота.")
+        raise commands.NotOwner("Эта команда доступна владельцу бота.")
 
     return app_commands.check(predicate)
 

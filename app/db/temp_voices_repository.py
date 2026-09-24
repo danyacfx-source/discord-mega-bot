@@ -1,9 +1,10 @@
 """Репозиторий временных голосовых каналов (владелец → канал)."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
 
 from app.db.base_repository import BaseRepository
+from app.types import TempVoiceRow
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -32,6 +33,6 @@ class TempVoicesRepository(BaseRepository):
         cursor = await self.db.execute("DELETE FROM temp_voices WHERE owner_id = ?", (owner_id,))
         return cursor.rowcount > 0
 
-    async def all(self) -> list[dict[str, Any]]:
-        rows = await self.db.fetchall("SELECT owner_id, channel_id FROM temp_voices")
-        return [dict(row) for row in rows]
+    async def all(self) -> list[TempVoiceRow]:
+        rows = await self.db.fetchall("SELECT owner_id, channel_id, created_at FROM temp_voices")
+        return [cast(TempVoiceRow, dict(row)) for row in rows]

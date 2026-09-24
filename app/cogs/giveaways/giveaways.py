@@ -13,6 +13,7 @@ from app.core import embeds
 from app.core.base import MegaCog
 from app.core.views import GiveawayView
 from app.services.giveaway_service import GiveawayService
+from app.types import GiveawayRow
 from app.utils.format import relative
 from app.utils.time import parse_duration
 
@@ -48,7 +49,12 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
             except Exception:
                 logger.exception("Ошибка при завершении розыгрыша #%s", giveaway["id"])
 
-    async def _finish(self, giveaway: dict, *, reroll: bool = False) -> None:
+    async def _finish(self, giveaway: GiveawayRow, *, reroll: bool = False, claim: bool = True) -> bool:
+        if claim:
+            claimed = await self.giveaways.claim(giveaway["id"])
+            if claimed is None:
+                return False
+            giveaway = claimed
         entries = await self.giveaways.entries(giveaway["id"])
         winners_count = int(giveaway["winners"])
         winners = self.giveaways.draw(entries, winners_count)
@@ -56,7 +62,7 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
 
         channel = self.bot.get_channel(giveaway["channel_id"])
         if not isinstance(channel, discord.TextChannel):
-            return
+            return True
 
         header = "Перерозыгрыш" if reroll else "Приз"
         announce = embeds.success("🎉 Розыгрыш завершён", f"{header}: **{giveaway['prize']}**")
@@ -75,6 +81,7 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
                 await message.edit(embed=embed, view=None)
             except discord.HTTPException:
                 pass
+        return True
 
     async def _start_giveaway(
         self,
@@ -85,6 +92,7 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
         min_days: int = 0,
         description: str | None = None,
     ) -> None:
+        seconds: int | None
         if duration_str.isdigit():
             seconds = int(duration_str) * 60
         else:
@@ -111,13 +119,22 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
             interaction.guild.id, interaction.channel.id, interaction.user.id, final_prize[:256], winners, ends_at, max(0, min_days)
         )
         giveaway = await self.giveaways.get(giveaway_id)
-        assert giveaway is not None
+        if giveaway is None:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Розыгрыш создан, но его данные не удалось загрузить."),
+                ephemeral=True,
+            )
+            return
         embed = await self.giveaways.embed(giveaway)
         view = GiveawayView()
-        await interaction.response.send_message(embed=embed, view=view)
-        message = await interaction.original_response()
-        await self.giveaways.bind_message(giveaway_id, message.id)
-        self.bot.add_view(view, message_id=message.id)
+        try:
+            await interaction.response.send_message(embed=embed, view=view)
+            message = await interaction.original_response()
+            await self.giveaways.bind_message(giveaway_id, message.id)
+            self.bot.add_view(view, message_id=message.id)
+        except Exception:
+            await self.giveaways.finish(giveaway_id)
+            raise
 
     @app_commands.command(name="gstart", description="Запустить розыгрыш")
     @app_commands.describe(
@@ -163,12 +180,23 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
                 embed=embeds.error("Не найдено", "Розыгрыш не найден. Права изменять есть?"), ephemeral=True
             )
             return
+        if giveaway["guild_id"] != interaction.guild.id:
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Этот розыгрыш принадлежит другому серверу."),
+                ephemeral=True,
+            )
+            return
         if not giveaway["active"]:
             await interaction.response.send_message(
                 embed=embeds.warning("Уже завершён", "Этот розыгрыш уже закрыт."), ephemeral=True
             )
             return
-        await self._finish(giveaway)
+        if not await self._finish(giveaway):
+            await interaction.response.send_message(
+                embed=embeds.warning("Уже обрабатывается", "Этот розыгрыш уже завершает другой процесс."),
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_message(embed=embeds.success("Розыгрыш завершён", "Победители объявлены в канале."), ephemeral=True)
 
     async def _do_reroll(self, interaction: discord.Interaction, message_id: int) -> None:
@@ -176,7 +204,19 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
         if giveaway is None:
             await interaction.response.send_message(embed=embeds.error("Не найдено", "Розыгрыш не найден."), ephemeral=True)
             return
-        await self._finish(giveaway, reroll=True)
+        if giveaway["guild_id"] != interaction.guild.id:
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Этот розыгрыш принадлежит другому серверу."),
+                ephemeral=True,
+            )
+            return
+        if giveaway["active"]:
+            await interaction.response.send_message(
+                embed=embeds.warning("Сначала завершите", "Перерозыгрыш доступен после окончания розыгрыша."),
+                ephemeral=True,
+            )
+            return
+        await self._finish(giveaway, reroll=True, claim=False)
         embed = embeds.success("Перерозыгрыш", "Новые победители объявлены в канале.")
         embed.add_field(name="Подсказка", value=f"Окончание было: {relative(datetime.fromisoformat(giveaway['ends_at']))}")
         await interaction.response.send_message(embed=embed, ephemeral=True)

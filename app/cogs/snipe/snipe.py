@@ -21,8 +21,8 @@ _MAX_ENTRIES = 10
 class SnipeCog(MegaCog, name="Snipe"):
     def __init__(self, bot: MegaBot) -> None:
         super().__init__(bot)
-        self._deleted: dict[tuple[int, int], deque] = defaultdict(lambda: deque(maxlen=_MAX_ENTRIES))
-        self._edited: dict[tuple[int, int], deque] = defaultdict(lambda: deque(maxlen=_MAX_ENTRIES))
+        self._deleted: dict[tuple[int, int], deque[discord.Message]] = defaultdict(lambda: deque(maxlen=_MAX_ENTRIES))
+        self._edited: dict[tuple[int, int], deque[discord.Message]] = defaultdict(lambda: deque(maxlen=_MAX_ENTRIES))
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message) -> None:
@@ -53,7 +53,12 @@ class SnipeCog(MegaCog, name="Snipe"):
     @app_commands.command(name="snipe", description="Показать последние удалённые сообщения в канале")
     @app_commands.guild_only()
     async def snipe(self, interaction: discord.Interaction) -> None:
-        assert isinstance(interaction.channel, discord.TextChannel)
+        if interaction.guild is None or not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Команда работает только в текстовом канале сервера."),
+                ephemeral=True,
+            )
+            return
         messages = self._deleted.get((interaction.guild.id, interaction.channel.id))
         if not messages:
             await interaction.response.send_message(embed=embeds.info("Пусто", "Удалённых сообщений в этом канале нет."), ephemeral=True)
@@ -69,7 +74,12 @@ class SnipeCog(MegaCog, name="Snipe"):
     @app_commands.command(name="editsnipe", description="Показать последние изменённые сообщения в канале")
     @app_commands.guild_only()
     async def editsnipe(self, interaction: discord.Interaction) -> None:
-        assert isinstance(interaction.channel, discord.TextChannel)
+        if interaction.guild is None or not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.response.send_message(
+                embed=embeds.error("Недоступно", "Команда работает только в текстовом канале сервера."),
+                ephemeral=True,
+            )
+            return
         messages = self._edited.get((interaction.guild.id, interaction.channel.id))
         if not messages:
             await interaction.response.send_message(embed=embeds.info("Пусто", "Изменённых сообщений в этом канале нет."), ephemeral=True)

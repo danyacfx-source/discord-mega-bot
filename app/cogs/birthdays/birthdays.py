@@ -29,7 +29,7 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
     def __init__(self, bot: MegaBot, birthdays: BirthdayService) -> None:
         super().__init__(bot)
         self.birthdays = birthdays
-        self._task: asyncio.Task | None = None
+        self._task: asyncio.Task[None] | None = None
 
     async def cog_load(self) -> None:
         if self.bot.config.birthday_channel_id is not None and self._task is None:

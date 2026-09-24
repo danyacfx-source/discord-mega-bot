@@ -1,10 +1,11 @@
 """Авто-модерация как на Node automod.js (спам/слова/ссылки/капс/растяжки)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import discord
@@ -71,6 +72,119 @@ class AutoModCog(MegaCog, name="AutoMod"):
         self.settings = settings
         self._messages: dict[int, list[float]] = {}
         self._timeout_counts: dict[int, list[float]] = {}
+        self._joins: dict[int, list[float]] = {}
+        self._raid_until: dict[int, float] = {}
+        self._raid_restore_tasks: dict[int, asyncio.Task[None]] = {}
+        self._lockdown_tasks: dict[int, asyncio.Task[None]] = {}
+
+    async def cog_unload(self) -> None:
+        for task in self._raid_restore_tasks.values():
+            task.cancel()
+        for task in self._lockdown_tasks.values():
+            task.cancel()
+        self._raid_restore_tasks.clear()
+        self._lockdown_tasks.clear()
+
+    async def activate_lockdown(self, guild: discord.Guild, seconds: int | None = None) -> int:
+        """Запрещает сообщения @everyone и автоматически восстанавливает права."""
+        me = guild.me
+        if me is None or not me.guild_permissions.manage_channels:
+            return 0
+        old: list[tuple[discord.TextChannel, discord.PermissionOverwrite]] = []
+        for channel in guild.text_channels:
+            current = channel.overwrites_for(guild.default_role)
+            if current.send_messages is False:
+                continue
+            updated = current.copy()
+            updated.send_messages = False
+            try:
+                await channel.set_permissions(guild.default_role, overwrite=updated, reason="Automod: lockdown")
+                old.append((channel, current))
+            except discord.HTTPException:
+                logger.debug("Automod: не удалось закрыть %s", channel, exc_info=True)
+        duration = max(30, seconds or self.bot.config.automod_lockdown_seconds)
+        prior = self._lockdown_tasks.pop(guild.id, None)
+        if prior is not None:
+            prior.cancel()
+
+        async def restore() -> None:
+            await asyncio.sleep(duration)
+            for channel, overwrite in old:
+                try:
+                    await channel.set_permissions(
+                        guild.default_role, overwrite=overwrite, reason="Automod: lockdown завершён"
+                    )
+                except discord.HTTPException:
+                    pass
+            self._lockdown_tasks.pop(guild.id, None)
+
+        self._lockdown_tasks[guild.id] = asyncio.create_task(restore())
+        logger.warning("Automod: lockdown включён на %s на %dс", guild, duration)
+        return len(old)
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        config = self.bot.config
+        if member.bot or member.guild is None:
+            return
+        if config.automod_min_account_age_days > 0:
+            created = member.created_at
+            if datetime.now(UTC) - created < timedelta(days=config.automod_min_account_age_days):
+                me = member.guild.me
+                if me is not None and me.guild_permissions.kick_members:
+                    try:
+                        await member.kick(reason="Automod: слишком новый аккаунт")
+                        logger.warning("Automod: кик нового аккаунта %s", member)
+                    except discord.HTTPException:
+                        logger.warning("Automod: не удалось удалить новый аккаунт %s", member, exc_info=True)
+                return
+        if not config.automod_antiraid_enabled:
+            return
+        now = time.monotonic()
+        joins = self._joins.setdefault(member.guild.id, [])
+        window = config.automod_antiraid_window_seconds
+        joins[:] = [stamp for stamp in joins if now - stamp <= window]
+        joins.append(now)
+        if len(joins) >= config.automod_antiraid_join_threshold:
+            await self._activate_raid_mode(member.guild)
+
+    async def _activate_raid_mode(self, guild: discord.Guild) -> None:
+        config = self.bot.config
+        now = time.monotonic()
+        if self._raid_until.get(guild.id, 0.0) > now:
+            return
+        me = guild.me
+        if me is None or not me.guild_permissions.manage_channels:
+            logger.warning("Automod: anti-raid сработал, но нет manage_channels в %s", guild)
+            return
+        self._raid_until[guild.id] = now + config.automod_antiraid_cooldown_seconds
+        changed: list[tuple[discord.TextChannel, int]] = []
+        for channel in guild.text_channels:
+            if channel.id in set(config.automod_ignored_channels):
+                continue
+            previous = channel.slowmode_delay
+            target = max(previous, config.automod_antiraid_slowmode_seconds)
+            if target == previous:
+                continue
+            try:
+                await channel.edit(slowmode_delay=target, reason="Automod: anti-raid")
+                changed.append((channel, previous))
+            except discord.HTTPException:
+                logger.debug("Automod: не удалось включить slowmode в %s", channel, exc_info=True)
+        logger.warning("Automod: anti-raid режим включён на сервере %s (%d каналов)", guild, len(changed))
+
+        async def restore() -> None:
+            await asyncio.sleep(config.automod_antiraid_cooldown_seconds)
+            for channel, previous in changed:
+                try:
+                    await channel.edit(slowmode_delay=previous, reason="Automod: anti-raid завершён")
+                except discord.HTTPException:
+                    pass
+            self._raid_until.pop(guild.id, None)
+            self._raid_restore_tasks.pop(guild.id, None)
+
+        task = asyncio.create_task(restore())
+        self._raid_restore_tasks[guild.id] = task
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -118,6 +232,13 @@ class AutoModCog(MegaCog, name="AutoMod"):
         if self._is_spam(user_id):
             return "спам"
         lowered = content.lower()
+        exempt = getattr(self.bot.config, "automod_exempt_regex", "")
+        if exempt:
+            try:
+                if re.search(exempt, content, flags=re.IGNORECASE):
+                    return None
+            except re.error:
+                logger.error("Некорректный AUTOMOD_EXEMPT_REGEX", exc_info=True)
 
         banned: set[str] = {w.strip() for w in (blocked_words or []) if w and w.strip()}
         for raw in (self.bot.config.automod_banned_words or "").split(","):

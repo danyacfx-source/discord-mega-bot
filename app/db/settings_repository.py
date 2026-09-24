@@ -43,6 +43,7 @@ _INT_COLUMNS = (
     "bot_log_channel_id",
     "donation_channel_id",
 )
+_SETTING_SQL_COLUMNS = {column: column for column in DEFAULT_SETTINGS}
 
 
 class SettingsRepository(BaseRepository):
@@ -54,7 +55,8 @@ class SettingsRepository(BaseRepository):
         if row is None:
             await self.ensure_row(guild_id)
             row = await self.db.fetchone("SELECT * FROM guild_settings WHERE guild_id = ?", (guild_id,))
-        assert row is not None
+        if row is None:
+            raise RuntimeError(f"Не удалось создать настройки сервера {guild_id}")
         data = dict(row)
         for column, default in DEFAULT_SETTINGS.items():
             data.setdefault(column, default)
@@ -64,10 +66,13 @@ class SettingsRepository(BaseRepository):
         return data
 
     async def set(self, guild_id: int, column: str, value: Any) -> None:
-        if column not in DEFAULT_SETTINGS:
+        safe_column = _SETTING_SQL_COLUMNS.get(column)
+        if safe_column is None:
             raise ValueError(f"Неизвестная колонка настроек: {column}")
         await self.ensure_row(guild_id)
-        await self.db.execute(f"UPDATE guild_settings SET {column} = ? WHERE guild_id = ?", (value, guild_id))
+        # safe_column comes exclusively from the fixed DEFAULT_SETTINGS whitelist.
+        sql = "UPDATE guild_settings SET " + safe_column + " = ? WHERE guild_id = ?"  # nosec B608
+        await self.db.execute(sql, (value, guild_id))
 
     async def set_defaults_missing(self, guild_id: int) -> dict[str, Any]:
         current = await self.get(guild_id)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord.ext import commands
@@ -29,7 +29,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
 
     # ------------------------------------------------------------- catalog LD
 
-    def _json(self, raw: str) -> dict:
+    def _json(self, raw: str) -> dict[str, Any]:
         if not raw.strip():
             return {}
         try:
@@ -39,7 +39,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
             return {}
         return data if isinstance(data, dict) else {}
 
-    def _json_list(self, raw: str) -> list:
+    def _json_list(self, raw: str) -> list[Any]:
         if not raw.strip():
             return []
         try:

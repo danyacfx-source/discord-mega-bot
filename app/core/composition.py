@@ -36,6 +36,8 @@ def assemble(
     from app.db.donations_repository import DonationsRepository
     from app.db.giveaways_repository import GiveawaysRepository
     from app.db.kv_repository import KvRepository
+    from app.db.moderation_cases_repository import ModerationCasesRepository
+    from app.db.music_repository import MusicRepository
     from app.db.polls_repository import PollsRepository
     from app.db.reaction_roles_repository import ReactionRolesRepository
     from app.db.reminders_repository import RemindersRepository
@@ -51,6 +53,7 @@ def assemble(
     from app.services.giveaway_service import GiveawayService
     from app.services.kick_service import KickService
     from app.services.logging_service import LoggingService
+    from app.services.moderation_case_service import ModerationCaseService
     from app.services.moderation_service import ModerationService
     from app.services.music_service import MusicService
     from app.services.poll_service import PollService
@@ -86,10 +89,11 @@ def assemble(
     # --- Сервисы, зависящие от бота и/или настроек ---
     logging_svc = override_or(overrides, "logging", LoggingService, settings, bot)
     moderation = override_or(overrides, "moderation", ModerationService, WarnsRepository(db), settings)
+    cases = override_or(overrides, "cases", ModerationCaseService, ModerationCasesRepository(db))
     tickets = override_or(
         overrides, "tickets", TicketService, settings, TicketsRepository(db), logging_svc
     )
-    music = override_or(overrides, "music", MusicService, bot)
+    music = override_or(overrides, "music", MusicService, bot, MusicRepository(db))
     donations = override_or(
         overrides, "donations", DonationService, DonationsRepository(db), kv_repo, config
     )
@@ -100,6 +104,7 @@ def assemble(
     services = Services(
         settings=settings,
         moderation=moderation,
+        cases=cases,
         music=music,
         tickets=tickets,
         logging=logging_svc,

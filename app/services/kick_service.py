@@ -1,11 +1,12 @@
 """Сервис Kick: статус стрима (публичный API v2) и модерация (Dev API v1)."""
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
+
+from app.core.api_client import ApiClient, ApiRequestError
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -32,31 +33,32 @@ class KickService:
     def __init__(self, repo: KvRepository, config: Config) -> None:
         self._repo = repo
         self._config = config
-        self._session: aiohttp.ClientSession | None = None
+        self._http = ApiClient(
+            "Kick",
+            timeout=config.api_timeout_seconds,
+            user_agent="DiscordMegaBot/3.3 Kick",
+            proxy=config.api_proxy,
+        )
         self._broadcaster: dict[str, Any] | None = None
 
     @property
     def session(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-        return self._session
+        return self._http.session
 
     async def aclose(self) -> None:
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        await self._http.close()
 
     # ------------------------------------------------------------------ стримы
 
     async def channel_status(self, slug: str) -> dict[str, Any] | None:
         """Статус канала: None — офлайн, иначе dict с полями стрима."""
         try:
-            async with self.session.get(f"{_PUBLIC_BASE}/channels/{slug}") as response:
-                if response.status != 200:
-                    logger.warning("Kick %s: статус %s", slug, response.status)
-                    return None
-                body = await response.json(content_type=None)
-        except aiohttp.ClientError:
+            status, body, _ = await self._http.json(
+                "GET", f"{_PUBLIC_BASE}/channels/{slug}", acceptable=(200, 404)
+            )
+            if status == 404:
+                return None
+        except ApiRequestError:
             logger.exception("Kick: сеть при статусе канала %s", slug)
             return None
         live = body.get("livestream") if isinstance(body, dict) else None
@@ -100,12 +102,19 @@ class KickService:
         """Ищет Kick-пользователя по нику: id и нормализованный username."""
         username = username.strip().lstrip("@")
         try:
-            async with self.session.get(f"{_PUBLIC_BASE}/users/{username}") as response:
-                body = await response.json(content_type=None) if response.status == 200 else None
+            status, body, _ = await self._http.json(
+                "GET", f"{_PUBLIC_BASE}/users/{username}", acceptable=(200, 404)
+            )
+            body = body if status == 200 else None
             if isinstance(body, dict) and isinstance(body.get("id"), int):
                 return {"id": int(body["id"]), "username": body.get("username") or username}
-            async with self.session.get(f"{_PUBLIC_BASE}/search", params={"q": username, "type": "users"}) as response:
-                body = await response.json(content_type=None) if response.status == 200 else None
+            status, body, _ = await self._http.json(
+                "GET",
+                f"{_PUBLIC_BASE}/search",
+                params={"q": username, "type": "users"},
+                acceptable=(200, 404),
+            )
+            body = body if status == 200 else None
             if isinstance(body, dict):
                 for user in body.get("users") or []:
                     if str(user.get("username", "")).lower() == username.lower():
@@ -113,7 +122,7 @@ class KickService:
                 if body.get("users"):
                     user = body["users"][0]
                     return {"id": int(user["id"]), "username": user.get("username", username)}
-        except (aiohttp.ClientError, TypeError, ValueError, KeyError):
+        except (ApiRequestError, TypeError, ValueError, KeyError):
             logger.exception("Kick: не удалось найти пользователя %s", username)
         return None
 
@@ -126,12 +135,8 @@ class KickService:
         if self._broadcaster is not None:
             return self._broadcaster
         try:
-            async with self.session.get(f"{_DEV_BASE}/users", headers=self._headers()) as response:
-                if response.status != 200:
-                    logger.warning("Kick: не удалось определить вещателя (HTTP %s)", response.status)
-                    return None
-                body = await response.json(content_type=None)
-        except (aiohttp.ClientError, ValueError):
+            _, body, _ = await self._http.json("GET", f"{_DEV_BASE}/users", headers=self._headers())
+        except (ApiRequestError, ValueError):
             logger.exception("Kick: ошибка запроса вещателя")
             return None
         me = (body or {}).pop("data", None) if isinstance(body, dict) else body
@@ -148,21 +153,15 @@ class KickService:
 
     async def resolve_chatroom_id(self, slug: str, retries: int = 3) -> int | None:
         """Определяет id чатрума канала через GET /api/v2/channels/{slug}/chatroom."""
-        last_err: Exception | None = None
-        for attempt in range(retries):
-            try:
-                async with self.session.get(f"{_PUBLIC_BASE}/channels/{slug}/chatroom") as response:
-                    if response.status != 200:
-                        raise RuntimeError(f"Kick: chatroom канала {slug} вернул HTTP {response.status}")
-                    body = await response.json(content_type=None)
-                if isinstance(body, dict) and body.get("id"):
-                    return int(body["id"])
-                raise RuntimeError(f"Kick: chatroom канала {slug} без id")
-            except (aiohttp.ClientError, TypeError, ValueError, RuntimeError) as exc:
-                last_err = exc
-                if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-        logger.error("Kick: не удалось получить chatroom канала %s: %s", slug, last_err)
+        try:
+            _, body, _ = await self._http.json(
+                "GET", f"{_PUBLIC_BASE}/channels/{slug}/chatroom", attempts=retries
+            )
+            if isinstance(body, dict) and body.get("id"):
+                return int(body["id"])
+            raise ValueError("в ответе нет id")
+        except (ApiRequestError, TypeError, ValueError) as exc:
+            logger.error("Kick: не удалось получить chatroom канала %s: %s", slug, exc)
         return None
 
     async def delete_message(self, message_id: int | str) -> bool:

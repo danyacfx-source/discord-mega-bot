@@ -88,7 +88,10 @@ class MegaBot(commands.Bot):
             logger.debug("Синк команд: application_id ещё не известен — пропуск")
             return
         total = 0
-        for target in (None, discord.Object(self.config.guild_id) if self.config.guild_id else None):
+        targets: list[discord.Object | None] = [None]
+        if self.config.guild_id:
+            targets.append(discord.Object(self.config.guild_id))
+        for target in targets:
             label = "глобально" if target is None else f"гильдия {target.id}"
             try:
                 synced = await self.tree.sync(guild=target)
@@ -103,6 +106,12 @@ class MegaBot(commands.Bot):
         logger.info("Синхронизировано команд: %d (%s)", total, ", ".join(names[:20]))
 
     async def close(self) -> None:
+        services = getattr(self, "services", None)
+        if services is not None:
+            try:
+                await services.music.aclose()
+            except Exception:
+                logger.exception("Ошибка при остановке музыкальных плееров")
         webpanel = self.webpanel
         if webpanel is not None:
             try:
@@ -136,6 +145,7 @@ class MegaBot(commands.Bot):
         known = (
             _BotMissingPermissions,
             app_commands.MissingPermissions,
+            commands.NotOwner,
             app_commands.CommandOnCooldown,
             app_commands.TransformerError,
             app_commands.CheckFailure,
@@ -158,6 +168,8 @@ class MegaBot(commands.Bot):
         elif isinstance(original, app_commands.MissingPermissions):
             names = ", ".join(f"`{name}`" for name in original.missing_permissions)
             embed = embeds.error("Недостаточно прав", f"Вам нужны права: {names}.")
+        elif isinstance(original, commands.NotOwner):
+            embed = embeds.error("Только для владельца", "Эта команда доступна владельцу бота.")
         elif isinstance(original, app_commands.CommandOnCooldown):
             embed = embeds.warning("Подождите", f"Команда на перезарядке: {original.retry_after:.1f} сек.")
         elif isinstance(original, discord.Forbidden):
@@ -265,9 +277,7 @@ class MegaBot(commands.Bot):
     async def on_error(self, event_method: str, *args: Any, **kwargs: Any) -> None:
         exc_type, exc_value, _traceback = sys.exc_info()
         guild = self._guild_from_error_args(args)
-        logger.error(
-            "Необработанная ошибка в событии %s", event_method, exc_info=(exc_type, exc_value, _traceback)
-        )
+        logger.error("Необработанная ошибка в событии %s", event_method, exc_info=True)
         if exc_value is not None:
             await self._notify_error_feed(guild, f"Событие {event_method}: {type(exc_value).__name__}: {exc_value}")
 

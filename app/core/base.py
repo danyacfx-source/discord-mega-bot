@@ -1,7 +1,7 @@
 """Базовые классы архитектуры: ког с типизированными сервисами и сервис поверх репозитория."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
 from discord.ext import commands
 
@@ -38,14 +38,17 @@ class MegaCog(commands.Cog):
         return self.bot.config
 
 
-class BaseService:
+RepoT = TypeVar("RepoT", bound="BaseRepository")
+
+
+class BaseService(Generic[RepoT]):
     """Базовый сервис: единый доступ к своему репозиторию."""
 
-    def __init__(self, repo: BaseRepository) -> None:
+    def __init__(self, repo: RepoT) -> None:
         self._repo = repo
 
     @property
-    def repo(self) -> BaseRepository:
+    def repo(self) -> RepoT:
         return self._repo
 
 
