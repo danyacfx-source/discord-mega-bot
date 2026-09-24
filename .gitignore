@@ -11,3 +11,7 @@ dist/
 build/
 .idea/
 .vscode/
+# Archives
+*.zip
+*.rar
+*.7z
