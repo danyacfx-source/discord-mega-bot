@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _REQUIRED_VARS = ("BOT_TOKEN",)
+_DEFAULT_WARDOGS_SERVER_ID = "c89b3266-aed5-40d1-b022-6da6f6eba377"
 
 
 def _ints(value: str | None) -> tuple[int, ...]:
@@ -171,7 +172,7 @@ class Config:
 
     # WARDOGS: живая карточка сервера и страница подключения
     wardogs_server_name: str = "Wardogs"
-    wardogs_server_id: str | None = None
+    wardogs_server_id: str | None = _DEFAULT_WARDOGS_SERVER_ID
     wardogs_join_url: str | None = None
 
     # Права категорий (permissions, как в Node)
@@ -346,7 +347,7 @@ class Config:
             socials_twitch=os.getenv("SOCIALS_TWITCH"),
             socials_donate=os.getenv("SOCIALS_DONATE"),
             wardogs_server_name=os.getenv("WARDOGS_SERVER_NAME", "Wardogs").strip() or "Wardogs",
-            wardogs_server_id=os.getenv("WARDOGS_SERVER_ID") or None,
+            wardogs_server_id=os.getenv("WARDOGS_SERVER_ID") or _DEFAULT_WARDOGS_SERVER_ID,
             wardogs_join_url=os.getenv("WARDOGS_JOIN_URL") or None,
             guild_id=_single_int(os.getenv("GUILD_ID")),
             permissions_auto_apply=_bool(os.getenv("PERMISSIONS_AUTO_APPLY")),
