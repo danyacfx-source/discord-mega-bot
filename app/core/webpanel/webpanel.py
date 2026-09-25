@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import html
 import io
 import json
 import logging
@@ -27,6 +28,7 @@ from argon2.exceptions import VerificationError
 from app.core import embeds
 from app.core.api_client import ApiClient
 from app.core.webpanel.log_ring import RingBufferHandler
+from app.services.wardogs_service import WardogsService, WardogsUnavailable
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -463,6 +465,8 @@ class WebPanel:
         app.router.add_get("/admin/embed-constructor", self._serve_index)
         app.router.add_get("/logs", self._serve_logs_page)
         app.router.add_get("/audit", self._serve_audit_page)
+        app.router.add_get("/wardogs/join", self._wardogs_join_page)
+        app.router.add_get("/api/wardogs/join-link", self._api_wardogs_join_link)
         app.router.add_get("/panel.js", self._serve_script)
         app.router.add_post("/api/login", self._api_login)
         app.router.add_get("/oauth/discord", self._oauth_start)
@@ -864,6 +868,91 @@ class WebPanel:
 
     async def _redirect_index(self, request: web.Request) -> web.Response:
         raise web.HTTPFound("/admin")
+
+    def _wardogs_service(self) -> WardogsService:
+        return WardogsService(
+            server_name=self.bot.config.wardogs_server_name,
+            server_id=self.bot.config.wardogs_server_id,
+            timeout=self.bot.config.api_timeout_seconds,
+        )
+
+    async def _api_wardogs_join_link(self, request: web.Request) -> web.Response:
+        """Публичный endpoint для виджетов, Discord и страницы подключения."""
+        try:
+            server = await self._wardogs_service().get_server()
+        except WardogsUnavailable as exc:
+            return self._json({"ok": False, "code": "server_unavailable", "error": str(exc)}, status=503)
+        custom_url = self.bot.config.wardogs_join_url
+        return self._json(
+            {
+                "ok": True,
+                "joinId": server.join_id,
+                "url": custom_url if custom_url and custom_url.startswith(("https://", "http://")) else None,
+                "server": server.as_dict(),
+            }
+        )
+
+    async def _wardogs_join_page(self, request: web.Request) -> web.Response:
+        try:
+            server = await self._wardogs_service().get_server()
+        except WardogsUnavailable as exc:
+            body = f"<h1>Сервер пока не виден</h1><p>{html.escape(str(exc))}</p><p>Попробуй обновить страницу через пару минут.</p>"
+            return web.Response(text=self._wardogs_page_html(body), content_type="text/html", status=503)
+
+        safe_name = html.escape(server.name)
+        safe_join_id = html.escape(server.join_id)
+        custom_url = self.bot.config.wardogs_join_url
+        launch = ""
+        if custom_url and custom_url.startswith(("https://", "http://")):
+            launch = f'<a class="primary" href="{html.escape(custom_url, quote=True)}">Запустить подключение</a>'
+        body = f"""
+          <span class="eyebrow">АСУНА ЮКИ · LIVE</span>
+          <h1>Заходи в WARDOGS</h1>
+          <p class="server">{safe_name}</p>
+          <div class="stats">
+            <b>{server.players}/{server.max_players}</b>
+            <span>{html.escape(server.map_name)}</span>
+            <span>{html.escape(server.region)}</span>
+          </div>
+          <label>JOIN ID</label>
+          <button class="code" data-code="{safe_join_id}"
+            onclick="navigator.clipboard.writeText(this.dataset.code);
+              this.querySelector('small').textContent='Скопировано ✓'">
+            <strong>{safe_join_id}</strong><small>Нажми, чтобы скопировать</small>
+          </button>
+          <div class="actions">{launch}<a href="https://store.steampowered.com/app/1867240/WARDOGS/">Открыть WARDOGS в Steam</a></div>
+          <p class="hint">В игре открой браузер серверов → <b>Join By ID</b> → вставь скопированный код.</p>
+        """
+        return web.Response(text=self._wardogs_page_html(body), content_type="text/html")
+
+    @staticmethod
+    def _wardogs_page_html(body: str) -> str:
+        return f"""<!doctype html>
+        <html lang="ru"><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>WARDOGS · Асуна Юки</title><style>
+        *{{box-sizing:border-box}}
+        body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
+          background:radial-gradient(circle at 20% 10%,#342365 0,transparent 38%),
+          radial-gradient(circle at 90% 90%,#173e54 0,transparent 40%),#090a12;
+          color:#f7f5ff;font:16px system-ui,sans-serif}}
+        main{{width:min(680px,100%);padding:clamp(28px,7vw,64px);border:1px solid #ffffff1d;
+          border-radius:30px;background:#11131fd9;box-shadow:0 28px 90px #0008;backdrop-filter:blur(20px)}}
+        .eyebrow{{color:#a78bfa;font-size:12px;font-weight:800;letter-spacing:.18em}}
+        h1{{margin:12px 0 8px;font-size:clamp(38px,8vw,68px);line-height:.95}}
+        p.server{{color:#c8c4d8;font-size:18px}}
+        .stats{{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0}}
+        .stats>*{{padding:9px 13px;border-radius:999px;background:#ffffff0c;border:1px solid #ffffff12}}
+        label{{display:block;margin:28px 0 9px;color:#8d87a3;font-size:12px;font-weight:800;letter-spacing:.14em}}
+        button.code{{width:100%;padding:20px;text-align:left;color:#fff;border:1px solid #8b5cf655;
+          border-radius:18px;background:#7c3aed1f;cursor:pointer}}
+        button.code strong{{display:block;overflow-wrap:anywhere;font:700 clamp(16px,4vw,22px) ui-monospace,monospace}}
+        button.code small{{display:block;margin-top:8px;color:#b9acd8}}
+        .actions{{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px}}
+        a{{padding:13px 17px;border:1px solid #ffffff1d;border-radius:13px;color:#e9e5f5;text-decoration:none}}
+        a.primary{{border:0;background:linear-gradient(135deg,#8b5cf6,#5b8cff);font-weight:800}}
+        .hint{{margin:24px 0 0;color:#938ca8;line-height:1.55}}
+        </style></head><body><main>{body}</main></body></html>"""
 
     async def _serve_index(self, request: web.Request) -> web.Response:
         html = self._index_html

@@ -169,6 +169,11 @@ class Config:
     socials_twitch: str | None = None
     socials_donate: str | None = None
 
+    # WARDOGS: живая карточка сервера и страница подключения
+    wardogs_server_name: str = "Wardogs"
+    wardogs_server_id: str | None = None
+    wardogs_join_url: str | None = None
+
     # Права категорий (permissions, как в Node)
     guild_id: int | None = None
     permissions_auto_apply: bool = False
@@ -340,6 +345,9 @@ class Config:
             socials_youtube=os.getenv("SOCIALS_YOUTUBE"),
             socials_twitch=os.getenv("SOCIALS_TWITCH"),
             socials_donate=os.getenv("SOCIALS_DONATE"),
+            wardogs_server_name=os.getenv("WARDOGS_SERVER_NAME", "Wardogs").strip() or "Wardogs",
+            wardogs_server_id=os.getenv("WARDOGS_SERVER_ID") or None,
+            wardogs_join_url=os.getenv("WARDOGS_JOIN_URL") or None,
             guild_id=_single_int(os.getenv("GUILD_ID")),
             permissions_auto_apply=_bool(os.getenv("PERMISSIONS_AUTO_APPLY")),
             permissions_categories=os.getenv("PERMISSIONS_CATEGORIES", ""),
