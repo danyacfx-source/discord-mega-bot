@@ -122,6 +122,7 @@ class Config:
     panel_oauth_client_id: str | None = None
     panel_oauth_client_secret: str | None = None
     panel_oauth_redirect_url: str | None = None
+    panel_bridge_token: str | None = None
 
     # Дни рождения
     birthday_channel_id: int | None = None
@@ -311,6 +312,7 @@ class Config:
             panel_oauth_client_id=os.getenv("PANEL_OAUTH_CLIENT_ID") or None,
             panel_oauth_client_secret=os.getenv("PANEL_OAUTH_CLIENT_SECRET") or None,
             panel_oauth_redirect_url=os.getenv("PANEL_OAUTH_REDIRECT_URL") or None,
+            panel_bridge_token=os.getenv("PANEL_BRIDGE_TOKEN") or None,
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
             birthday_ping_role_id=_single_int(os.getenv("BIRTHDAY_PING_ROLE_ID")),

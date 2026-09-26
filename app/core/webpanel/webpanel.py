@@ -387,6 +387,7 @@ class WebPanel:
         self._oauth_client_id = config.panel_oauth_client_id
         self._oauth_client_secret = config.panel_oauth_client_secret
         self._oauth_redirect_url = config.panel_oauth_redirect_url
+        self._bridge_token = config.panel_bridge_token
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
         self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
@@ -512,9 +513,9 @@ class WebPanel:
         app.router.add_get("/api/birthdays", self._authorized(self._api_birthdays_get))
         app.router.add_post("/api/birthdays", self._authorized(self._api_birthdays_post))
         app.router.add_post("/api/birthdays/{user_id}/remove", self._authorized(self._api_birthdays_remove))
-        app.router.add_get("/api/tempvoice", self._authorized(self._api_tempvoice_get))
-        app.router.add_post("/api/tempvoice/{channel_id}/delete", self._authorized(self._api_tempvoice_delete))
-        app.router.add_post("/api/tempvoice/{channel_id}/transfer", self._authorized(self._api_tempvoice_transfer))
+        app.router.add_get("/api/tempvoice", self._bridge_or_authorized(self._api_tempvoice_get))
+        app.router.add_post("/api/tempvoice/{channel_id}/delete", self._bridge_or_authorized(self._api_tempvoice_delete, "admin"))
+        app.router.add_post("/api/tempvoice/{channel_id}/transfer", self._bridge_or_authorized(self._api_tempvoice_transfer, "admin"))
         app.router.add_get("/api/ai", self._authorized(self._api_ai_get))
         app.router.add_post("/api/ai", self._authorized(self._api_ai_post))
         app.router.add_get("/api/schedule", self._authorized(self._api_schedule))
@@ -679,6 +680,22 @@ class WebPanel:
             response = await handler(request)
             await self._record_admin_audit(request, role, response)
             return response
+
+        return wrapped
+
+    def _bridge_or_authorized(self, handler, required_role: str | None = None):
+        authorized = self._authorized(handler, required_role)
+
+        async def wrapped(request: web.Request) -> web.Response:
+            supplied = request.headers.get("X-Bridge-Token", "")
+            if (
+                self._bridge_token
+                and supplied
+                and self._rate_ok(request)
+                and secrets.compare_digest(supplied, self._bridge_token)
+            ):
+                return await handler(request)
+            return await authorized(request)
 
         return wrapped
 
