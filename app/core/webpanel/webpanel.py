@@ -2664,6 +2664,14 @@ class WebPanel:
                     "owner_id": str(row["owner_id"]),
                     "owner_name": self._member_name(guild, row["owner_id"]),
                     "created_at": row["created_at"],
+                    "members": [
+                        {
+                            "id": str(member.id),
+                            "name": member.display_name,
+                            "bot": member.bot,
+                        }
+                        for member in (channel.members if isinstance(channel, discord.VoiceChannel) else [])
+                    ],
                 }
             )
         config = self.bot.config
