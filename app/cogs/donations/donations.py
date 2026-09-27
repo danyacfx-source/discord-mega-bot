@@ -208,6 +208,11 @@ class DonationsCog(MegaCog, name="Donations"):
 
     async def _donation_channel(self, guild_id: int | None) -> discord.TextChannel | None:
         config = self.bot.config
+        if not guild_id:
+            # Донат без VIP-кода не привязан к гильде — подставляем основную.
+            # Иначе молча уходим в DONATION_NOTIFY_CHANNEL_ID, который по
+            # умолчанию совпадает с каналом кнопки «Поддержать».
+            guild_id = config.guild_id or (self.bot.guilds[0].id if self.bot.guilds else None)
         if guild_id:
             try:
                 if self.bot.services is None:
