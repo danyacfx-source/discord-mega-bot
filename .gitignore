@@ -5,6 +5,7 @@ __pycache__/
 .env
 /data/
 /logs/
+*.log
 .pytest_cache/
 .ruff_cache/
 dist/
