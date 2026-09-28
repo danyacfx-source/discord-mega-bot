@@ -253,6 +253,9 @@ body[data-theme="light"]::before{opacity:.15}
 .scroll{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .scroll::-webkit-scrollbar{width:10px}.scroll::-webkit-scrollbar-thumb{background:var(--border);border:3px solid transparent;background-clip:padding-box;border-radius:999px}
 @media(max-width:900px){.sidebar:after{display:none}.card:hover,.stat:hover{transform:none}.topbar{box-shadow:0 8px 24px rgba(0,0,0,.12)}}
+
+/* Command palette and live-status polish. Kept CSS-only so every existing panel action stays intact. */
+.topbar-meta{display:flex;align-items:center;gap:9px}.live-indicator{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid var(--border);border-radius:999px;background:color-mix(in srgb,var(--card) 86%,transparent);color:var(--muted);font-size:11px;font-weight:700;white-space:nowrap}.live-indicator i{width:7px;height:7px;border-radius:50%;background:#f0b232;box-shadow:0 0 0 4px rgba(240,178,50,.12)}.live-indicator.online{color:#54c784;border-color:rgba(35,165,90,.35)}.live-indicator.online i{background:#23a55a;box-shadow:0 0 0 4px rgba(35,165,90,.13);animation:live-pulse 1.8s infinite}.live-indicator.offline{color:#f47578;border-color:rgba(242,63,67,.3)}.live-indicator.offline i{background:#f23f43;box-shadow:none}@keyframes live-pulse{70%{box-shadow:0 0 0 9px rgba(35,165,90,0)}100%{box-shadow:0 0 0 4px rgba(35,165,90,0)}}.section-context{margin:5px 0 0;color:var(--muted);font-size:12px;line-height:1.35}.palette-backdrop{position:fixed;inset:0;z-index:300;display:none;place-items:start center;padding-top:min(16vh,150px);background:rgba(4,6,10,.56);backdrop-filter:blur(9px)}.palette-backdrop.open{display:grid}.command-palette{width:min(630px,calc(100vw - 32px));overflow:hidden;border:1px solid color-mix(in srgb,var(--accent) 26%,var(--border));border-radius:18px;background:color-mix(in srgb,var(--card) 97%,var(--accent) 3%);box-shadow:0 28px 90px rgba(0,0,0,.42);animation:palette-in .18s var(--ease)}@keyframes palette-in{from{opacity:0;transform:translateY(-10px) scale(.98)}to{opacity:1;transform:none}}.command-search-wrap{display:flex;align-items:center;gap:10px;padding:13px 15px;border-bottom:1px solid var(--border)}.command-search-wrap span{font-size:19px;color:var(--accent)}.command-search-wrap input{min-height:36px;padding:4px 0;border:0;border-radius:0;background:transparent;font-size:15px;font-weight:600;box-shadow:none!important}.command-search-wrap kbd{padding:3px 6px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font:10px inherit}.command-list{max-height:min(48vh,420px);overflow:auto;padding:8px}.command-item{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;width:100%;padding:10px;border:0;border-radius:11px;background:transparent;color:var(--text);text-align:left;cursor:pointer}.command-item:hover,.command-item.selected{background:color-mix(in srgb,var(--accent) 13%,transparent)}.command-item .cmd-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:color-mix(in srgb,var(--accent) 13%,transparent);font-size:15px}.command-item b{font-size:13px}.command-item small{display:block;margin-top:3px;color:var(--muted);font-size:11px}.command-item kbd{color:var(--muted);font:10px inherit}.command-empty{padding:28px;color:var(--muted);font-size:13px;text-align:center}.palette-foot{display:flex;gap:12px;padding:10px 15px;border-top:1px solid var(--border);color:var(--muted);font-size:10px}.palette-foot kbd{padding:1px 5px;border:1px solid var(--border);border-radius:4px;font:10px inherit}@media(max-width:560px){.live-indicator span{display:none}.topbar-meta .pill{display:none}.palette-backdrop{padding-top:62px}.palette-foot{justify-content:center}.palette-foot span:nth-child(2){display:none}}
 </style>
 </head>
 <body data-theme="dark">
@@ -316,8 +319,8 @@ body[data-theme="light"]::before{opacity:.15}
 
   <main class="main">
     <header class="topbar">
-      <div class="topbar-title"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button><h1 id="section-title">Обзор</h1></div>
-      <div style="display:flex;align-items:center;gap:8px"><button class="search-trigger" id="search-trigger" type="button">⌕ Найти <kbd>Ctrl K</kbd></button><span class="pill" id="panel-name">…</span></div>
+      <div class="topbar-title"><button class="mobile-menu" id="mobile-menu" type="button" aria-label="Открыть меню">☰</button><div><h1 id="section-title">Обзор</h1><p class="section-context" id="section-context">Состояние сервера и главные действия в одном месте.</p></div></div>
+      <div class="topbar-meta"><span class="live-indicator" id="live-indicator"><i></i><span id="live-indicator-text">Проверяем статус</span></span><button class="search-trigger" id="search-trigger" type="button">⌕ Команды <kbd>Ctrl K</kbd></button><span class="pill" id="panel-name">…</span></div>
     </header>
     <div class="scroll">
 
@@ -900,6 +903,14 @@ body[data-theme="light"]::before{opacity:.15}
 
     </div>
   </main>
+</div>
+
+<div class="palette-backdrop" id="palette-backdrop" aria-hidden="true">
+  <div class="command-palette" role="dialog" aria-modal="true" aria-label="Быстрые переходы">
+    <div class="command-search-wrap"><span>⌕</span><input id="command-search" type="text" placeholder="Найти раздел или действие…" autocomplete="off"><kbd>Esc</kbd></div>
+    <div class="command-list" id="command-list"></div>
+    <div class="palette-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> выбрать</span><span><kbd>Enter</kbd> открыть</span><span><kbd>Esc</kbd> закрыть</span></div>
+  </div>
 </div>
 
 <div id="toasts"></div>

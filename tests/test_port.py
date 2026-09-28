@@ -832,6 +832,8 @@ async def test_webpanel_admin_page_multiple_embeds(tmp_path):
             assert 'id="embeds_box"' in text
             assert "addEmbed" in text
             assert "Добавить эмбед" in text
+            assert 'id="palette-backdrop"' in text
+            assert 'id="live-indicator"' in text
 
 
 def test_webhook_body_multiple_embeds(tmp_path):

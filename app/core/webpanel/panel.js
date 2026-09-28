@@ -16,6 +16,27 @@ const COLORS = {blurple: 0x5865f2, green: 0x23a55a, red: 0xf23f43, yellow: 0xf0b
 const hex6 = /^#?([0-9a-f]{6})$/i;
 const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
 const TITLES = {overview: "Обзор", server: "Сервер", moderation: "Модерация", giveaways: "Розыгрыши", tickets: "Тикеты", automod: "Автомод", polls: "Опросы", birthdays: "Дни рождения", tempvoice: "Голосовые", ai: "AI-чат", embed: "Эмбеды", scheduler: "Планировщик", settings: "Настройки", test: "Тест", files: "Файлы", logs: "Логи", audit: "Логи Discord", stats: "Статистика", backup: "Бэкап"};
+const SECTION_CONTEXT = {
+  overview: "Состояние сервера и главные действия в одном месте.",
+  server: "Участники, каналы и голосовая активность сервера.",
+  moderation: "Действия модераторов и история нарушений.",
+  giveaways: "Активные и завершённые розыгрыши сообщества.",
+  tickets: "Обращения участников и их история.",
+  automod: "Автоматическая защита, правила и быстрый lockdown.",
+  polls: "Опросы, голоса и результаты.",
+  birthdays: "Календарь поздравлений для участников.",
+  tempvoice: "Активные временные голосовые комнаты.",
+  ai: "Состояние и управление AI-чатом.",
+  embed: "Создание сообщений и эмбедов с предпросмотром.",
+  scheduler: "Планирование будущих публикаций.",
+  settings: "Каналы и рабочие настройки сервера.",
+  test: "Проверка отправки сообщений от имени бота.",
+  files: "Изображения, доступные для оформления сообщений.",
+  logs: "Технические события и ошибки в реальном времени.",
+  audit: "События Discord: сообщения, участники и модерация.",
+  stats: "Аналитика активности и динамика сообщества.",
+  backup: "Экспорт данных и состояние резервных копий.",
+};
 const SETTINGS_GROUPS = [
   { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   { title: "🧾 Логи аудита", cols: [["log_channel_id", "Общий лог"], ["member_log_channel_id", "Лог участников"], ["message_log_channel_id", "Лог сообщений"], ["voice_log_channel_id", "Лог голосовых"], ["mod_log_channel_id", "Лог модерации"], ["bot_log_channel_id", "Лог бота"]] },
@@ -38,6 +59,7 @@ let auditTimer = null;
 let overviewTimer = null;
 let analyticsSocket = null;
 let analyticsReconnectTimer = null;
+let commandIndex = 0;
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,6 +195,9 @@ const mobileMenu = $("mobile-menu");
 const sidebarScrim = $("sidebar-scrim");
 const navSearch = $("nav-search");
 const searchTrigger = $("search-trigger");
+const paletteBackdrop = $("palette-backdrop");
+const commandSearch = $("command-search");
+const commandList = $("command-list");
 
 function filterNavigation() {
   const query = (navSearch ? navSearch.value : "").trim().toLocaleLowerCase("ru");
@@ -194,9 +219,57 @@ function filterNavigation() {
   if ($("nav-empty")) $("nav-empty").style.display = visible ? "none" : "block";
 }
 
+function commandItems() {
+  return [...document.querySelectorAll(".nav-item")].map((item) => {
+    const section = item.dataset.section;
+    return {
+      section,
+      title: TITLES[section] || section,
+      icon: item.querySelector("span")?.textContent || "•",
+      description: SECTION_CONTEXT[section] || "Открыть раздел панели.",
+    };
+  });
+}
+
+function renderCommandPalette() {
+  if (!commandList || !commandSearch) return;
+  const query = commandSearch.value.trim().toLocaleLowerCase("ru");
+  const entries = commandItems().filter((item) => (`${item.title} ${item.description}`).toLocaleLowerCase("ru").includes(query));
+  commandIndex = Math.max(0, Math.min(commandIndex, Math.max(0, entries.length - 1)));
+  commandList.innerHTML = "";
+  if (!entries.length) {
+    commandList.innerHTML = '<div class="command-empty">Ничего не найдено</div>';
+    return;
+  }
+  entries.forEach((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "command-item" + (index === commandIndex ? " selected" : "");
+    button.innerHTML = `<span class="cmd-icon">${escapeHtml(item.icon)}</span><span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.description)}</small></span><kbd>↵</kbd>`;
+    button.addEventListener("click", () => { closeCommandPalette(); switchSection(item.section); });
+    commandList.appendChild(button);
+  });
+}
+
+function openCommandPalette() {
+  if (!paletteBackdrop || !commandSearch) return;
+  closeMobileNav();
+  commandIndex = 0;
+  commandSearch.value = "";
+  paletteBackdrop.classList.add("open");
+  paletteBackdrop.setAttribute("aria-hidden", "false");
+  renderCommandPalette();
+  commandSearch.focus();
+}
+
+function closeCommandPalette() {
+  if (!paletteBackdrop) return;
+  paletteBackdrop.classList.remove("open");
+  paletteBackdrop.setAttribute("aria-hidden", "true");
+}
+
 function focusNavigationSearch() {
-  if (window.matchMedia("(max-width: 900px)").matches) document.body.classList.add("nav-open");
-  if (navSearch) { navSearch.focus(); navSearch.select(); }
+  openCommandPalette();
 }
 if (navSearch) {
   navSearch.addEventListener("input", filterNavigation);
@@ -208,6 +281,23 @@ if (navSearch) {
   });
 }
 if (searchTrigger) searchTrigger.addEventListener("click", focusNavigationSearch);
+if (paletteBackdrop) paletteBackdrop.addEventListener("click", (event) => { if (event.target === paletteBackdrop) closeCommandPalette(); });
+if (commandSearch) {
+  commandSearch.addEventListener("input", () => { commandIndex = 0; renderCommandPalette(); });
+  commandSearch.addEventListener("keydown", (event) => {
+    const entries = commandList ? [...commandList.querySelectorAll(".command-item")] : [];
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!entries.length) return;
+      commandIndex = (commandIndex + (event.key === "ArrowDown" ? 1 : -1) + entries.length) % entries.length;
+      renderCommandPalette();
+    }
+    if (event.key === "Enter" && entries.length) {
+      event.preventDefault();
+      entries[commandIndex]?.click();
+    }
+  });
+}
 function closeMobileNav() {
   document.body.classList.remove("nav-open");
   if (mobileMenu) mobileMenu.setAttribute("aria-expanded", "false");
@@ -221,7 +311,7 @@ if (mobileMenu) {
 }
 if (sidebarScrim) sidebarScrim.addEventListener("click", closeMobileNav);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeMobileNav();
+  if (event.key === "Escape") { closeCommandPalette(); closeMobileNav(); }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
     focusNavigationSearch();
@@ -236,6 +326,7 @@ function switchSection(name) {
   document.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.section === name));
   document.querySelectorAll(".section").forEach((s) => s.classList.toggle("active", s.id === "sec-" + name));
   $("section-title").textContent = TITLES[name] || name;
+  if ($("section-context")) $("section-context").textContent = SECTION_CONTEXT[name] || "Рабочее пространство управления ботом.";
   if (name === "settings" && !settingsLoaded) loadSettings();
   if (name === "test") loadTestChannels();
   if (name === "embed") renderPreview();
@@ -279,6 +370,12 @@ async function loadOverview() {
   $("ov_status").className = "badge " + (online ? "ok" : "off");
   st.textContent = online ? ("бот онлайн: " + (d.bot_name || "—")) : "бот офлайн";
   st.className = "badge " + (online ? "ok" : "off");
+  const live = $("live-indicator");
+  const liveText = $("live-indicator-text");
+  if (live && liveText) {
+    live.className = "live-indicator " + (online ? "online" : "offline");
+    liveText.textContent = online ? "Бот на связи" : "Бот офлайн";
+  }
   $("guildname").textContent = d.guild && d.guild.name ? "сервер: " + d.guild.name : "";
   $("ov_uptime").textContent = d.uptime || "—";
   $("ov_ping").textContent = (d.latency_ms !== undefined ? String(d.latency_ms) : "—") + " мс";
