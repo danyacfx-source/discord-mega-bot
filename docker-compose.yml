@@ -20,7 +20,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
-      - "traefik.http.routers.megabot.rule=Host(`dendich.link`)"
+      - "traefik.http.routers.megabot.rule=Host(`dendich.ru`) || Host(`www.dendich.ru`)"
       - "traefik.http.routers.megabot.entrypoints=websecure"
       - "traefik.http.routers.megabot.tls=true"
       - "traefik.http.routers.megabot.tls.certresolver=letsencrypt"

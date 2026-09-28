@@ -1,4 +1,9 @@
-"""Rewrite проекта: та же бизнес-логика, но без DI-контейнера.
+"""Legacy-эксперимент с альтернативной сборкой графа зависимостей.
+
+Рабочая точка входа — ``main.py`` и ``app.core.composition.assemble``.
+Пакет ``rewrite`` сохранён только как историческая reference-реализация для
+сравнения подходов к composition root. Новые возможности в него не добавлять.
+Подробности и критерии удаления: ``rewrite/README.md``.
 
 Вместо дерева ``DependencyContainer``/``PackageContainers`` (app/core/container.py,
 app/core/packages.py) весь граф зависимостей собирается вручную в одном месте —
