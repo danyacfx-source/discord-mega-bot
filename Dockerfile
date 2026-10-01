@@ -5,8 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # ffmpeg и libopus — обязательны для музыки и голосовых каналов (py-nacl, discordsrv)
 # curl + ca-certificates — для загрузки sing-box
+# postgresql-client — pg_dump для периодических backup-ов PostgreSQL
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu \
+    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # sing-box — опциональный прокси только для Gemini (если хост в EEA/NL, где API недоступен).
