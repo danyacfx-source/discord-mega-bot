@@ -78,6 +78,10 @@ docker compose logs -f --tail=100
 - Без `--build` изменения `app/`, `requirements.txt` и `Dockerfile` игнорируются.
 - Откат: `git checkout <commit> && docker compose up -d --build`.
 - Токены и `.env` живут вне образа (volume), при пересборке не теряются.
+- Healthcheck: `docker compose ps` показывает `healthy/unhealthy` — скрипт
+  `scripts/healthcheck.py` раз в 30 с дергает `GET /api/health` панели (с токеном
+  из `data/.panel-token`); `503` (бот не ready / БД не прошла integrity) или молчание
+  сервера помечают контейнер unhealthy.
 - Если канал-счётчик (ServerStats) ловит `429 PATCH /channels/...` — это лимит Discord
   «2 переименования за 10 минут»; в коге стоит троттлинг, менять интервал в `.env`
   на значение **меньше 360 секунд** не стоит.

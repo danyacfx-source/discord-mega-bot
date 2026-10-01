@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from app.core.api_client import ApiClient, ApiRequestError
+from app.services.stream_archive import StreamArchiveStore
+from app.services.stream_rsvp import StreamRsvpStore
+from app.services.stream_session import StreamSessionStore
+from app.services.viewer_sessions import ViewerSessionStore
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -94,6 +98,22 @@ class KickService:
         }
 
     # ------------------------------------------------------------------ sticky
+
+    def session_store(self, slug: str) -> StreamSessionStore:
+        """Хранилище сессии стрима (пик зрителей, метаданные) для карточек."""
+        return StreamSessionStore(self._repo, f"stream:session:kick:{slug.lower()}")
+
+    def rsvp_store(self) -> StreamRsvpStore:
+        """Хранилище id старт-анонса для команды /stream_rsvp."""
+        return StreamRsvpStore(self._repo, "stream:rsvp:kick")
+
+    def viewer_store(self) -> ViewerSessionStore:
+        """Онлайн-сессии зрителей чата (из Pusher-событий)."""
+        return ViewerSessionStore(self._repo)
+
+    def archive_store(self, slug: str) -> StreamArchiveStore:
+        """Архив завершённых эфиров для /stream_stats."""
+        return StreamArchiveStore(self._repo, f"stream:archive:kick:{slug.lower()}")
 
     @staticmethod
     def _sticky_key() -> str:

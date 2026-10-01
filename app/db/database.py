@@ -466,15 +466,19 @@ class Database:
                 temp_path = Path(temp_file.name)
             if temp_path is None:
                 raise RuntimeError("Не удалось подготовить временный файл SQLite backup")
-            backup_conn = await aiosqlite.connect(temp_path)
-            try:
-                await self.conn.backup(backup_conn)
-                cursor = await backup_conn.execute("PRAGMA integrity_check")
-                row = await cursor.fetchone()
-                if not row or str(row[0]).lower() != "ok":
-                    raise RuntimeError(f"Проверка backup SQLite не пройдена: {row[0] if row else 'unknown'}")
-            finally:
-                await backup_conn.close()
+            # Под тем же локом, что и execute(): backup на общем коннекте ждёт
+            # освобождения незакоммиченной записи, а коммит стоял бы в очереди
+            # аiosqlite позади backup'а — получался дедлок.
+            async with self._tx_lock:
+                backup_conn = await aiosqlite.connect(temp_path)
+                try:
+                    await self.conn.backup(backup_conn)
+                    cursor = await backup_conn.execute("PRAGMA integrity_check")
+                    row = await cursor.fetchone()
+                    if not row or str(row[0]).lower() != "ok":
+                        raise RuntimeError(f"Проверка backup SQLite не пройдена: {row[0] if row else 'unknown'}")
+                finally:
+                    await backup_conn.close()
             os.replace(temp_path, target)
             temp_path = None
         finally:

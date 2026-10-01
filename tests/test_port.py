@@ -1025,3 +1025,74 @@ def test_tracemalloc_report():
         del blobs
     finally:
         tracemalloc.stop()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_streams(tmp_path):
+    bot = _panel_bot(
+        tmp_path,
+        twitch_channels=("alice",),
+        kick_channel_slug="bob",
+        stream_quiet_hours=(23, 8),
+        stream_role_id=10,
+        stream_role_user_ids=(42,),
+    )
+    await bot.setup_hook()
+    panel = WebPanel(bot)
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                assert (await client.get("/api/streams")).status == 401
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                resp = await client.get("/api/streams", headers=headers)
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["ok"] is True
+                labels = [s["label"] for s in data["streams"]]
+                assert "Twitch · alice" in labels
+                assert "Kick · bob" in labels
+                assert all(s["session"] is None for s in data["streams"]), "сессия пуста без стрима"
+                assert data["quiet_hours"] == "23-8"
+                assert data["role_id"] == "10"
+                assert data["role_user_ids"] == ["42"]
+    finally:
+        await bot.close()
+
+
+def test_webpanel_stream_is_live_freshness(tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    bot = _panel_bot(tmp_path, stream_sticky_poll_seconds=60.0)
+    panel = WebPanel(bot)
+    fresh = {"captured_at": datetime.now(UTC).isoformat()}
+    stale = {"captured_at": (datetime.now(UTC) - timedelta(hours=2)).isoformat()}
+    assert panel._stream_is_live(fresh, 300) is True
+    assert panel._stream_is_live(stale, 300) is False
+    assert panel._stream_is_live(None, 300) is False
+    assert panel._stream_is_live({"captured_at": "мусор"}, 300) is False
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_streams_watchers(tmp_path):
+    bot = _panel_bot(tmp_path, kick_channel_slug="bob")
+    await bot.setup_hook()
+    panel = WebPanel(bot)
+    try:
+        store = bot.services.kick.viewer_store()
+        await store.touch("alice", stream_id="s1")
+        await store.touch("bob", stream_id="s1")
+        await store.touch("alice", stream_id="s1")
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                assert (await client.get("/api/streams/watchers")).status == 401
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                resp = await client.get("/api/streams/watchers", headers=headers)
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["ok"] is True
+                assert data["kick_enabled"] is True
+                assert [t["name"] for t in data["top"]] == ["alice", "bob"], "топ по сообщениям за эфир"
+                assert data["top"][0]["name"] == "alice", "alice с двумя сообщениями впереди"
+                assert {r["name"] for r in data["active"]} == {"alice", "bob"}
+    finally:
+        await bot.close()

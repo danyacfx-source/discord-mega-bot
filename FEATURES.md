@@ -242,12 +242,35 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 - `/donate` — кнопка-ссылка на страницу доната
 - OAuth: автообновление токена (`DONATIONS_REFRESH_TOKEN`); без токена поллинг выключен (кнопка работает)
 
+### Стримы (общее для Twitch/Kick/VK Видео)
+- Карточки эфира: платформа-цвет, превью, зрители/пик/длительность/категория;
+  тренд «▲ +N за 10 мин» и спарклайн `▂▅▇█` из истории сэмплов в KV
+- Карточка после эфира: итоги, пик, длительность и ссылка на запись
+  (Twitch — последний VOD через Helix, иначе `/videos`; Kick — `/videos`; VK — страница видео)
+- `/stream_stats` — история завершённых эфиров из архива KV: пики, длительность, записи,
+  средний/лучший пик и суммарное время; живой эфир показывается сверху 🔴
+- Архив хранит последние `STREAM_ARCHIVE_DAYS` дней (по умолчанию 90) и не больше 50 эфиров на канал
+- Роль «В эфире» (`STREAM_ROLE_ID` + `STREAM_ROLE_USER_IDS`): выдаётся на старте, снимается на финише
+- Тихий час `STREAM_QUIET_HOURS=23-8` — по московскому времени (`STREAM_QUIET_TZ`, по умолчанию
+  `Europe/Moscow`, не зависит от таймзоны хоста): в окно пинг роли при старте не шлётся (карточка появляется)
+- Табло живёт быстрее базового поллинга: во время эфира обновление каждые `STREAM_STICKY_POLL_SECONDS` (60 с)
+- Старт-анонс отдельным постом с реакций 🔔 → `/stream_rsvp [платформа]` — кто откликнулся
+- Стрим-пост закрепляется на время эфира и открепляется на финише
+- Алерт «⚠️ Стрим прерван», если эфир длился меньше `STREAM_ABORT_ALERT_MINUTES` (0 — выкл)
+- Дедуп ошибок поллинга: первая ошибка серии — со стеком, повторы — редкие, после восстановления — info
+- Сессия последнего эфира хранится в KV (не чистится на офлайне) — её видят карточки, оверлей и панель
+- Панель: секция «Стримы» (`/api/streams`) + виджет на «Обзоре»
+
 ### Twitch
-- `/twitch_status [канал]` — статус: зрители, категория, превью
+- `/twitch_status [канал]` — статус: зрители, категория, превью, тренд
+- `/stream_schedule [канал]` — ближайшие эфиры из расписания Twitch (Helix, время московское)
+- `/twitch_clip [название]` — клип с живого эфира (Helix clips; нужен `TWITCH_REFRESH_TOKEN`
+  со scope `clips:edit`, токен обновляется автоматически)
 - Автоуведомления о старте/конце стрима: sticky-сообщение, пинг роли, смена присутствия бота на «🔴 стрим: …»
 
 ### Kick
 - `/kick_status` — статус стрима (публичный API v2), sticky-сообщение и пинг роли
+- `/kick_watchers` — онлайн-сессии зрителей из чата (Pusher): участники сервера отдельным списком
 - Модерация (Dev API, права: админ/управление сообщениями):
   `/kick_ban`, `/kick_timeout <1–10080 мин>`, `/kick_unban` — по нику на Kick
 - Автомод чата через Pusher WebSocket: бан-слово → таймаут 10 мин
@@ -257,7 +280,9 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 - aiohttp-сервер (включается `OVERLAY_PORT`): `/overlay` — страница-виджет, `/overlay/api` — JSON, `/overlay/health`
 - Токен (`X-Overlay-Token` или `?token=`): `OVERLAY_TOKEN`; если пуст — генерится и сохраняется в `data/.overlay-token`
   (в оверлей-ссылку подставляется автоматически)
-- Показывает: статус стрима (первый канал из `TWITCH_CHANNELS`, зрители/пик/категория), донат-цель (`OVERLAY_DONATION_GOAL_*`)
+- Показывает: статус стрима (Kick приоритет, иначе первый Twitch-канал): зрители/пик/категория/длительность,
+  тренд и спарклайн за эфир, офлайн — «последний эфир» с пиком; статус опрашивается не чаще раза в 60 с;
+  донат-цель (`OVERLAY_DONATION_GOAL_*`)
 
 ### Отчёт по ОЗУ (RamReport)
 - Каждые `RAM_REPORT_INTERVAL_MINUTES` мин (первый сразу после старта) в канал `RAM_REPORT_CHANNEL_ID`
@@ -265,6 +290,16 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 - Поле «📊 Отчёт о памяти (tracemalloc)» — топ аллокаций (файл:строка | МБ | блоки) и «Всего отслежено»
   (`RAM_REPORT_TRACEMALLOC=1`; трассировка стартует в `main.py` до импорта приложений;
   оверхед производительности, выключить — `RAM_REPORT_TRACEMALLOC=0`)
+
+### Heartbeat (алерт о тишине)
+- `HEARTBEAT_SILENCE_MINUTES=N` (0 — выключен): если бот не видел/не отправил ни одного
+  сообщения дольше N минут, в канал(ы) «Бот» (`/setup log-channel bot` или `BOT_LOG_CHANNEL_ID`)
+  уходит embed «Heartbeat: бот молчит» с временем последней активности
+- Один эпизод тишины — один алерт: любое сообщение (входящее или от бота) сбрасывает счётчик
+- Отдельно ловится залипание: сообщение, обработанное с опозданием больше порога (event loop
+  или шлюз Discord висели) — алерт уходит сразу, без ожидания нового окна
+- Проверка идёт каждые `min(30, N/4)` мин; после старта окно считается с готовности бота,
+  чтобы не алертить сразу при запуске
 
 ### Расширенные логи
 - join/leave участников, голосовые (заход/выход/переход), удаление/изменение сообщений,
@@ -360,13 +395,17 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 | `DONATE_BUTTON_CHANNEL_ID` / `DONATE_BONUSES` | пусто (без спонсор-кнопки) |
 | `DONATION_NOTIFY_CHANNEL_ID` / `DONATE_URL` | пусто |
 | `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` | пусто (Twitch выключен) |
+| `TWITCH_REFRESH_TOKEN` | пусто (без `/twitch_clip`) |
 | `TWITCH_CHANNELS` | пусто (список через запятую) |
 | `TWITCH_NOTIFY_CHANNEL_ID` / `TWITCH_PING_ROLE_ID` | пусто |
+| `STREAM_ROLE_ID` / `STREAM_ROLE_USER_IDS` | пусто (роль «В эфире» выключена) |
+| `STREAM_STICKY_POLL_SECONDS` / `STREAM_QUIET_HOURS` / `STREAM_QUIET_TZ` / `STREAM_ABORT_ALERT_MINUTES` / `STREAM_ARCHIVE_DAYS` | `60` / пусто / `Europe/Moscow` / `10` / `90` |
 | `KICK_CHANNEL_SLUG` | пусто (Kick выключен) |
 | `KICK_MOD_CHANNEL_ID` / `KICK_ACCESS_TOKEN` / `KICK_BAN_WORDS` | пусто (модерация выключена) |
 | `RULES_MESSAGE_ID` / `RULES_ROLE_ID` | пусто (гейт выключен) |
 | `TEMP_VOICE_TRIGGER_IDS` / `TEMP_VOICE_CATEGORY_ID` | пусто (tempvoice выключен) |
 | `LOGS_IGNORE_CHANNEL_IDS` / `LOGS_IGNORE_CATEGORY_IDS` | пусто |
+| `HEARTBEAT_SILENCE_MINUTES` | `0` (алерт о тишине выключен) |
 | `PANEL_PORT` | пусто (вебпанель выключена) |
 | `PANEL_HOST` / `PANEL_PASSWORD` / `PANEL_PUBLIC_URL` | `127.0.0.1` / пусто / пусто |
 | `OVERLAY_PORT` / `OVERLAY_HOST` / `OVERLAY_TOKEN` | пусто (оверлей выключен) / `127.0.0.1` / пусто |
@@ -385,7 +424,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 
 ## Качество
 
-- 44 юнит- и интеграционных теста (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея
+- 230 юнит- и интеграционных тестов (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея
 - `ruff check .` — чисто (line-length 140)
 - Единые паттерны: cog → service → repository → БД; граф собирается в composition root (`app/core/composition.py`)
 - Деплой на Ubuntu: `scripts/install_ubuntu.sh` + `systemd/discord-mega-bot.service`

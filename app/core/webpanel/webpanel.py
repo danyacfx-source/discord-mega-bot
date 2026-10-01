@@ -30,6 +30,7 @@ from app.core.api_client import ApiClient
 from app.core.webpanel.log_ring import RingBufferHandler
 from app.core.webpanel.routes import register_routes
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
+from app.utils.stream_history import trend
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -2550,6 +2551,125 @@ class WebPanel:
         return self._json({"ok": True, "question": question, "counts": {str(k): v for k, v in counts.items()}, "total": total})
 
     # --- API: дни рождения ---
+
+    def _stream_is_live(self, session: dict[str, Any] | None, poll_seconds: float) -> bool:
+        """Эфир считается идущим, пока сессия свежая (поллинг её дописывает).
+
+        Сессия переживает офлайн (это «последний эфир»), поэтому простого
+        наличия недостаточно — смотрим на ``captured_at``.
+        """
+        if not session or not session.get("captured_at"):
+            return False
+        try:
+            captured = datetime.fromisoformat(str(session["captured_at"]).replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if captured.tzinfo is None:
+            captured = captured.replace(tzinfo=UTC)
+        window = max(poll_seconds, self.bot.config.stream_sticky_poll_seconds) * 3
+        return (datetime.now(UTC) - captured).total_seconds() <= window
+
+    async def _api_streams_get(self, request: web.Request) -> web.Response:
+        """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.
+
+        Статус берётся из session-store (обновляется поллингом) — без
+        запросов к внешним API на каждый клик в панели.
+        """
+        config = self.bot.config
+        streams: list[dict[str, Any]] = []
+
+        def item(platform: str, label: str, url: str, notify_id: int | None, poll: float) -> dict[str, Any]:
+            return {
+                "platform": platform,
+                "label": label,
+                "url": url,
+                "notify_channel_id": str(notify_id or ""),
+                "poll_seconds": poll,
+                "session": None,
+                "live": False,
+                "trend": None,
+            }
+
+        if config.twitch_channels:
+            for login in config.twitch_channels:
+                entry = item(
+                    "twitch",
+                    f"Twitch · {login}",
+                    f"https://www.twitch.tv/{login}",
+                    config.twitch_notify_channel_id,
+                    config.twitch_poll_seconds,
+                )
+                entry["session"] = await self.services.twitch.session_store(login).load()
+                streams.append(entry)
+        if config.kick_channel_slug:
+            slug = config.kick_channel_slug
+            entry = item(
+                "kick",
+                f"Kick · {slug}",
+                f"https://kick.com/{slug}",
+                config.kick_notify_channel_id,
+                config.kick_poll_seconds,
+            )
+            entry["session"] = await self.services.kick.session_store(slug).load()
+            streams.append(entry)
+        if config.vk_channel_slug:
+            slug = config.vk_channel_slug
+            entry = item(
+                "vk_video",
+                f"VK Видео · {slug}",
+                f"https://live.vkvideo.ru/{slug}",
+                config.vk_notify_channel_id,
+                config.vk_poll_seconds,
+            )
+            entry["session"] = await self.services.vk_video.session_store(slug).load()
+            streams.append(entry)
+
+        for entry in streams:
+            entry["live"] = self._stream_is_live(entry["session"], entry["poll_seconds"])
+            if entry["live"]:
+                entry["trend"] = trend((entry["session"] or {}).get("history"))
+
+        quiet = config.stream_quiet_hours
+        return self._json(
+            {
+                "ok": True,
+                "streams": streams,
+                "role_id": str(config.stream_role_id or ""),
+                "role_user_ids": [str(uid) for uid in config.stream_role_user_ids],
+                "quiet_hours": f"{quiet[0]}-{quiet[1]}" if quiet else "",
+                "sticky_poll_seconds": config.stream_sticky_poll_seconds,
+            }
+        )
+
+    async def _api_streams_watchers(self, request: web.Request) -> web.Response:
+        """Кто сейчас в чате Kick и топ говорящих за эфир (KV viewer-sessions)."""
+        store = self.services.kick.viewer_store()
+        active = await store.active()
+        top = await store.top_talkers(limit=10)
+        rows: list[dict[str, Any]] = []
+        for session in active.values():
+            if not isinstance(session, dict):
+                continue
+            try:
+                messages = int(session.get("messages") or 0)
+            except (TypeError, ValueError):
+                messages = 0
+            rows.append(
+                {
+                    "name": str(session.get("name") or ""),
+                    "messages": messages,
+                    "last_seen": str(session.get("last_seen") or ""),
+                }
+            )
+        rows.sort(key=lambda row: row["last_seen"], reverse=True)
+        return self._json(
+            {
+                "ok": True,
+                "kick_enabled": bool(self.bot.config.kick_channel_slug),
+                "active": rows,
+                "top": top,
+            }
+        )
 
     async def _api_birthdays_get(self, request: web.Request) -> web.Response:
         guild = self._primary_guild()

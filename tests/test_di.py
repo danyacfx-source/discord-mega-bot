@@ -105,7 +105,7 @@ async def test_all_cogs_load_through_composition() -> None:
         try:
             loaded = bot.cogs
             assert len(loaded) >= 30, f"когов загружено: {len(loaded)}"
-            assert {"Setup", "Kick", "Moderation", "TwitchStatus", "AutoMod"} <= set(loaded)
+            assert {"Setup", "Kick", "Moderation", "TwitchStatus", "AutoMod", "StreamRsvp", "StreamStats"} <= set(loaded)
 
             from app.cogs.general.help import _CATEGORIES, _category_embed, _flatten
 

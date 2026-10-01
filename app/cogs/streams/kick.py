@@ -11,10 +11,18 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 
+from app.cogs.streams.abort_alert import abort_alert
+from app.cogs.streams.archive import needs_seal, seal_archive
+from app.cogs.streams.poll_guard import PollGuard
+from app.cogs.streams.quiet import is_quiet
+from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
+from app.cogs.streams.stream_cards import live_card, offline_card
+from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog
 from app.core.stream_state import stream_activity
 from app.services.kick_service import KickService, truncate_chat_content
+from app.services.viewer_sessions import OFFLINE_AFTER_SECONDS
 from app.utils.format import plural
 
 if TYPE_CHECKING:
@@ -38,6 +46,8 @@ class KickCog(MegaCog, name="Kick"):
         super().__init__(bot)
         self.kick = kick
         self._chat_task: asyncio.Task[None] | None = None
+        self._guard = PollGuard()
+        self._stream_key: str | None = None
 
     async def cog_load(self) -> None:
         if self.bot.config.kick_channel_slug:
@@ -68,11 +78,27 @@ class KickCog(MegaCog, name="Kick"):
             if status is not None:
                 await self._sticky_live(status)
                 await self._set_presence(status["title"], int(status.get("viewers") or 0))
+                # Табло живёт быстрее базового поллинга, пока стрим идёт.
+                self.poll_loop.change_interval(seconds=self.bot.config.stream_sticky_poll_seconds)
             else:
                 await self._sticky_offline(slug)
                 await self._set_presence(None, 0)
+                self.poll_loop.change_interval(seconds=self.bot.config.kick_poll_seconds)
+            await self._sweep_viewers()
+            self._guard.ok("kick")
         except Exception:
-            logger.exception("Kick: ошибка проверки стрима %s", slug)
+            self._guard.fail("kick", f"Kick: ошибка проверки стрима {slug}")
+
+    async def _sweep_viewers(self) -> None:
+        """Закрывает сессии зрителей, молчащих дольше порога (не валит поллинг)."""
+        try:
+            closed = await self.kick.viewer_store().sweep()
+        except Exception:
+            logger.debug("Kick: не удалось обновить сессии зрителей", exc_info=True)
+            return
+        if closed:
+            names = ", ".join(str(s.get("name") or "?") for s in closed[:5])
+            logger.debug("Kick: зрители вышли из эфира (%d): %s", len(closed), names)
 
     @poll_loop.before_loop
     async def _before_poll(self) -> None:
@@ -85,11 +111,17 @@ class KickCog(MegaCog, name="Kick"):
             logger.debug("Kick: не удалось сменить присутствие", exc_info=True)
 
     async def _sticky_live(self, status: dict[str, Any]) -> None:
+        await update_stream_role(self.bot, enable=True)
+        # Ключ текущего эфира — для сброса счётчика топа говорящих.
+        self._stream_key = str(status.get("started_at") or "") or None
         config = self.bot.config
         channel = self._notify_channel()
         if channel is None:
             return
-        embed = self._status_embed(status)
+        slug = str(status["slug"])
+        url = f"https://kick.com/{slug}"
+        session = await self.kick.session_store(slug).capture(status, url=url)
+        embed = live_card("kick", url=url, status=status, session=session)
         message_id = await self.kick.sticky_message_id()
         if message_id is not None:
             try:
@@ -99,12 +131,19 @@ class KickCog(MegaCog, name="Kick"):
             except discord.HTTPException:
                 pass
         content = ""
-        if config.kick_ping_role_id:
+        if config.kick_ping_role_id and not is_quiet(config):  # ночью — без пинга
             role = channel.guild.get_role(config.kick_ping_role_id)
             if role is not None:
                 content = role.mention
         message = await channel.send(content, embed=embed)
         await self.kick.set_sticky_message(message.id)
+        await pin_sticky(message)
+        await post_rsvp(
+            channel,
+            store=self.kick.rsvp_store(),
+            title=str(status.get("title") or ""),
+            url=url,
+        )
         await self._announce_chat_live(status)
 
     async def _announce_chat_live(self, status: dict[str, Any]) -> None:
@@ -128,17 +167,44 @@ class KickCog(MegaCog, name="Kick"):
         await self.kick.send_chat_message(text, as_user=config.kick_chat_send_as_user)
 
     async def _sticky_offline(self, slug: str) -> None:
+        await update_stream_role(self.bot, enable=False)
+        store = self.kick.session_store(slug)
+        session = await store.load()
+        url = f"https://kick.com/{slug}"
+        vod_url = f"{url}/videos"
+        archive = self.kick.archive_store(slug)
+        if await needs_seal(archive, session):
+            await seal_archive(
+                archive,
+                session,
+                platform="kick",
+                url=url,
+                vod_url=vod_url,
+                max_age_days=self.bot.config.stream_archive_days,
+            )
         channel = self._notify_channel()
         message_id = await self.kick.sticky_message_id()
         if channel is None or message_id is None:
             return
+        top = await self.kick.viewer_store().top_talkers()
         try:
             message = await channel.fetch_message(message_id)
-            embed = embeds.info("Стрим завершён", f"Канал `{slug}` офлайн. Спасибо за просмотр!")
-            await message.edit(embed=embed, content="")
+            await message.edit(
+                embed=offline_card("kick", url=url, session=session, vod_url=vod_url, top_talkers=top),
+                content="",
+            )
+            await unpin_sticky(message)
         except discord.HTTPException:
             pass
         await self.kick.clear_sticky_message()
+        # Сессию не чистим — это «последний эфир» для карточек и оверлея.
+        await abort_alert(
+            channel,
+            session=session,
+            label="Kick",
+            url=url,
+            threshold_minutes=self.bot.config.stream_abort_alert_minutes,
+        )
 
     def _notify_channel(self) -> discord.TextChannel | None:
         channel_id = self.bot.config.kick_notify_channel_id
@@ -149,15 +215,6 @@ class KickCog(MegaCog, name="Kick"):
             if isinstance(channel, discord.TextChannel):
                 return channel
         return None
-
-    @staticmethod
-    def _status_embed(status: dict[str, Any]) -> discord.Embed:
-        embed = embeds.info("🔴 Kick: стрим начался", f"**[{status['title']}](https://kick.com/{status['slug']})**")
-        if status["thumbnail"]:
-            embed.set_thumbnail(url=status["thumbnail"])
-        embed.add_field(name="Зрители", value=str(status["viewers"]), inline=True)
-        embed.add_field(name="Категория", value=status["category"], inline=True)
-        return embed
 
     @app_commands.command(name="kick_status", description="Статус Kick-стрима")
     @app_commands.guild_only()
@@ -170,10 +227,12 @@ class KickCog(MegaCog, name="Kick"):
             )
             return
         status = await self.kick.channel_status(slug)
+        url = f"https://kick.com/{slug}"
+        session = await self.kick.session_store(slug).load()
         if status is None:
-            embed = embeds.info(f"Kick: {slug}", "Канал сейчас **офлайн**.")
+            embed = offline_card("kick", url=url, session=session, vod_url=f"{url}/videos")
         else:
-            embed = self._status_embed(status)
+            embed = live_card("kick", url=url, status=status, session=session)
         await interaction.response.send_message(embed=embed)
 
     # ---------------------------------------------------------------- отправка в чат
@@ -266,6 +325,66 @@ class KickCog(MegaCog, name="Kick"):
             embed = embeds.error("Kick: ошибка", "Не удалось снять бан.")
         await interaction.response.send_message(embed=embed)
 
+    # ---------------------------------------------------------------- зрители
+
+    @app_commands.command(name="kick_watchers", description="Кто сейчас смотрит Kick-стрим (онлайн-сессии из чата)")
+    @app_commands.guild_only()
+    async def kick_watchers(self, interaction: discord.Interaction) -> None:
+        """Сессии зрителей из Pusher-чата: участники сервера отдельным списком."""
+        from datetime import UTC, datetime
+
+        store = self.kick.viewer_store()
+        try:
+            await store.sweep()
+            active = await store.active()
+        except Exception:
+            await interaction.response.send_message(
+                embed=embeds.error("Kick: ошибка", "Не удалось прочитать сессии зрителей."),
+                ephemeral=True,
+            )
+            return
+        if not active:
+            await interaction.response.send_message(
+                embed=embeds.info("Kick: зрители", "Сейчас в чате никого — сессий нет."),
+                ephemeral=True,
+            )
+            return
+
+        lookup: dict[str, discord.Member] = {}
+        if interaction.guild is not None:
+            for member in interaction.guild.members:
+                for candidate in (member.nick, member.display_name, member.name):
+                    if candidate:
+                        lookup.setdefault(candidate.casefold(), member)
+
+        now = datetime.now(UTC)
+        mine: list[str] = []
+        others: list[str] = []
+        for session in sorted(active.values(), key=lambda s: str(s.get("first_seen") or ""), reverse=True):
+            name = str(session.get("name") or "?")
+            member = lookup.get(name.casefold())
+            try:
+                first = datetime.fromisoformat(str(session.get("first_seen") or "").replace("Z", "+00:00"))
+                minutes = max(0, round((now - first).total_seconds() / 60))
+            except ValueError:
+                minutes = 0
+            messages = int(session.get("messages") or 0)
+            line = f"**{name}**" + (f" · {member.mention}" if member else "") + f" — {minutes} мин · {messages} сообщ."
+            if member is not None:
+                mine.append(line)
+            else:
+                others.append(line)
+
+        embed = embeds.info(
+            "Kick: зрители онлайн",
+            f"Активных сессий: **{len(active)}** (сводка раз в {OFFLINE_AFTER_SECONDS // 60} мин молчания)",
+        )
+        if mine:
+            embed.add_field(name=f"С нашего сервера • {len(mine)}", value="\n".join(mine)[:1024], inline=False)
+        if others:
+            embed.add_field(name=f"Остальные • {len(others)}", value="\n".join(others)[:1024], inline=False)
+        await interaction.response.send_message(embed=embed)
+
     # ---------------------------------------------------------------- автомод чата
 
     async def _chat_watcher(self) -> None:
@@ -316,11 +435,19 @@ class KickCog(MegaCog, name="Kick"):
                         await self._handle_chat_message(data)
 
     async def _handle_chat_message(self, data: dict[str, Any]) -> None:
+        sender = data.get("sender") or data.get("user") or {}
+        username = str(sender.get("username") or sender.get("slug") or "")
+        if username:
+            try:
+                # Сессия зрителя живёт независимо от автомода: любое сообщение
+                # в чате продлевает онлайн-окно и копится в топе говорящих.
+                await self.kick.viewer_store().touch(username, stream_id=self._stream_key)
+            except Exception:
+                logger.debug("Kick: не удалось обновить сессию зрителя %s", username, exc_info=True)
         content = (data.get("content") or "")[:200].lower()
         ban_words = self.bot.config.kick_ban_words
         if not ban_words or not any(word.lower() in content for word in ban_words):
             return
-        sender = data.get("sender") or data.get("user") or {}
         user_id = sender.get("id")
         if not user_id:
             return

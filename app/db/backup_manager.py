@@ -62,9 +62,8 @@ class DatabaseBackupManager:
         if task is None:
             return
         task.cancel()
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=10.0)
-        except (TimeoutError, asyncio.CancelledError):
+        done, _pending = await asyncio.wait({task}, timeout=10.0)
+        if not done:
             logger.warning("SQLite backup-таск не завершился за 10с; продолжаем shutdown")
 
     async def backup_now(self) -> Path:

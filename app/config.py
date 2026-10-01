@@ -24,6 +24,22 @@ def _strs(value: str | None) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
+def _hour_range(value: str | None) -> tuple[int, int] | None:
+    """``23-8`` → ``(23, 8)``: окно тихих часов; мусор или равные границы → None."""
+    if not value:
+        return None
+    parts = value.split("-")
+    if len(parts) != 2:
+        return None
+    try:
+        start, end = int(parts[0].strip()), int(parts[1].strip())
+    except ValueError:
+        return None
+    if not (0 <= start <= 23 and 0 <= end <= 23) or start == end:
+        return None
+    return (start, end)
+
+
 @dataclass(slots=True, frozen=True)
 class Config:
     token: str
@@ -65,9 +81,19 @@ class Config:
     donate_url: str | None = None
     donation_poll_seconds: float = 15.0
 
+    # Стримы (общее для Twitch/Kick/VK)
+    stream_role_id: int | None = None
+    stream_role_user_ids: tuple[int, ...] = ()
+    stream_sticky_poll_seconds: float = 60.0
+    stream_quiet_hours: tuple[int, int] | None = None
+    stream_quiet_tz: str = "Europe/Moscow"
+    stream_abort_alert_minutes: int = 10
+    stream_archive_days: int = 90
+
     # Twitch
     twitch_client_id: str | None = None
     twitch_client_secret: str | None = None
+    twitch_refresh_token: str | None = None
     twitch_channels: tuple[str, ...] = ()
     twitch_notify_channel_id: int | None = None
     twitch_ping_role_id: int | None = None
@@ -103,6 +129,9 @@ class Config:
     message_log_channel_id: int | None = None
     voice_log_channel_id: int | None = None
     mod_log_channel_id: int | None = None
+
+    # Heartbeat: алерт в канал логов, если бот молчит дольше N минут (0 — выкл)
+    heartbeat_silence_minutes: int = 0
 
     # Правила-гейт
     rules_message_id: int | None = None
@@ -277,8 +306,16 @@ class Config:
             donation_notify_channel_id=_single_int(os.getenv("DONATION_NOTIFY_CHANNEL_ID")),
             donate_url=os.getenv("DONATE_URL"),
             donation_poll_seconds=float(os.getenv("DONATION_POLL_SECONDS", "15")),
+            stream_role_id=_single_int(os.getenv("STREAM_ROLE_ID")),
+            stream_role_user_ids=_ints(os.getenv("STREAM_ROLE_USER_IDS")),
+            stream_sticky_poll_seconds=max(30.0, float(os.getenv("STREAM_STICKY_POLL_SECONDS", "60"))),
+            stream_quiet_hours=_hour_range(os.getenv("STREAM_QUIET_HOURS")),
+            stream_quiet_tz=os.getenv("STREAM_QUIET_TZ") or "Europe/Moscow",
+            stream_abort_alert_minutes=max(0, int(os.getenv("STREAM_ABORT_ALERT_MINUTES", "10") or "10")),
+            stream_archive_days=max(1, int(os.getenv("STREAM_ARCHIVE_DAYS", "90") or "90")),
             twitch_client_id=os.getenv("TWITCH_CLIENT_ID"),
             twitch_client_secret=os.getenv("TWITCH_CLIENT_SECRET"),
+            twitch_refresh_token=os.getenv("TWITCH_REFRESH_TOKEN"),
             twitch_channels=_strs(os.getenv("TWITCH_CHANNELS")),
             twitch_notify_channel_id=_single_int(os.getenv("TWITCH_NOTIFY_CHANNEL_ID")),
             twitch_ping_role_id=_single_int(os.getenv("TWITCH_PING_ROLE_ID")),
@@ -309,6 +346,7 @@ class Config:
             message_log_channel_id=_single_int(os.getenv("MESSAGE_LOG_CHANNEL_ID")),
             voice_log_channel_id=_single_int(os.getenv("VOICE_LOG_CHANNEL_ID")),
             mod_log_channel_id=_single_int(os.getenv("MOD_LOG_CHANNEL_ID")),
+            heartbeat_silence_minutes=max(0, min(1440, int(os.getenv("HEARTBEAT_SILENCE_MINUTES", "0") or "0"))),
             rules_message_id=_single_int(os.getenv("RULES_MESSAGE_ID")),
             rules_role_id=_single_int(os.getenv("RULES_ROLE_ID")),
             temp_voice_trigger_ids=_ints(os.getenv("TEMP_VOICE_TRIGGER_IDS")),

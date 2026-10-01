@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from app.core.api_client import ApiClient, ApiRequestError
+from app.services.stream_archive import StreamArchiveStore
+from app.services.stream_rsvp import StreamRsvpStore
+from app.services.stream_session import StreamSessionStore
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -109,6 +112,18 @@ class VkVideoService:
         }
 
     # ------------------------------------------------------------------ sticky
+
+    def session_store(self, slug: str) -> StreamSessionStore:
+        """Хранилище сессии трансляции для карточек."""
+        return StreamSessionStore(self._repo, f"stream:session:vk:{slug.lower()}")
+
+    def rsvp_store(self) -> StreamRsvpStore:
+        """Хранилище id старт-анонса для команды /stream_rsvp."""
+        return StreamRsvpStore(self._repo, "stream:rsvp:vk_video")
+
+    def archive_store(self, slug: str) -> StreamArchiveStore:
+        """Архив завершённых трансляций для /stream_stats."""
+        return StreamArchiveStore(self._repo, f"stream:archive:vk:{slug.lower()}")
 
     @staticmethod
     def _sticky_key() -> str:

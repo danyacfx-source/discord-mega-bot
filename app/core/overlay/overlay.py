@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import logging
 import secrets
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
+
+from app.utils.stream_history import sparkline, trend
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -14,6 +18,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.overlay")
 
 _PAGE_FILE = Path(__file__).resolve().parent / "page.html"
+
+#: OBS опрашивает оверлей каждые 5 с — статус стрима кэшируем, чтобы не
+#: долбить Twitch/Kick API на каждый запрос страницы.
+_STATUS_CACHE_TTL = 60.0
 
 _CSP = (
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
@@ -34,6 +42,7 @@ class Overlay:
         self._site: web.TCPSite | None = None
         self._token = self._resolve_token()
         self._page = _read_page().replace("__TOKEN__", self._token)
+        self._status_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
     # ------------------------------------------------------------------ токен
     def _resolve_token(self) -> str:
@@ -160,42 +169,80 @@ class Overlay:
             return None
         services = self.bot.services
         if services is None:
-            return self._base_stream("twitch", None)
+            return {**self._base_stream("twitch", None), "last": None}
+
+        # Приоритет как раньше: Kick, если настроен, иначе Twitch.
         if config.kick_channel_slug:
-            try:
-                status = await services.kick.channel_status(config.kick_channel_slug)
-            except Exception:
-                logger.debug("Overlay: ошибка опроса Kick %s", config.kick_channel_slug, exc_info=True)
-                status = None
-            base = self._base_stream("kick", f"https://kick.com/{config.kick_channel_slug}")
-            if status is not None:
-                viewers = status.get("viewers") or 0
-                return {
-                    **base,
-                    "live": True,
-                    "viewers": viewers,
-                    "peak": viewers,
-                    "title": str(status.get("title") or "")[:200],
-                    "category": str(status.get("category") or "")[:100],
-                    "startedAt": status.get("started_at"),
-                }
-            if not config.twitch_channels:
-                return base
-        login = config.twitch_channels[0]
-        base = self._base_stream("twitch", f"https://www.twitch.tv/{login}")
-        try:
-            status = await services.twitch.channel_status(login)
-        except Exception:
-            logger.debug("Overlay: ошибка опроса стрима %s", login, exc_info=True)
-            return base
+            slug = config.kick_channel_slug
+            platform = "kick"
+            url = f"https://kick.com/{slug}"
+            session = await services.kick.session_store(slug).load()
+            status = await self._cached_status(platform, lambda: services.kick.channel_status(slug))
+        elif config.twitch_channels:
+            login = config.twitch_channels[0]
+            platform = "twitch"
+            url = f"https://www.twitch.tv/{login}"
+            session = await services.twitch.session_store(login).load()
+            status = await self._cached_status(platform, lambda: services.twitch.channel_status(login))
+        else:
+            return None
+
+        # Сессия «последнего эфира» может быть от другого стрима — для live-блока
+        # берём её только если started_at совпадает с текущим статусом.
+        if status is not None and session and session.get("started_at") != status.get("started_at"):
+            session = None
+        last = self._last_block(session) if status is None else None
+
+        base = self._base_stream(platform, url)
         if status is None:
-            return base
+            return {**base, "last": last}
+        viewers = int(status.get("viewers") or 0)
         return {
             **base,
             "live": True,
-            "viewers": status.get("viewers") or 0,
+            "viewers": viewers,
+            "peak": max(viewers, int((session or {}).get("peak") or 0)),
             "title": str(status.get("title") or "")[:200],
             "category": str(status.get("category") or "")[:100],
+            "startedAt": status.get("started_at") or (session or {}).get("started_at"),
+            "trend": trend((session or {}).get("history")),
+            "spark": sparkline((session or {}).get("history")),
+            "last": last,
+        }
+
+    async def _cached_status(
+        self, key: str, fetch: Callable[[], Awaitable[dict[str, Any] | None]]
+    ) -> dict[str, Any] | None:
+        """Статус стрима не чаще раза в ``_STATUS_CACHE_TTL`` секунд.
+
+        ``fetch`` — корутина-фабрика (вызывается только при промахе кэша, чтобы
+        не плодить не-awaited корутины). Ошибка тоже кэшируется: при забитом
+        API оверлей не ретраит каждые 5 секунд.
+        """
+        now = time.monotonic()
+        hit = self._status_cache.get(key)
+        if hit is not None and now - hit[0] < _STATUS_CACHE_TTL:
+            return hit[1]
+        try:
+            result = await fetch()
+        except Exception:
+            logger.debug("Overlay: ошибка опроса стрима %s", key, exc_info=True)
+            result = None
+        self._status_cache[key] = (now, result)
+        return result
+
+    @staticmethod
+    def _last_block(session: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Данные последнего завершённого эфира для офлайн-карточки оверлея."""
+        if not session or not session.get("title"):
+            return None
+        return {
+            "title": str(session.get("title"))[:200],
+            "peak": int(session.get("peak") or 0),
+            "category": str(session.get("category") or "")[:100],
+            "startedAt": session.get("started_at"),
+            "capturedAt": session.get("captured_at"),
+            "spark": sparkline(session.get("history")),
         }
 
     @staticmethod

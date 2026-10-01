@@ -16,15 +16,17 @@ const EMPTY = {
 export default function Overview() {
   const [ov, setOv] = useState(EMPTY);
   const [mon, setMon] = useState({ latency: [], mem: [], online: [] });
+  const [streams, setStreams] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let alive = true;
     async function tick() {
-      const [a, b] = await Promise.all([api("/api/overview"), api("/api/monitor")]);
+      const [a, b, c] = await Promise.all([api("/api/overview"), api("/api/monitor"), api("/api/streams")]);
       if (!alive) return;
       if (a.status === 200) setOv({ ...EMPTY, ...a.data });
       if (b.status === 200) setMon({ latency: b.data.latency || [], mem: b.data.mem || [], online: b.data.online || [] });
+      if (c.status === 200) setStreams(c.data.streams || []);
       setLoaded(true);
     }
     tick();
@@ -89,6 +91,31 @@ export default function Overview() {
           <Sparkline points={mon.online} label="online" color="#23a55a" />
         </div>
       </div>
+      {streams.length > 0 && (
+        <div class="card">
+          <div class="card-head">
+            <h3>📺 Стримы</h3>
+            <span class="muted small">по данным последнего поллинга</span>
+          </div>
+          <div class="list">
+            {streams.map((s) => (
+              <div class="listline" key={s.label}>
+                <span class={"chip " + (s.live ? "tone-ok" : "tone-bad")}>
+                  {s.live ? "● LIVE" : "○ офлайн"}
+                </span>
+                <span class="grow">
+                  <b>{s.label}</b>
+                  <div class="sub">
+                    {s.live && s.session
+                      ? `${s.session.title || "Без названия"}${s.session.viewers != null ? ` · 👁 ${s.session.viewers}` : ""}${s.session.peak ? ` · пик ${s.session.peak}` : ""}${s.trend != null ? ` · ${s.trend >= 0 ? "▲ +" : "▼ "}${s.trend} за 10 мин` : ""}`
+                      : `поллинг каждые ${s.poll_seconds} с`}
+                  </div>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;co
 .card .value{font-size:17px;font-weight:700;line-height:1.45;white-space:pre-wrap;word-break:break-word;letter-spacing:-.02em}
 .card .empty{color:var(--muted);font-size:14px}.counters{font-size:13px;line-height:1.75;color:var(--muted)}.counters b{color:var(--text)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;box-shadow:0 0 0 0 rgba(255,90,54,.55);animation:pulse 1.8s infinite}
+.spark{font-size:15px;letter-spacing:1px;color:var(--accent);line-height:1.4}
 .progress{height:6px;margin-top:12px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.progress i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#ff9a76)}
 @keyframes pulse{70%{box-shadow:0 0 0 10px rgba(255,90,54,0)}100%{box-shadow:0 0 0 0 rgba(255,90,54,0)}}
 @media(prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -18,12 +19,20 @@ body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;co
 <script>
 async function load(){try{const r=await fetch('/overlay/api',{headers:{'X-Overlay-Token':'__TOKEN__'}});const d=await r.json();let h='';
 if(d.stream&&d.stream.live){h+='<div class="card live"><h3>В ЭФИРЕ · '+esc(d.stream.platform)+'</h3><div class="value"><span class="dot"></span>'+esc(d.stream.title)+'</div>';
-h+='<div class="counters">Зрители <b>'+esc(d.stream.viewers)+'</b> · Пик <b>'+esc(d.stream.peak)+'</b></div>';
+const bits=['Зрители <b>'+esc(d.stream.viewers)+'</b>'];
+if(d.stream.peak)bits.push('Пик <b>'+esc(d.stream.peak)+'</b>');
+const dur=fmtDur(d.stream.startedAt);if(dur)bits.push('⏱ '+dur);
+if(d.stream.trend!=null&&d.stream.trend!==undefined)bits.push((d.stream.trend>=0?'▲ +':'▼ ')+esc(d.stream.trend)+' за 10 мин');
+h+='<div class="counters">'+bits.join(' · ')+'</div>';
+if(d.stream.spark)h+='<div class="counters spark">'+esc(d.stream.spark)+'</div>';
 if(d.stream.category)h+='<div class="counters">Категория · '+esc(d.stream.category)+'</div>';h+='</div>'}
-else if(d.stream){h+='<div class="card"><h3>ТРАНСЛЯЦИЯ</h3><div class="empty">Сейчас офлайн</div></div>'}
+else if(d.stream){h+='<div class="card"><h3>ТРАНСЛЯЦИЯ</h3>';const last=d.stream.last;
+if(last&&last.title){h+='<div class="value">'+esc(last.title)+'</div><div class="counters">Последний эфир · Пик <b>'+esc(last.peak)+'</b>'+(last.spark?' · '+esc(last.spark):'')+'</div>'}
+else{h+='<div class="empty">Сейчас офлайн</div>'}h+='</div>'}
 if(d.counters&&d.counters.length){h+='<div class="card"><h3>СЧЁТЧИКИ</h3><div class="counters">';for(const c of d.counters)h+='<div>'+esc(c.name)+' · <b>'+esc(c.value)+'</b></div>';h+='</div></div>'}
 if(d.donation_goal&&d.donation_goal.enabled){const p=Math.max(0,Math.min(100,Number(d.donation_goal.current)/Math.max(1,Number(d.donation_goal.target))*100));h+='<div class="card"><h3>'+esc(d.donation_goal.label)+'</h3><div class="value">'+esc(d.donation_goal.current)+' / '+esc(d.donation_goal.target)+' '+esc(d.donation_goal.currency)+'</div><div class="progress"><i style="width:'+p+'%"></i></div></div>'}
 document.getElementById('root').innerHTML=h;}catch(e){}}
+function fmtDur(started){if(!started)return'';const ms=Date.now()-Date.parse(started);if(isNaN(ms)||ms<0)return'';const s=Math.floor(ms/1000);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+' ч '+m+' мин':m+' мин'}
 function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
 load();setInterval(load,5000);
 </script></body></html>
