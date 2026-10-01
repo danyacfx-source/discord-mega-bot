@@ -80,6 +80,8 @@ class SettingsRepository(BaseRepository):
         for column, default in DEFAULT_SETTINGS.items():
             if current.get(column) is None and default is not None:
                 updates.append((default, column))
-        for value, column in updates:
-            await self.set(guild_id, column, value)
+        if updates:
+            async with self.db.transaction():
+                for value, column in updates:
+                    await self.set(guild_id, column, value)
         return await self.get(guild_id)

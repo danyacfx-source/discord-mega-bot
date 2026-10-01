@@ -159,7 +159,10 @@ async function doLogin() {
 }
 
 $("btn_logout").onclick = () => {
+  const csrf = localStorage.getItem("panel-csrf") || "";
+  fetch("/api/logout", { method: "POST", headers: { "X-Panel-Token": TOKEN, "X-Panel-CSRF": csrf } }).catch(() => {});
   localStorage.removeItem("panel-token");
+  localStorage.removeItem("panel-csrf");
   TOKEN = "";
   showLogin();
 };

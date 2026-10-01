@@ -1,6 +1,7 @@
 """Розыгрыши: запуск по таймеру, участие кнопкой, победители."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -49,6 +50,13 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
             except Exception:
                 logger.exception("Ошибка при завершении розыгрыша #%s", giveaway["id"])
 
+    @check_loop.before_loop
+    async def _before_check(self) -> None:
+        try:
+            await self.bot.wait_until_ready()
+        except RuntimeError:
+            raise asyncio.CancelledError from None
+
     async def _finish(self, giveaway: GiveawayRow, *, reroll: bool = False, claim: bool = True) -> bool:
         if claim:
             claimed = await self.giveaways.claim(giveaway["id"])
@@ -58,10 +66,21 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
         entries = await self.giveaways.entries(giveaway["id"])
         winners_count = int(giveaway["winners"])
         winners = self.giveaways.draw(entries, winners_count)
-        await self.giveaways.finish(giveaway["id"])
 
         channel = self.bot.get_channel(giveaway["channel_id"])
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(giveaway["channel_id"])
+            except discord.NotFound:
+                channel = None
         if not isinstance(channel, discord.TextChannel):
+            logger.warning(
+                "Канал %s розыгрыша #%s недоступен — завершаю без объявления, победители: %s",
+                giveaway["channel_id"],
+                giveaway["id"],
+                winners,
+            )
+            await self.giveaways.finish(giveaway["id"])
             return True
 
         header = "Перерозыгрыш" if reroll else "Приз"
@@ -71,7 +90,17 @@ class GiveawaysCog(MegaCog, name="Giveaways"):
             announce.add_field(name="Победители", value=mentions, inline=False)
         else:
             announce.add_field(name="Победители", value="Недостаточно участников", inline=False)
-        await channel.send(embed=announce)
+        try:
+            await channel.send(embed=announce)
+        except discord.HTTPException:
+            logger.warning(
+                "Не удалось объявить победителей розыгрыша #%s в канале %s, победители: %s",
+                giveaway["id"],
+                giveaway["channel_id"],
+                winners,
+            )
+
+        await self.giveaways.finish(giveaway["id"])
 
         if giveaway["message_id"]:
             try:

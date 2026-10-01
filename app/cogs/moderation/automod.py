@@ -216,20 +216,64 @@ class AutoModCog(MegaCog, name="AutoMod"):
         if not reason:
             return
 
+        await self._delete_and_punish(message, member, reason)
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        """Редактирование не обходит фильтр: проверяется итоговый текст."""
+        if not self.bot.config.automod_enabled:
+            return
+        if before.author.bot or before.guild is None or isinstance(before.channel, discord.DMChannel):
+            return
+        if before.content == after.content:
+            return
+
+        settings = await self.settings.get(before.guild.id)
+        if not settings.get("automod_enabled", True):
+            return
+
+        member = before.author
+        if isinstance(member, discord.User):
+            member = before.guild.get_member(member.id)
+        if member is None or not isinstance(member, discord.Member):
+            return
+        if self._has_ignored_role(member):
+            return
+        if member.guild_permissions.manage_messages:
+            return
+        config = self.bot.config
+        if after.channel.id in set(config.automod_ignored_channels):
+            return
+
+        blocked_words = await self.settings.blocked_words(before.guild.id)
+        reason = self._analyze(member.id, after.content or "", blocked_words, check_spam=False)
+        if not reason:
+            return
+
+        await self._delete_and_punish(after, member, reason)
+
+    async def _delete_and_punish(self, message: discord.Message, member: discord.Member, reason: str) -> None:
         try:
             await message.delete()
         except discord.HTTPException:
-            pass
+            logger.debug("Automod: не удалось удалить сообщение %s", message.id, exc_info=True)
         await self._punish(member, reason)
         channel_name = getattr(message.channel, "name", message.channel.id)
         logger.warning("Automod: %s в #%s: %s", message.author, channel_name, reason)
 
     def _has_ignored_role(self, member: discord.Member) -> bool:
-        ignored = set(self.bot.config.automod_ignore_roles)
-        return bool(ignored and any(role.name in ignored for role in member.roles))
+        ignored = {name.casefold() for name in self.bot.config.automod_ignore_roles}
+        return bool(ignored and any(role.name.casefold() in ignored for role in member.roles))
 
-    def _analyze(self, user_id: int, content: str, blocked_words: list[str] | None = None) -> str | None:
-        if self._is_spam(user_id):
+    def _analyze(
+        self,
+        user_id: int,
+        content: str,
+        blocked_words: list[str] | None = None,
+        *,
+        check_spam: bool = True,
+    ) -> str | None:
+        if check_spam and self._is_spam(user_id):
             return "спам"
         lowered = content.lower()
         exempt = getattr(self.bot.config, "automod_exempt_regex", "")
@@ -263,6 +307,9 @@ class AutoModCog(MegaCog, name="AutoMod"):
 
     def _track_spam(self, user_id: int) -> None:
         now = time.monotonic()
+        if len(self._messages) > 5000:
+            cutoff = now - _SPAM_WINDOW * 2
+            self._messages = {uid: stamps for uid, stamps in self._messages.items() if stamps and stamps[-1] >= cutoff}
         stamps = self._messages.setdefault(user_id, [])
         while stamps and now - stamps[0] > _SPAM_WINDOW:
             stamps.pop(0)
@@ -286,7 +333,7 @@ class AutoModCog(MegaCog, name="AutoMod"):
             try:
                 await member.timeout(discord.utils.utcnow() + timedelta(seconds=duration), reason=f"Automod: {reason}")
             except discord.HTTPException:
-                pass
+                logger.warning("Automod: не удалось выдать timeout %s: %s", member, reason, exc_info=True)
 
         ban_after = config.automod_ban_after_timeouts
         if ban_after > 0:
@@ -301,5 +348,5 @@ class AutoModCog(MegaCog, name="AutoMod"):
                     await member.ban(reason=f"Automod: {ban_after} нарушений за {window}с")
                     logger.warning("Automod: бан %s (%s)", member, reason)
                 except discord.HTTPException:
-                    pass
+                    logger.warning("Automod: не удалось забанить %s: %s", member, reason, exc_info=True)
                 stamps.clear()

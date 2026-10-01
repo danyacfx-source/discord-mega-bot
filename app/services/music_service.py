@@ -70,8 +70,34 @@ class MusicService:
 
     def get_player(self, guild_id: int) -> GuildPlayer:
         if guild_id not in self._players:
-            self._players[guild_id] = GuildPlayer(self._bot, guild_id)
+            player = GuildPlayer(self._bot, guild_id)
+            player.on_disconnected = lambda p, gid=guild_id: self._player_disconnected(gid, p)
+            self._players[guild_id] = player
         return self._players[guild_id]
+
+    def peek(self, guild_id: int) -> GuildPlayer | None:
+        return self._players.get(guild_id)
+
+    def release(self, guild_id: int) -> None:
+        self._players.pop(guild_id, None)
+
+    async def _player_disconnected(self, guild_id: int, player: GuildPlayer) -> None:
+        try:
+            if self.playlists is not None and hasattr(self.playlists, "save_queue"):
+                tracks = ([player.current] if player.current is not None else []) + list(player.queue)
+                await self.playlists.save_queue(guild_id, tracks)
+        except Exception:
+            logger.exception("Не удалось сохранить очередь после отключения %s", guild_id)
+        if self._players.get(guild_id) is player:
+            del self._players[guild_id]
+            self._restored.discard(guild_id)
+
+    async def handle_bot_disconnected(self, guild_id: int) -> None:
+        player = self._players.get(guild_id)
+        if player is None:
+            return
+        player.handle_external_disconnect()
+        await self._player_disconnected(guild_id, player)
 
     async def restore_queue(self, guild_id: int) -> None:
         if guild_id in self._restored:

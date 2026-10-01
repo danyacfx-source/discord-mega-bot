@@ -84,6 +84,11 @@ class Config:
     kick_pusher_app_key: str = "32cbd69e4b950bf97679"
     kick_pusher_host: str = "ws-us2.pusher.com"
 
+    # Отправка сообщений в чат Kick (Dev API POST /public/v1/chat, scope chat:write)
+    kick_chat_auto_link: bool = False
+    kick_chat_link_text: str = "Стрим уже на Kick! Ссылка на стрим в шапке канала."
+    kick_chat_send_as_user: bool = False
+
     # VK Видео Live
     vk_channel_slug: str | None = None
     vk_notify_channel_id: int | None = None
@@ -123,6 +128,10 @@ class Config:
     panel_oauth_client_secret: str | None = None
     panel_oauth_redirect_url: str | None = None
     panel_bridge_token: str | None = None
+    # Доверенный reverse-proxy перед панелью: с ним rate-limit берёт клиента
+    # из X-Forwarded-For. Без него заголовок подделывается любым клиентом,
+    # поэтому считается адрес соединения.
+    panel_trusted_proxy: bool = False
 
     # Дни рождения
     birthday_channel_id: int | None = None
@@ -281,6 +290,12 @@ class Config:
             kick_mod_channel_id=_single_int(os.getenv("KICK_MOD_CHANNEL_ID")),
             kick_access_token=os.getenv("KICK_ACCESS_TOKEN"),
             kick_ban_words=_strs(os.getenv("KICK_BAN_WORDS")),
+            kick_chat_auto_link=_bool(os.getenv("KICK_CHAT_AUTO_LINK")),
+            kick_chat_link_text=os.getenv(
+                "KICK_CHAT_LINK_TEXT",
+                "Стрим уже на Kick! Ссылка на стрим в шапке канала.",
+            ),
+            kick_chat_send_as_user=_bool(os.getenv("KICK_CHAT_SEND_AS_USER")),
             kick_pusher_app_key=os.getenv("KICK_PUSHER_APP_KEY", "32cbd69e4b950bf97679"),
             kick_pusher_host=os.getenv("KICK_PUSHER_HOST", "ws-us2.pusher.com"),
             vk_channel_slug=os.getenv("VK_CHANNEL_SLUG"),
@@ -313,6 +328,7 @@ class Config:
             panel_oauth_client_secret=os.getenv("PANEL_OAUTH_CLIENT_SECRET") or None,
             panel_oauth_redirect_url=os.getenv("PANEL_OAUTH_REDIRECT_URL") or None,
             panel_bridge_token=os.getenv("PANEL_BRIDGE_TOKEN") or None,
+            panel_trusted_proxy=_bool(os.getenv("PANEL_TRUSTED_PROXY")),
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
             birthday_ping_role_id=_single_int(os.getenv("BIRTHDAY_PING_ROLE_ID")),

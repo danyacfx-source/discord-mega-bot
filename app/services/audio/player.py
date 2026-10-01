@@ -5,6 +5,7 @@ import asyncio
 import logging
 import secrets
 from collections import deque
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 import discord
@@ -38,10 +39,17 @@ class GuildPlayer:
         self.position_seconds = 0
         self._seeking = False
         self._idle_task: asyncio.Task[None] | None = None
+        self._gen = 0
+        self._ended = False
+        self.on_disconnected: Callable[[GuildPlayer], Awaitable[None]] | None = None
 
     @property
     def is_playing(self) -> bool:
         return self.voice is not None and self.voice.is_playing()
+
+    @property
+    def is_paused(self) -> bool:
+        return self.voice is not None and self.voice.is_paused()
 
     def enqueue(self, track: Track) -> None:
         self.queue.append(track)
@@ -81,6 +89,11 @@ class GuildPlayer:
     async def _start(self, track: Track) -> None:
         if self.voice is None or not self.voice.is_connected():
             return
+        if self.voice.is_paused():
+            # Источник на паузе: voice.play() молча перезапишет _player и
+            # старый ffmpeg-процесс утечёт — глушим его явно.
+            self._invalidate()
+            self.voice.stop()
         if self.voice.is_playing():
             return
         source = discord.PCMVolumeTransformer(
@@ -93,21 +106,40 @@ class GuildPlayer:
             ),
             volume=self.volume,
         )
-        self.voice.play(source, after=self._on_finished)
+        self._gen += 1
+        self._ended = False
+        gen = self._gen
+        self.voice.play(source, after=lambda error, g=gen: self._on_finished(error, g))
 
-    def _on_finished(self, error: Exception | None) -> None:
+    def _invalidate(self) -> None:
+        """Делает запланированные after-колбэки устаревшими источника."""
+        self._gen += 1
+        self._ended = False
+        self._seeking = False
+
+    def _on_finished(self, error: Exception | None, gen: int) -> None:
+        if gen != self._gen:
+            return  # источник уже заменён или остановлен вручную
+        if self.voice is None or not self.voice.is_connected():
+            return  # голоса нет — очередь не трогаем, её сохранит слушатель
         if error and not isinstance(error, asyncio.CancelledError):
             logger.warning("Ошибка воспроизведения: %s", error)
+        self._ended = True
         try:
-            coroutine = self._restart_after_seek() if self._seeking else self.play_next()
-            asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(10)
+            asyncio.run_coroutine_threadsafe(self._after_source(gen), self.loop).result(10)
         except Exception:
             logger.exception("Сбой при переключении трека")
 
-    async def _restart_after_seek(self) -> None:
-        self._seeking = False
-        if self.current is not None:
-            await self._start(self.current)
+    async def _after_source(self, gen: int) -> None:
+        if gen != self._gen or not self._ended:
+            return
+        self._ended = False
+        if self._seeking:
+            self._seeking = False
+            if self.current is not None:
+                await self._start(self.current)
+            return
+        await self.play_next()
 
     async def seek(self, seconds: int) -> bool:
         if self.current is None or self.voice is None or not self.voice.is_connected():
@@ -123,7 +155,15 @@ class GuildPlayer:
         return True
 
     async def play_next(self) -> None:
+        if self._ended:
+            return
+        if self.voice is None or not self.voice.is_connected():
+            return
+        if self.voice.is_playing() or self.voice.is_paused():
+            return
+        self.skip_votes.clear()
         if self.loop_one and self.current is not None:
+            self.position_seconds = 0
             await self._start(self.current)
             await self.notify(f"🔁 Повтор: **{self.current}**")
             return
@@ -143,6 +183,10 @@ class GuildPlayer:
                 self.queue.popleft()
         if self.loop_one:
             self.loop_one = False
+        if self._ended:
+            self._seeking = False
+            return skipped
+        self._invalidate()
         if self.voice is not None:
             self.voice.stop()
         await self.play_next()
@@ -154,8 +198,10 @@ class GuildPlayer:
         self.skip_votes.clear()
         self.current = None
         self.position_seconds = 0
+        self._invalidate()
         if self.voice is not None:
             self.voice.stop()
+        await self._schedule_idle_disconnect()
 
     def pause(self) -> bool:
         if self.voice is not None and self.voice.is_playing():
@@ -176,11 +222,22 @@ class GuildPlayer:
 
     async def disconnect(self) -> None:
         self._cancel_idle()
+        self._invalidate()
+        voice = self.voice
+        self.voice = None
+        if voice is not None and voice.is_connected():
+            await voice.disconnect()
+        if self.on_disconnected is not None:
+            await self.on_disconnected(self)
         self.queue.clear()
+        self.skip_votes.clear()
         self.current = None
         self.position_seconds = 0
-        if self.voice is not None and self.voice.is_connected():
-            await self.voice.disconnect()
+
+    def handle_external_disconnect(self) -> None:
+        """Бота отключили извне: сбрасываем голосовое состояние, очередь сохраняем."""
+        self._cancel_idle()
+        self._invalidate()
         self.voice = None
 
     async def _schedule_idle_disconnect(self) -> None:
@@ -191,7 +248,12 @@ class GuildPlayer:
 
     async def _idle_disconnect(self) -> None:
         await asyncio.sleep(_IDLE_DISCONNECT_SECONDS)
-        if self.voice is not None and self.voice.is_connected() and not self.voice.is_playing():
+        if (
+            self.voice is not None
+            and self.voice.is_connected()
+            and not self.voice.is_playing()
+            and not self.voice.is_paused()
+        ):
             await self.disconnect()
             await self.notify("👋 Очередь пуста — вышел из голосового канала.")
 

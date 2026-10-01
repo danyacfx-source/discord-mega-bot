@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import discord
+
 from app.config import Config
 from app.core.composition import assemble
 from app.db.database import Database
@@ -131,6 +133,36 @@ async def test_close_missing_ticket(tmp_path) -> None:
         guild = _guild([])
         result = await tickets.close_by_id(guild, 9999, MagicMock(id=99, mention="<@99>"))
         assert result is not None and result.error is not None
+    finally:
+        await db.close()
+
+
+async def test_close_sends_transcript_to_log_channel(tmp_path) -> None:
+    """При настроенном log_channel_id транскрипт уходит в этот канал."""
+    tickets, db = await _setup(str(tmp_path))
+    try:
+        await tickets._settings.update(GILD_ID, log_channel_id=777)
+
+        log_channel = MagicMock(spec=discord.TextChannel)
+        log_channel.id = 777
+        log_channel.mention = "<#777>"
+        log_channel.send = AsyncMock()
+
+        channel = _channel(555)
+        guild = _guild([channel, log_channel])
+        guild.create_text_channel = AsyncMock(return_value=channel)
+        creator = _Creator(42, "vasya")
+
+        result = await tickets.create(guild, creator)
+        assert result.error is None
+        ticket = await tickets.get_open_ticket(GILD_ID, channel.id)
+        assert ticket is not None
+
+        closed = await tickets.close_by_id(guild, ticket["ticket_id"], MagicMock(id=99, mention="<@99>"))
+
+        assert closed.error is None
+        assert closed.transcript_channel_mention == "<#777>"
+        log_channel.send.assert_awaited_once()
     finally:
         await db.close()
 

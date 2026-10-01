@@ -21,10 +21,7 @@ app/
 ├── core/                      # ядро
 │   ├── bot.py                 #   MegaBot: intents, setup_hook, обработчик ошибок команд
 │   ├── composition.py         #   composition root: assemble() — один граф зависимостей
-│   ├── ports.py               #   Protocol-контракты портов (KvStore, SettingsStore, …)
-│   ├── adapters.py            #   реальные классы как адаптеры портов + assert_ports()
 │   ├── root.py                #   Root: типизированное владение графом
-│   ├── security.py            #   инварианты склейки привилегированных когов
 │   ├── base.py                #   MegaCog (типизированный доступ к сервисам) и BaseService
 │   ├── loader.py              #   сборка когов по COG_PROVIDERS + persistent views
 │   ├── views.py               #   ConfirmView, TicketOpen/CloseView, GiveawayView, PollView
@@ -104,10 +101,6 @@ tests/                         # 51 тест: структуры (модель-�
 репозитории → сервисы → бот → сервисы, зависящие от бота. Замена реализации
 (фейк, другая БД) — параметры `assemble(...)`, а не правка потребителей.
 
-`app/core/ports.py` — Protocol-контракты (`KvStore`, `SettingsStore`,
-`KickStatusSource`, `DonationsSource`, `LogSink`). Реальные классы объявлены их
-адаптерами (`app/core/adapters.py`) и структурно проверяются (`assert_ports()`).
-
 ```
 
 app/core/composition.assemble(config, db)
@@ -132,9 +125,8 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
    ```
 4. **Граница слоёв статическая**: параметры конструкторов когов допускают только
    `bot` и ключи `COG_PROVIDERS` → репозитории/БД в коги не попадают, проверяется тестом.
-5. **Безопасность**: `app/core/security.py` фиксирует инварианты склейки —
-   привилегированные коги обязаны получить именно реальные сервисы из Root
-   (`Security.assert_wiring`), секреты только из Config (env).
+5. **Безопасность**: секреты читаются только из Config (env), литералами в коде
+   их не хранят — проверяется тестом.
 6. **Тестимость**: `assemble(..., kick=FakeKick())` подменяет реализацию без
    изменения потребителей — фейк попадает в Root и далее в коги.
 

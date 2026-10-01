@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from app.core import embeds
 from app.core.base import MegaCog
@@ -38,6 +39,19 @@ class MusicCog(MegaCog, name="Music"):
     async def _restore_queue(self, interaction: discord.Interaction) -> None:
         if interaction.guild is not None:
             await self.music.restore_queue(interaction.guild.id)
+
+    @commands.Cog.listener()
+    async def on_voice_state_update(
+        self,
+        member: discord.Member,
+        before: discord.VoiceState,
+        after: discord.VoiceState,
+    ) -> None:
+        if self.bot.user is None or member.id != self.bot.user.id or member.guild is None:
+            return
+        if after.channel is not None:
+            return
+        await self.music.handle_bot_disconnected(member.guild.id)
 
     @music_group.command(name="play", description="Воспроизвести трек по названию или ссылке")
     @app_commands.describe(query="Название трека или ссылка на YouTube")
@@ -75,11 +89,13 @@ class MusicCog(MegaCog, name="Music"):
 
         player.notify_channel_id = interaction.channel_id
         player.enqueue(track)
-        if not player.is_playing:
+        if player.is_playing or player.is_paused:
+            embed = self._now_playing(track, player, added=True)
+            if player.is_paused:
+                embed.set_footer(text="Плеер на паузе — трек встанет в очередь")
+        else:
             await player.play_next()
             embed = self._now_playing(track, player, added=False)
-        else:
-            embed = self._now_playing(track, player, added=True)
         await interaction.followup.send(embed=embed)
         await self.music.persist_queue(interaction.guild.id)
         await self.music.record_history(interaction.guild.id, interaction.user.id, track)

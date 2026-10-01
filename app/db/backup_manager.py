@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -73,10 +74,13 @@ class DatabaseBackupManager:
         # Секунда может совпасть при ручном вызове и старте; добавляем суффикс.
         if target.exists():
             target = self.directory / f"bot-{timestamp}-{datetime.now(UTC).microsecond:06d}.db"
-        result = await self.database.backup(target)
+        try:
+            result = await self.database.backup(target)
+        finally:
+            # Чистим даже после ошибки: осиротевшие temp-файлы иначе копятся.
+            self._prune()
         self._last_backup = result
         self._last_error = None
-        self._prune()
         logger.info("SQLite backup создан: %s", result)
         return result
 
@@ -113,3 +117,22 @@ class DatabaseBackupManager:
                 old_backup.unlink()
             except OSError:
                 logger.warning("Не удалось удалить старый SQLite backup: %s", old_backup, exc_info=True)
+        self._prune_temp_files()
+
+    def _prune_temp_files(self, max_age_seconds: float = 3600.0) -> None:
+        """Удаляет осиротевшие .tmp отменённых backup'ов.
+
+        На Windows unlink временного файла может проиграть гонку с хэндлом
+        aiosqlite, и файл остаётся навсегда — glob их не видит, т.к. имя
+        начинается с точки.
+        """
+        now = time.time()
+        for temp_file in self.directory.glob(".*.tmp"):
+            try:
+                if not temp_file.is_file():
+                    continue
+                if now - temp_file.stat().st_mtime < max_age_seconds:
+                    continue
+                temp_file.unlink(missing_ok=True)
+            except OSError:
+                logger.warning("Не удалось удалить временный backup-файл: %s", temp_file, exc_info=True)

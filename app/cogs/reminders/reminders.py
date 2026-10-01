@@ -1,6 +1,7 @@
 """Напоминания: личные напоминания по времени с фоновой доставкой."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -51,21 +52,42 @@ class RemindersCog(MegaCog, name="Reminders"):
             except Exception:
                 logger.exception("Не удалось доставить напоминание #%s", item["id"])
                 await self.reminders.release_claim(item["id"])
+                return
             else:
                 await self.reminders.mark_done(item["id"])
 
+    @check_loop.before_loop
+    async def _before_check(self) -> None:
+        try:
+            await self.bot.wait_until_ready()
+        except RuntimeError:
+            raise asyncio.CancelledError from None
+
     async def _deliver(self, item: ReminderRow) -> None:
-        user = self.bot.get_user(item["user_id"])
         embed = embeds.info("⏰ Напоминание", item["message"])
         embed.set_footer(text=f"ID напоминания: {item['id']}")
+
         channel = self.bot.get_channel(item["channel_id"]) if item["channel_id"] else None
+        if channel is None and item["channel_id"]:
+            try:
+                channel = await self.bot.fetch_channel(item["channel_id"])
+            except discord.NotFound:
+                channel = None
         if isinstance(channel, discord.TextChannel):
             await channel.send(embed=embed)
-        elif user is not None:
+            return
+
+        user = self.bot.get_user(item["user_id"])
+        if user is None:
             try:
-                await user.send(embed=embed)
-            except discord.HTTPException:
-                logger.warning("Не удалось отправить ЛС пользователю %s", user.id)
+                user = await self.bot.fetch_user(item["user_id"])
+            except discord.NotFound:
+                logger.warning("Напоминание #%s: пользователь %s не найден — пропуск", item["id"], item["user_id"])
+                return
+        try:
+            await user.send(embed=embed)
+        except discord.Forbidden:
+            logger.warning("Напоминание #%s: закрыты ЛС у %s", item["id"], item["user_id"])
 
     @app_commands.command(name="remindme", description="Напомнить вам о чём-либо через некоторое время")
     @app_commands.describe(duration="Срок, например: 30s, 5m, 2h, 1d", text="Текст напоминания")

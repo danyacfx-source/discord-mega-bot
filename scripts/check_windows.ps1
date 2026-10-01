@@ -7,6 +7,6 @@ if (-not (Test-Path ".venv\Scripts\python.exe")) {
 & ".venv\Scripts\python.exe" scripts\preflight.py
 & ".venv\Scripts\python.exe" -m pytest -q
 & ".venv\Scripts\ruff.exe" check .
-& ".venv\Scripts\mypy.exe" app rewrite --no-incremental
-& ".venv\Scripts\python.exe" -m compileall -q app rewrite tests scripts
+& ".venv\Scripts\mypy.exe" app --no-incremental
+& ".venv\Scripts\python.exe" -m compileall -q app tests scripts
 Write-Host "Полный Windows QA завершён успешно." -ForegroundColor Green

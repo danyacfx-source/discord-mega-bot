@@ -172,7 +172,7 @@ class TicketService:
         task.add_done_callback(self._delete_tasks.discard)
 
         target = await self._logging.target_channel(guild)
-        mention = target.mention if target else channel.mention
+        mention = target.mention if target else "Транскрипт сохранён в веб-панели."
         return TicketCloseResult(transcript_channel_mention=mention)
 
     async def aclose(self) -> None:

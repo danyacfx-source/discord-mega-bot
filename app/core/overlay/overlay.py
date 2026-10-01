@@ -105,6 +105,12 @@ class Overlay:
         token = request.headers.get("X-Overlay-Token") or request.query.get("token") or ""
         return secrets.compare_digest(str(token), self._token)
 
+    def _valid_api_auth(self, request: web.Request) -> bool:
+        # API принимает только заголовок: query-строка оседает в access-log
+        # и истории запросов браузера, в отличие от заголовка.
+        token = request.headers.get("X-Overlay-Token", "")
+        return secrets.compare_digest(str(token), self._token)
+
     def _unauthorized(self) -> web.Response:
         return web.json_response({"error": "unauthorized"}, status=401)
 
@@ -117,7 +123,7 @@ class Overlay:
         return web.json_response({"ok": True})
 
     async def _api_handler(self, request: web.Request) -> web.Response:
-        if not self._valid_auth(request):
+        if not self._valid_api_auth(request):
             return self._unauthorized()
         return web.json_response(await self._payload())
 

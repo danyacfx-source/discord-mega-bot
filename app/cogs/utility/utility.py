@@ -24,6 +24,31 @@ class UtilityCog(MegaCog, name="Utility"):
             return channel
         return interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
 
+    async def _set_lock(self, interaction: discord.Interaction, target: discord.TextChannel, locked: bool) -> bool:
+        """Меняет только send_messages у @everyone, сохраняя остальные перезаписи канала."""
+        everyone = interaction.guild.default_role
+        overwrite = target.overwrites_for(everyone)
+        overwrite.send_messages = False if locked else None
+        try:
+            await target.set_permissions(
+                everyone,
+                overwrite=overwrite,
+                reason=f"{'Lock' if locked else 'Unlock'} by {interaction.user}",
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                embed=embeds.error("Нет прав", "Не удалось изменить права в этом канале."),
+                ephemeral=True,
+            )
+            return False
+        except discord.HTTPException:
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка Discord", "Не удалось изменить права в этом канале."),
+                ephemeral=True,
+            )
+            return False
+        return True
+
     @app_commands.command(name="lock", description="Запретить @everyone писать в канал")
     @app_commands.describe(channel="Канал (по умолчанию текущий)")
     @app_commands.default_permissions(manage_channels=True)
@@ -37,8 +62,8 @@ class UtilityCog(MegaCog, name="Utility"):
                 ephemeral=True,
             )
             return
-        everyone = interaction.guild.default_role
-        await target.set_permissions(everyone, send_messages=False, reason=f"Lock by {interaction.user}")
+        if not await self._set_lock(interaction, target, locked=True):
+            return
         await interaction.response.send_message(embed=embeds.success("Канал закрыт", target.mention))
 
     @app_commands.command(name="unlock", description="Разрешить @everyone писать в канал")
@@ -54,8 +79,8 @@ class UtilityCog(MegaCog, name="Utility"):
                 ephemeral=True,
             )
             return
-        everyone = interaction.guild.default_role
-        await target.set_permissions(everyone, send_messages=None, reason=f"Unlock by {interaction.user}")
+        if not await self._set_lock(interaction, target, locked=False):
+            return
         await interaction.response.send_message(embed=embeds.success("Канал открыт", target.mention))
 
     @app_commands.command(name="avatar", description="Показать аватар пользователя")

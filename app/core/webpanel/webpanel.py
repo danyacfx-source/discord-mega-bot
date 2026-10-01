@@ -47,8 +47,7 @@ class _PanelSession(TypedDict):
 
 _PANEL_ROLE_KEY = web.RequestKey("panel_role", str)
 
-_INDEX_PATH = Path(__file__).parent / "index.html"
-_SCRIPT_PATH = Path(__file__).parent / "panel.js"
+_DIST_INDEX_PATH = Path(__file__).parent / "dist" / "index.html"
 _LOGS_PAGE_PATH = Path(__file__).parent / "logs.html"
 _AUDIT_PAGE_PATH = Path(__file__).parent / "audit.html"
 _WEBHOOK_RE = re.compile(r"^https://(?:discord\.com|discordapp\.com)/api/webhooks/(\d+)/([A-Za-z0-9_\-]+)$")
@@ -389,9 +388,8 @@ class WebPanel:
         self._oauth_client_secret = config.panel_oauth_client_secret
         self._oauth_redirect_url = config.panel_oauth_redirect_url
         self._bridge_token = config.panel_bridge_token
+        self._trusted_proxy = bool(config.panel_trusted_proxy)
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
-        self._index_html = _INDEX_PATH.read_text(encoding="utf-8")
-        self._index_js = _SCRIPT_PATH.read_text(encoding="utf-8")
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
         self._static_token: str | None = None if self.password else self._load_static_token()
@@ -412,6 +410,7 @@ class WebPanel:
                 self._panel_password_hashes[role] = value
         self._password_auth = bool(self._panel_passwords or self._panel_password_hashes)
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
+        self._rate_gc: int = 0
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
         self._runner: web.AppRunner | None = None
         self._http: aiohttp.ClientSession | None = None
@@ -531,6 +530,11 @@ class WebPanel:
 
     @web.middleware
     async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
+        # Страницы, статика и прочие не-API маршруты не проходят через
+        # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
+        # в своих обработчиках, чтобы не считать дважды.
+        if not request.path.startswith(("/api/", "/ws/")) and not self._rate_ok(request):
+            return self._json({"ok": False, "error": "Слишком много запросов"}, status=429)
         try:
             response = await handler(request)
         except web.HTTPException as exc:
@@ -623,9 +627,12 @@ class WebPanel:
         return wrapped
 
     def _rate_key(self, request: web.Request) -> str:
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip() or (request.remote or "?")
+        # Адрес соединения — единственный ключ, который нельзя подделать
+        # извне. X-Forwarded-For учитывается только за доверенным прокси.
+        if self._trusted_proxy:
+            forwarded = request.headers.get("X-Forwarded-For", "")
+            if forwarded:
+                return forwarded.split(",")[0].strip() or (request.remote or "?")
         return request.remote or "?"
 
     def _rate_ok(self, request: web.Request) -> bool:
@@ -637,7 +644,17 @@ class WebPanel:
         if len(hits) >= _RATE_LIMIT_MAX:
             return False
         hits.append(now)
+        self._rate_gc += 1
+        if self._rate_gc % 500 == 0:
+            self._prune_rate_hits(now)
         return True
+
+    def _prune_rate_hits(self, now: float) -> None:
+        """Удаляет протухшие ключи, чтобы словарь не рос бесконечно."""
+        cutoff = now - _RATE_LIMIT_WINDOW
+        expired = [key for key, hits in self._rate_hits.items() if not hits or hits[-1] < cutoff]
+        for key in expired:
+            self._rate_hits.pop(key, None)
 
     def _allowed_origin(self, request: web.Request) -> bool:
         origin = request.headers.get("Origin") or request.headers.get("Referer")
@@ -797,8 +814,10 @@ class WebPanel:
         self._sessions[session_token] = {"expires": time.time() + _SESSION_TTL, "role": role, "csrf": csrf}
         if len(self._sessions) > _SESSION_MAX:
             self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        # Токен уходит во fragment: он не попадает ни в access-log сервера,
+        # ни в историю запросов, в отличие от query-строки.
         query = urlencode({"oauth_token": session_token, "oauth_csrf": csrf})
-        return web.Response(status=302, headers={"Location": f"/admin?{query}"})
+        return web.Response(status=302, headers={"Location": f"/admin#{query}"})
 
     @staticmethod
     def _json(data: dict[str, Any], status: int = 200) -> web.Response:
@@ -894,13 +913,23 @@ class WebPanel:
         .hint{{margin:24px 0 0;color:#938ca8;line-height:1.55}}
         </style></head><body><main>{body}</main></body></html>"""
 
-    async def _serve_index(self, request: web.Request) -> web.Response:
-        html = self._index_html
-        if self._password_auth:
-            html = html.replace("__PANEL_TOKEN__", "")
-        else:
-            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
+    def _inject_panel_bootstrap(self, html: str) -> str:
+        token = "" if self._password_auth else (self._static_token or "")
+        html = html.replace("__PANEL_TOKEN__", token)
+        html = html.replace("__PANEL_LOGIN__", "1" if self._password_auth else "0")
         html = html.replace("__PANEL_OAUTH__", "1" if self._oauth_enabled else "0")
+        return html
+
+    def _load_index_html(self) -> str:
+        """Читает сборку panel-ui (dist/) на каждый запрос, чтобы пересборка
+        фронтенда не требовала перезапуска бота."""
+        try:
+            return _DIST_INDEX_PATH.read_text(encoding="utf-8")
+        except OSError:
+            return "<!doctype html><title>Панель</title><p>Сборка panel-ui не найдена (dist/index.html).</p>"
+
+    async def _serve_index(self, request: web.Request) -> web.Response:
+        html = self._inject_panel_bootstrap(self._load_index_html())
         return web.Response(text=html, content_type="text/html", charset="utf-8")
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
@@ -918,15 +947,6 @@ class WebPanel:
         else:
             html = html.replace("__PANEL_TOKEN__", self._static_token or "")
         return web.Response(text=html, content_type="text/html", charset="utf-8")
-
-    async def _serve_script(self, request: web.Request) -> web.Response:
-        body = self._index_js
-        if self._password_auth:
-            body = body.replace("__PANEL_TOKEN__", "").replace("__PANEL_LOGIN__", "1")
-        else:
-            body = body.replace("__PANEL_TOKEN__", self._static_token or "").replace("__PANEL_LOGIN__", "0")
-        body = body.replace("__PANEL_OAUTH__", "1" if self._oauth_enabled else "0")
-        return web.Response(text=body, content_type="text/javascript", charset="utf-8")
 
     # --- API: login / status / channels ---
 

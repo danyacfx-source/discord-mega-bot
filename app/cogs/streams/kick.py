@@ -14,7 +14,7 @@ from discord.ext import tasks
 from app.core import embeds
 from app.core.base import MegaCog
 from app.core.stream_state import stream_activity
-from app.services.kick_service import KickService
+from app.services.kick_service import KickService, truncate_chat_content
 from app.utils.format import plural
 
 if TYPE_CHECKING:
@@ -105,6 +105,27 @@ class KickCog(MegaCog, name="Kick"):
                 content = role.mention
         message = await channel.send(content, embed=embed)
         await self.kick.set_sticky_message(message.id)
+        await self._announce_chat_live(status)
+
+    async def _announce_chat_live(self, status: dict[str, Any]) -> None:
+        """Кидает ссылку на стрим в чат Kick, если включено KICK_CHAT_AUTO_LINK.
+
+        Вызывается только когда sticky-сообщение пришлось создать заново, то есть
+        ровно один раз на старт эфира.
+        """
+        config = self.bot.config
+        if not config.kick_chat_auto_link:
+            return
+        text = config.kick_chat_link_text.strip()
+        if not text:
+            return
+        if "{url}" in text or "{title}" in text or "{viewers}" in text:
+            text = text.format(
+                url=f"https://kick.com/{status['slug']}",
+                title=status.get("title") or "",
+                viewers=status.get("viewers") or 0,
+            )
+        await self.kick.send_chat_message(text, as_user=config.kick_chat_send_as_user)
 
     async def _sticky_offline(self, slug: str) -> None:
         channel = self._notify_channel()
@@ -154,6 +175,33 @@ class KickCog(MegaCog, name="Kick"):
         else:
             embed = self._status_embed(status)
         await interaction.response.send_message(embed=embed)
+
+    # ---------------------------------------------------------------- отправка в чат
+
+    @app_commands.command(name="kick_say", description="Отправить сообщение в чат Kick")
+    @app_commands.describe(message="Текст сообщения (до 500 символов)")
+    @app_commands.guild_only()
+    @app_commands.check(_can_moderate)
+    async def kick_say(self, interaction: discord.Interaction, message: str) -> None:
+        config = self.bot.config
+        if not config.kick_access_token:
+            await interaction.response.send_message(
+                embed=embeds.error("Не настроено", "Не задан KICK_ACCESS_TOKEN."),
+                ephemeral=True,
+            )
+            return
+        sent_id = await self.kick.send_chat_message(
+            message, as_user=config.kick_chat_send_as_user
+        )
+        if sent_id is None:
+            embed = embeds.error(
+                "Kick: ошибка",
+                "Не удалось отправить. Проверьте scope `chat:write` у токена.",
+            )
+        else:
+            preview = truncate_chat_content(message)
+            embed = embeds.success("Kick: отправлено", f"Сообщение в чат Kick:\n```{preview}```")
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ---------------------------------------------------------------- модерация
 

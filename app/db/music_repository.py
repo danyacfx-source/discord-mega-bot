@@ -26,39 +26,40 @@ class MusicRepository(BaseRepository):
         normalized = name.strip().lower()[:64]
         if not normalized:
             raise ValueError("Название плейлиста не может быть пустым")
-        await self.db.execute(
-            """
-            INSERT INTO music_playlists(guild_id, name, created_by, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(guild_id, name) DO UPDATE SET
-                created_by = excluded.created_by,
-                created_at = excluded.created_at
-            """,
-            (guild_id, normalized, author_id, datetime.now(UTC).isoformat()),
-        )
-        await self.db.execute(
-            "DELETE FROM music_playlist_tracks WHERE guild_id = ? AND playlist_name = ?",
-            (guild_id, normalized),
-        )
-        for position, track in enumerate(tracks[:100], start=1):
+        async with self.db.transaction():
             await self.db.execute(
                 """
-                INSERT INTO music_playlist_tracks
-                    (guild_id, playlist_name, position, title, url, stream_url, duration, uploader, thumbnail)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO music_playlists(guild_id, name, created_by, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(guild_id, name) DO UPDATE SET
+                    created_by = excluded.created_by,
+                    created_at = excluded.created_at
                 """,
-                (
-                    guild_id,
-                    normalized,
-                    position,
-                    track.title[:256],
-                    track.url[:2048],
-                    track.stream_url[:4096],
-                    track.duration,
-                    (track.uploader or "")[:256],
-                    (track.thumbnail or "")[:2048],
-                ),
+                (guild_id, normalized, author_id, datetime.now(UTC).isoformat()),
             )
+            await self.db.execute(
+                "DELETE FROM music_playlist_tracks WHERE guild_id = ? AND playlist_name = ?",
+                (guild_id, normalized),
+            )
+            for position, track in enumerate(tracks[:100], start=1):
+                await self.db.execute(
+                    """
+                    INSERT INTO music_playlist_tracks
+                        (guild_id, playlist_name, position, title, url, stream_url, duration, uploader, thumbnail)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        guild_id,
+                        normalized,
+                        position,
+                        track.title[:256],
+                        track.url[:2048],
+                        track.stream_url[:4096],
+                        track.duration,
+                        (track.uploader or "")[:256],
+                        (track.thumbnail or "")[:2048],
+                    ),
+                )
 
     async def list_playlists(self, guild_id: int) -> list[dict[str, Any]]:
         rows = await self.db.fetchall(
@@ -105,16 +106,17 @@ class MusicRepository(BaseRepository):
         return cursor.rowcount > 0
 
     async def save_queue(self, guild_id: int, tracks: list[Track]) -> None:
-        await self.db.execute("DELETE FROM music_queue WHERE guild_id = ?", (guild_id,))
-        for position, track in enumerate(tracks[:100], start=1):
-            await self.db.execute(
-                """
-                INSERT INTO music_queue
-                    (guild_id, position, title, url, stream_url, duration, uploader, thumbnail)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                self._track_params(guild_id, position, track),
-            )
+        async with self.db.transaction():
+            await self.db.execute("DELETE FROM music_queue WHERE guild_id = ?", (guild_id,))
+            for position, track in enumerate(tracks[:100], start=1):
+                await self.db.execute(
+                    """
+                    INSERT INTO music_queue
+                        (guild_id, position, title, url, stream_url, duration, uploader, thumbnail)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    self._track_params(guild_id, position, track),
+                )
 
     async def load_queue(self, guild_id: int) -> list[Track]:
         rows = await self.db.fetchall(

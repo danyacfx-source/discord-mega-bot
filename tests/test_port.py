@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tempfile
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import discord
 import pytest
@@ -34,12 +35,10 @@ from app.services.temp_voice_service import TempVoiceService
 from app.services.twitch_service import TwitchService
 
 
-def test_panel_js_token_header():
-    from app.core.webpanel.webpanel import _SCRIPT_PATH
-
-    body = _SCRIPT_PATH.read_text(encoding="utf-8")
-    assert '"X-Panel-Token"' in body
-    assert '"X-Bot-Token"' not in body
+def test_panel_api_token_header():
+    src = (Path(__file__).resolve().parents[1] / "panel-ui" / "src" / "api.js").read_text(encoding="utf-8")
+    assert '"X-Panel-Token"' in src
+    assert '"X-Bot-Token"' not in src
 
 
 def test_config_new_options(tmp_path):
@@ -484,11 +483,13 @@ async def test_webpanel_auth_and_status(tmp_path):
         async with TestClient(server) as client:
             page = await client.get("/admin/embed-constructor")
             assert page.status == 200
-            assert "Панель управления" in await page.text()
+            page_text = await page.text()
+            assert "window.__PANEL__" in page_text
+            assert 'id="app"' in page_text
 
             admin_page = await client.get("/admin")
             assert admin_page.status == 200
-            assert "Панель управления" in await admin_page.text()
+            assert "window.__PANEL__" in await admin_page.text()
 
             rejected = await client.get("/api/status")
             assert rejected.status == 401
@@ -706,33 +707,6 @@ async def test_webpanel_security_headers(tmp_path):
             assert "frame-ancestors 'none'" in csp
             assert "style-src 'self' 'unsafe-inline'" in csp
 
-            js = await client.get("/panel.js")
-            assert js.status == 200
-            assert "text/javascript" in js.headers.get("Content-Type", "")
-            assert "X-Frame-Options" in js.headers
-
-
-@pytest.mark.asyncio
-async def test_webpanel_panel_js_injection(tmp_path):
-    bot = _panel_bot(tmp_path)
-    panel = WebPanel(bot)
-    async with TestServer(panel._create_app()) as server:
-        async with TestClient(server) as client:
-            js = await client.get("/panel.js")
-            body = await js.text()
-            assert "__PANEL_LOGIN__" not in body and "__PANEL_TOKEN__" not in body
-            assert (panel._static_token or "") in body
-            assert '"0" === "1"' in body
-
-    secured = _panel_bot(tmp_path, panel_password="hunter2")
-    panel2 = WebPanel(secured)
-    async with TestServer(panel2._create_app()) as server:
-        async with TestClient(server) as client:
-            js = await client.get("/panel.js")
-            body = await js.text()
-            assert "__PANEL_LOGIN__" not in body and "__PANEL_TOKEN__" not in body
-            assert '"1" === "1"' in body
-
 
 @pytest.mark.asyncio
 async def test_webpanel_upload_magic_mismatch(tmp_path):
@@ -817,23 +791,6 @@ async def test_webpanel_audit_page(tmp_path):
             text = await page.text()
             assert "Логи Discord" in text
             assert "audit=1" in text
-
-
-@pytest.mark.asyncio
-async def test_webpanel_admin_page_multiple_embeds(tmp_path):
-    """Страница /admin рендерит секцию эмбедов: контейнер, кнопка добавления и элементы редактора."""
-    bot = _panel_bot(tmp_path)
-    panel = WebPanel(bot)
-    async with TestServer(panel._create_app()) as server:
-        async with TestClient(server) as client:
-            page = await client.get("/admin")
-            assert page.status == 200
-            text = await page.text()
-            assert 'id="embeds_box"' in text
-            assert "addEmbed" in text
-            assert "Добавить эмбед" in text
-            assert 'id="palette-backdrop"' in text
-            assert 'id="live-indicator"' in text
 
 
 def test_webhook_body_multiple_embeds(tmp_path):
@@ -931,35 +888,46 @@ async def test_webpanel_api_logs_filters(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_logging_service_does_not_use_discord_channels(tmp_path):
-    """LoggingService.send_embed не отправляет ничего в Discord-канал."""
+async def test_logging_service_channel_only_when_configured(tmp_path):
+    """send_embed не шлёт в Discord-канал без настройки; с настройкой — шлёт."""
+    from unittest.mock import AsyncMock, MagicMock
+
     from app.services.logging_service import LoggingService
 
     bot = _panel_bot(tmp_path)
-    sent = []
-
-    class _FakeSettings:
-        async def get(self, guild_id):
-            return {"log_channel_id": 555}
-
-    svc = LoggingService(_FakeSettings(), bot)
 
     class _Guild:
         name = "Тест-сервер"
         id = 111
 
+        def __init__(self, channel_id: int | None) -> None:
+            self._channel_id = channel_id
+            self.channel = MagicMock(spec=discord.TextChannel)
+            self.channel.send = AsyncMock()
+
         def get_channel(self, channel_id):
-            class _Ch:
-                async def send(self, *args, **kwargs):
-                    sent.append((args, kwargs))
-                    return discord.Object(id=1)
+            if self._channel_id is not None and channel_id == self._channel_id:
+                return self.channel
+            return None
 
-            return _Ch()
+    class _NoChannels:
+        async def get(self, guild_id):
+            return {}
 
-    guild = _Guild()
+    svc = LoggingService(_NoChannels(), bot)
     embed = discord.Embed(title="Событие", description="описание")
-    await svc.send_embed(guild, embed, category="mod")
-    assert sent == [], "LoggingService не должен слать в Discord-канал"
+    unconfigured = _Guild(None)
+    await svc.send_embed(unconfigured, embed, category="mod")
+    unconfigured.channel.send.assert_not_awaited()
+
+    class _WithChannel:
+        async def get(self, guild_id):
+            return {"mod_log_channel_id": 555}
+
+    svc = LoggingService(_WithChannel(), bot)
+    configured = _Guild(555)
+    await svc.send_embed(configured, embed, category="mod")
+    configured.channel.send.assert_awaited_once()
 
 
 @pytest.mark.asyncio

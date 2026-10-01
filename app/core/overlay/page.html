@@ -16,7 +16,7 @@ body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;co
 @media(prefers-reduced-motion:reduce){.dot{animation:none}}
 </style></head><body><div id="root"></div>
 <script>
-async function load(){try{const r=await fetch('/overlay/api?token=__TOKEN__');const d=await r.json();let h='';
+async function load(){try{const r=await fetch('/overlay/api',{headers:{'X-Overlay-Token':'__TOKEN__'}});const d=await r.json();let h='';
 if(d.stream&&d.stream.live){h+='<div class="card live"><h3>В ЭФИРЕ · '+esc(d.stream.platform)+'</h3><div class="value"><span class="dot"></span>'+esc(d.stream.title)+'</div>';
 h+='<div class="counters">Зрители <b>'+esc(d.stream.viewers)+'</b> · Пик <b>'+esc(d.stream.peak)+'</b></div>';
 if(d.stream.category)h+='<div class="counters">Категория · '+esc(d.stream.category)+'</div>';h+='</div>'}

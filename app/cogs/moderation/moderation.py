@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -75,13 +76,41 @@ class ModerationCog(MegaCog, name="Moderation"):
             logger.exception("Не удалось создать moderation case для %s", user_id)
             return None
 
+    async def _guard_invoker(self, interaction: discord.Interaction, member: discord.Member) -> bool:
+        guild = interaction.guild
+        invoker = interaction.user
+        if isinstance(invoker, discord.Member) and guild is not None:
+            if member.id == invoker.id:
+                await interaction.response.send_message(
+                    embed=embeds.error("Ошибка", "Нельзя применять это действие к себе."),
+                    ephemeral=True,
+                )
+                return False
+            if (
+                member.id != guild.owner_id
+                and invoker.id != guild.owner_id
+                and member.top_role.position >= invoker.top_role.position
+            ):
+                await interaction.response.send_message(
+                    embed=embeds.error(
+                        "Недостаточно прав",
+                        "Участник выше вас в иерархии ролей — действие запрещено.",
+                    ),
+                    ephemeral=True,
+                )
+                return False
+        return True
+
     async def _guard_target(self, interaction: discord.Interaction, member: discord.Member) -> bool:
-        me = interaction.guild.me if interaction.guild is not None else None
+        guild = interaction.guild
+        me = guild.me if guild is not None else None
         if not isinstance(me, discord.Member):
             await interaction.response.send_message(
                 embed=embeds.error("Ошибка", "Не удалось определить участника-бота на сервере."),
                 ephemeral=True,
             )
+            return False
+        if not await self._guard_invoker(interaction, member):
             return False
         if not self.moderation.can_moderate(me, member):
             await interaction.response.send_message(
@@ -94,6 +123,24 @@ class ModerationCog(MegaCog, name="Moderation"):
             return False
         return True
 
+    async def _perform(self, interaction: discord.Interaction, action: Awaitable[None], what: str) -> bool:
+        try:
+            await action
+            return True
+        except discord.Forbidden:
+            logger.warning("Forbidden при действии %s в гильдии %s", what, interaction.guild_id)
+            await interaction.response.send_message(
+                embed=embeds.error("Нет прав", f"Не удалось выполнить действие: {what}."),
+                ephemeral=True,
+            )
+        except discord.HTTPException:
+            logger.exception("HTTP-ошибка при действии %s в гильдии %s", what, interaction.guild_id)
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка Discord", f"Не удалось выполнить действие: {what}."),
+                ephemeral=True,
+            )
+        return False
+
     @app_commands.command(name="kick", description="Кикнуть участника")
     @app_commands.default_permissions(kick_members=True)
     @app_commands.guild_only()
@@ -105,7 +152,8 @@ class ModerationCog(MegaCog, name="Moderation"):
     ) -> None:
         if not await self._guard_target(interaction, member):
             return
-        await member.kick(reason=moderation_reason(interaction.user, reason))
+        if not await self._perform(interaction, member.kick(reason=moderation_reason(interaction.user, reason)), "кик"):
+            return
         embed = _member_embed("Кик", member, reason or "не указана")
         case_id = await self._record_case(interaction, member.id, "kick", reason)
         if case_id is not None:
@@ -127,7 +175,12 @@ class ModerationCog(MegaCog, name="Moderation"):
     ) -> None:
         if not await self._guard_target(interaction, member):
             return
-        await member.ban(reason=moderation_reason(interaction.user, reason), delete_message_seconds=delete_days * 86400)
+        if not await self._perform(
+            interaction,
+            member.ban(reason=moderation_reason(interaction.user, reason), delete_message_seconds=delete_days * 86400),
+            "бан",
+        ):
+            return
         embed = _member_embed("Бан", member, reason or "не указана")
         case_id = await self._record_case(interaction, member.id, "ban", reason)
         if case_id is not None:
@@ -153,7 +206,8 @@ class ModerationCog(MegaCog, name="Moderation"):
         except discord.NotFound:
             await interaction.response.send_message(embed=embeds.error("Не найден", "Пользователь с таким ID не забанен."), ephemeral=True)
             return
-        await guild.unban(ban_entry.user, reason=moderation_reason(interaction.user))
+        if not await self._perform(interaction, guild.unban(ban_entry.user, reason=moderation_reason(interaction.user)), "разбан"):
+            return
         embed = _member_embed("Разбан", ban_entry.user, "")
         case_id = await self._record_case(interaction, ban_entry.user.id, "unban")
         if case_id is not None:
@@ -167,15 +221,26 @@ class ModerationCog(MegaCog, name="Moderation"):
     @app_commands.guild_only()
     async def timeout(self, interaction: discord.Interaction, member: discord.Member, duration: str, reason: str = "") -> None:
         seconds = self.moderation.parse_duration(duration)
-        if seconds is None:
+        if seconds is None or seconds <= 0:
             await interaction.response.send_message(
                 embed=embeds.error("Ошибка формата", "Пример формата: `1h 30m` или `7d`."),
                 ephemeral=True,
             )
             return
+        if seconds > 28 * 86400:
+            await interaction.response.send_message(
+                embed=embeds.error("Слишком долго", "Максимальный тайм-аут — 28 дней."),
+                ephemeral=True,
+            )
+            return
         if not await self._guard_target(interaction, member):
             return
-        await member.timeout(utcnow() + timedelta(seconds=seconds), reason=moderation_reason(interaction.user, reason))
+        if not await self._perform(
+            interaction,
+            member.timeout(utcnow() + timedelta(seconds=seconds), reason=moderation_reason(interaction.user, reason)),
+            "тайм-аут",
+        ):
+            return
         embed = _member_embed("Тайм-аут", member, f"{duration} · {reason or 'не указана'}")
         case_id = await self._record_case(
             interaction,
@@ -217,7 +282,21 @@ class ModerationCog(MegaCog, name="Moderation"):
         def _check(message: discord.Message) -> bool:
             return not message.author.bot if member is None else message.author == member
 
-        deleted = await channel.purge(limit=amount, check=_check, bulk=True)
+        try:
+            deleted = await channel.purge(limit=amount, check=_check, bulk=True)
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                embed=embeds.error("Нет прав", "Не удалось удалить сообщения в этом канале."),
+                ephemeral=True,
+            )
+            return
+        except discord.HTTPException:
+            logger.exception("Ошибка purge в гильдии %s", interaction.guild_id)
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка Discord", "Не удалось удалить часть сообщений."),
+                ephemeral=True,
+            )
+            return
         embed = embeds.success("Очистка завершена", f"Удалено сообщений: **{len(deleted)}**")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -225,6 +304,8 @@ class ModerationCog(MegaCog, name="Moderation"):
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.guild_only()
     async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str) -> None:
+        if not await self._guard_invoker(interaction, member):
+            return
         count = await self.moderation.warn(interaction.guild.id, member.id, interaction.user.id, reason)
         embed = _member_embed("Предупреждение", member, reason)
         embed.add_field(name="Всего предупреждений", value=str(count), inline=True)
@@ -332,7 +413,8 @@ class ModerationCog(MegaCog, name="Moderation"):
             )
             return
         seconds = self.moderation.parse_slowmode(duration)
-        await channel.edit(slowmode_delay=seconds)
+        if not await self._perform(interaction, channel.edit(slowmode_delay=seconds), "слоумод"):
+            return
         text = "отключён" if seconds == 0 else f"установлен на {duration}"
         await interaction.response.send_message(embed=embeds.success("Слоумод", f"В канале {channel.mention} слоумод {text}."))
 
@@ -344,9 +426,21 @@ class ModerationCog(MegaCog, name="Moderation"):
         if action not in {"give", "remove"}:
             await interaction.response.send_message(embed=embeds.error("Ошибка", "Действие: `give` или `remove`."), ephemeral=True)
             return
-        if role >= interaction.guild.me.top_role:
+        me = interaction.guild.me
+        if me is None or role >= me.top_role:
             await interaction.response.send_message(
                 embed=embeds.error("Ошибка", "Этот роль выше бота — не могу выдать/снять."),
+                ephemeral=True,
+            )
+            return
+        invoker = interaction.user
+        if (
+            isinstance(invoker, discord.Member)
+            and invoker.id != interaction.guild.owner_id
+            and role >= invoker.top_role
+        ):
+            await interaction.response.send_message(
+                embed=embeds.error("Ошибка", "Эта роль выше вас в иерархии — не могу выдать/снять."),
                 ephemeral=True,
             )
             return

@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -200,6 +202,7 @@ class PostgresDatabase:
     def __init__(self, url: str) -> None:
         self.url = url
         self.pool: asyncpg.Pool | None = None
+        self._tx_connection: asyncpg.Connection | None = None
 
     async def connect(self) -> None:
         self.pool = await asyncpg.create_pool(
@@ -216,10 +219,29 @@ class PostgresDatabase:
             raise RuntimeError("PostgreSQL не подключён")
         return self.pool
 
+    @asynccontextmanager
+    async def _acquire(self) -> AsyncIterator[asyncpg.Connection]:
+        """Соединение для запроса: внутри транзакции — её собственное."""
+        if self._tx_connection is not None:
+            yield self._tx_connection
+            return
+        async with self._require_pool().acquire() as connection:
+            yield connection
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[None]:
+        """Выделяет соединение и держит транзакцию открытой на время блока."""
+        async with self._require_pool().acquire() as connection:
+            async with connection.transaction():
+                self._tx_connection = connection
+                try:
+                    yield
+                finally:
+                    self._tx_connection = None
+
     async def execute(self, sql: str, params: tuple[Any, ...] = ()) -> PostgresCursor:
-        pool = self._require_pool()
         query, generated_key = _translate_sql(sql)
-        async with pool.acquire() as connection:
+        async with self._acquire() as connection:
             if generated_key:
                 rows = await connection.fetch(query, *params)
                 lastrowid = int(rows[0][generated_key]) if rows else None
@@ -228,23 +250,20 @@ class PostgresDatabase:
         return PostgresCursor(rowcount=_command_rowcount(status))
 
     async def execute_returning(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        pool = self._require_pool()
         query, _ = _translate_sql(sql)
-        async with pool.acquire() as connection:
+        async with self._acquire() as connection:
             row = await connection.fetchrow(query, *params)
         return dict(row) if row is not None else None
 
     async def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
-        pool = self._require_pool()
         query, _ = _translate_sql(sql)
-        async with pool.acquire() as connection:
+        async with self._acquire() as connection:
             row = await connection.fetchrow(query, *params)
         return dict(row) if row is not None else None
 
     async def fetchall(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        pool = self._require_pool()
         query, _ = _translate_sql(sql)
-        async with pool.acquire() as connection:
+        async with self._acquire() as connection:
             rows = await connection.fetch(query, *params)
         return [dict(row) for row in rows]
 
@@ -257,20 +276,53 @@ class PostgresDatabase:
         target = Path(destination)
         target.parent.mkdir(parents=True, exist_ok=True)
         temp = target.with_name(f".{target.name}.tmp")
-        process = await asyncio.create_subprocess_exec(
-            "pg_dump",
-            "--format=custom",
-            "--no-owner",
-            "--file",
-            str(temp),
-            self.url,
-        )
-        return_code = await process.wait()
-        if return_code != 0:
+        env = self._pg_env()
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "pg_dump",
+                "--format=custom",
+                "--no-owner",
+                "--file",
+                str(temp),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("pg_dump не найден: установите postgresql-client (pg_dump) в PATH") from exc
+        try:
+            _, stderr = await process.communicate()
+        except asyncio.CancelledError:
             temp.unlink(missing_ok=True)
-            raise RuntimeError(f"pg_dump завершился с кодом {return_code}")
+            raise
+        if process.returncode != 0:
+            temp.unlink(missing_ok=True)
+            detail = (stderr or b"").decode("utf-8", errors="replace").strip()[:500]
+            raise RuntimeError(f"pg_dump завершился с кодом {process.returncode}: {detail or 'без описания'}")
         os.replace(temp, target)
         return target
+
+    def _pg_env(self) -> dict[str, str]:
+        """Параметры подключения для pg_dump через переменные окружения.
+
+        DSN не передаётся в argv: пароль не должен быть виден в `ps`.
+        """
+        from urllib.parse import unquote, urlparse
+
+        parsed = urlparse(self.url)
+        env = dict(os.environ)
+        if parsed.hostname:
+            env["PGHOST"] = parsed.hostname
+        if parsed.port:
+            env["PGPORT"] = str(parsed.port)
+        if parsed.username:
+            env["PGUSER"] = unquote(parsed.username)
+        if parsed.password:
+            env["PGPASSWORD"] = unquote(parsed.password)
+        database = parsed.path.lstrip("/")
+        if database:
+            env["PGDATABASE"] = unquote(database)
+        return env
 
     async def close(self) -> None:
         if self.pool is not None:

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from aiohttp import web
@@ -18,11 +19,13 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/admin", panel._serve_index)
     router.add_get("/admin/", panel._serve_index)
     router.add_get("/admin/embed-constructor", panel._serve_index)
+    assets_dir = Path(__file__).parent / "dist" / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    router.add_static("/assets", str(assets_dir), show_index=False)
     router.add_get("/logs", panel._serve_logs_page)
     router.add_get("/audit", panel._serve_audit_page)
     router.add_get("/wardogs/join", panel._wardogs_join_page)
     router.add_get("/api/wardogs/join-link", panel._api_wardogs_join_link)
-    router.add_get("/panel.js", panel._serve_script)
     router.add_post("/api/login", panel._api_login)
     router.add_get("/oauth/discord", panel._oauth_start)
     router.add_get("/oauth/discord/callback", panel._oauth_callback)

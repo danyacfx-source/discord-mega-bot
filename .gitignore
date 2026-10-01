@@ -9,7 +9,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
+!app/core/webpanel/dist/
 build/
+node_modules/
+panel-ui/.vite/
 .idea/
 .vscode/
 # Archives

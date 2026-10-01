@@ -17,6 +17,20 @@ logger = logging.getLogger("bot.services")
 _PUBLIC_BASE = "https://kick.com/api/v2"
 _DEV_BASE = "https://api.kick.com/public/v1"  # https://docs.kick.com/reference/
 
+#: Kick считает лимит по графемным кластерам, а не по code points.
+_CHAT_MAX_CHARS = 500
+_CHAT_MAX_BYTES = 2048
+
+
+def truncate_chat_content(content: str) -> str:
+    """Обрезает текст под лимиты POST /public/v1/chat (500 символов / 2048 байт)."""
+    text = content.strip()
+    if len(text) > _CHAT_MAX_CHARS:
+        text = text[:_CHAT_MAX_CHARS]
+    while len(text.encode("utf-8")) > _CHAT_MAX_BYTES:
+        text = text[:-1]
+    return text
+
 
 def _first_viewer_count(*values: Any) -> int:
     for value in values:
@@ -94,6 +108,54 @@ class KickService:
 
     async def clear_sticky_message(self) -> None:
         await self._repo.delete(self._sticky_key())
+
+    # ------------------------------------------------------------------ отправка в чат
+
+    async def send_chat_message(
+        self,
+        content: str,
+        *,
+        as_user: bool = False,
+        reply_to_message_id: str | None = None,
+    ) -> str | None:
+        """Отправляет сообщение в чат Kick. Возвращает message_id или None.
+
+        ``as_user=False`` — писать от имени бота, привязанного к токену
+        (``broadcaster_user_id`` тогда игнорируется и не нужен).
+        ``as_user=True`` — писать от имени вещателя, тогда ``broadcaster_user_id``
+        обязателен.
+
+        Требуется scope ``chat:write`` у KICK_ACCESS_TOKEN.
+        """
+        text = truncate_chat_content(content)
+        if not text:
+            logger.warning("Kick: пустое сообщение в чат не отправлено")
+            return None
+
+        payload: dict[str, Any] = {"content": text, "type": "user" if as_user else "bot"}
+        if reply_to_message_id:
+            payload["reply_to_message_id"] = str(reply_to_message_id)
+        if as_user:
+            broadcaster = await self.resolve_broadcaster()
+            if broadcaster is None:
+                logger.warning("Kick: не удалось определить broadcaster_user_id для отправки от пользователя")
+                return None
+            payload["broadcaster_user_id"] = broadcaster["user_id"]
+
+        try:
+            _, body, _ = await self._http.json(
+                "POST", f"{_DEV_BASE}/chat", json=payload, headers=self._headers()
+            )
+        except ApiRequestError as exc:
+            logger.warning("Kick: сообщение в чат не отправлено (%s): %s", exc.status, exc)
+            return None
+        data = (body or {}).get("data") if isinstance(body, dict) else None
+        if isinstance(data, dict) and data.get("is_sent") is False:
+            logger.warning("Kick: Kick отклонил сообщение в чат: %s", data)
+            return None
+        message_id = data.get("message_id") if isinstance(data, dict) else None
+        logger.info("Kick: сообщение отправлено в чат (%s символов)", len(text))
+        return str(message_id) if message_id else ""
 
     # ------------------------------------------------------------------ модерация
 

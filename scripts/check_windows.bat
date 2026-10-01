@@ -10,8 +10,8 @@ call .venv\Scripts\python.exe -m pytest -q
 if errorlevel 1 exit /b 1
 call .venv\Scripts\ruff.exe check .
 if errorlevel 1 exit /b 1
-call .venv\Scripts\mypy.exe app rewrite --no-incremental
+call .venv\Scripts\mypy.exe app --no-incremental
 if errorlevel 1 exit /b 1
-call .venv\Scripts\python.exe -m compileall -q app rewrite tests scripts
+call .venv\Scripts\python.exe -m compileall -q app tests scripts
 if errorlevel 1 exit /b 1
 echo Полный Windows QA завершен успешно.

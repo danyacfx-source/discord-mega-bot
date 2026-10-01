@@ -1,9 +1,15 @@
 """Тесты миграций, integrity check и консистентного backup SQLite."""
 
+import asyncio
+import os
+import time
 from pathlib import Path
+
+import pytest
 
 from app.db.backup_manager import DatabaseBackupManager
 from app.db.database import Database
+from app.db.postgres_database import PostgresDatabase
 from app.db.restore import restore_backup
 
 
@@ -80,4 +86,76 @@ async def test_backup_manager_keeps_only_configured_retention(tmp_path: Path) ->
     assert len(backups) == 2
     assert manager.status()["last_backup"] is not None
     assert manager.status()["last_error"] is None
+    await database.close()
+
+
+async def test_backup_manager_prunes_orphan_temp_files(tmp_path: Path) -> None:
+    backups = tmp_path / "backups"
+    backups.mkdir()
+    stale = backups / ".bot-20260101-000000.db.abc123.tmp"
+    stale.write_bytes(b"")
+    old = time.time() - 7200
+    os.utime(stale, (old, old))
+    fresh = backups / ".bot-20260102-000000.db.def456.tmp"
+    fresh.write_bytes(b"")
+    regular = backups / "bot-20260101-000000.db"
+    regular.write_bytes(b"db")
+
+    manager = DatabaseBackupManager(Database(str(tmp_path / "source.db")), backups, interval_hours=1, retention=1)
+    manager._prune()
+
+    assert not stale.exists()
+    assert fresh.exists()
+    assert regular.exists()
+
+
+def test_pg_env_keeps_password_out_of_process_args() -> None:
+    db = PostgresDatabase("postgresql://panel:s3cret@dbhost:5432/megabot")
+    env = db._pg_env()
+    assert env["PGHOST"] == "dbhost"
+    assert env["PGPORT"] == "5432"
+    assert env["PGUSER"] == "panel"
+    assert env["PGPASSWORD"] == "s3cret"
+    assert env["PGDATABASE"] == "megabot"
+
+
+async def test_transaction_commits_atomically_and_rolls_back(tmp_path: Path) -> None:
+    database = Database(str(tmp_path / "tx.db"))
+    await database.connect()
+
+    async with database.transaction():
+        await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("committed", "yes"))
+        await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("atomic", "pair"))
+        row = await database.fetchone("SELECT value FROM kv WHERE key = ?", ("committed",))
+        assert row is not None and row["value"] == "yes"
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with database.transaction():
+            await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("rolled", "back"))
+            raise RuntimeError("boom")
+
+    assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("committed",)) is not None
+    assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("atomic",)) is not None
+    assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("rolled",)) is None
+
+    await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("after", "tx"))
+    assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("after",)) is not None
+    await database.close()
+
+
+async def test_transaction_blocks_concurrent_writes_until_commit(tmp_path: Path) -> None:
+    database = Database(str(tmp_path / "tx2.db"))
+    await database.connect()
+
+    async def write(key: str) -> None:
+        await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", (key, "v"))
+
+    async with database.transaction():
+        await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("inside", "1"))
+        waiter = asyncio.create_task(write("waiting"))
+        await asyncio.sleep(0.05)
+        assert not waiter.done()
+    await waiter
+
+    assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("waiting",)) is not None
     await database.close()

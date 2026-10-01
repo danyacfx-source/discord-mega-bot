@@ -1,8 +1,11 @@
 """Управление подключением к SQLite через aiosqlite."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -176,6 +179,10 @@ class Database:
         self.path = path
         self._conn: aiosqlite.Connection | None = None
         self._postgres: Any | None = None
+        # Сериализует явные транзакции: одна запись в БД на процесс,
+        # конкурирующие записи ждут, а не вливаются в чужой BEGIN.
+        self._tx_lock = asyncio.Lock()
+        self._tx_owner: asyncio.Task[Any] | None = None
 
     @property
     def conn(self) -> aiosqlite.Connection:
@@ -428,10 +435,14 @@ class Database:
     ) -> aiosqlite.Row | None:
         if self._postgres is not None:
             return await self._postgres.execute_returning(sql, params)
-        cursor = await self.conn.execute(sql, params)
-        row = await cursor.fetchone()
-        await self.conn.commit()
-        return row
+        if self._tx_owner is asyncio.current_task():
+            cursor = await self.conn.execute(sql, params)
+            return await cursor.fetchone()
+        async with self._tx_lock:
+            cursor = await self.conn.execute(sql, params)
+            row = await cursor.fetchone()
+            await self.conn.commit()
+            return row
 
     async def backup(self, destination: str | Path) -> Path:
         """Создаёт консистентный backup через SQLite backup API.
@@ -541,9 +552,13 @@ class Database:
     async def execute(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Cursor:
         if self._postgres is not None:
             return await self._postgres.execute(sql, params)
-        cursor = await self.conn.execute(sql, params)
-        await self.conn.commit()
-        return cursor
+        if self._tx_owner is asyncio.current_task():
+            # Собственная транзакция: коммит сделает transaction().
+            return await self.conn.execute(sql, params)
+        async with self._tx_lock:
+            cursor = await self.conn.execute(sql, params)
+            await self.conn.commit()
+            return cursor
 
     async def fetchone(self, sql: str, params: tuple[Any, ...] = ()) -> aiosqlite.Row | None:
         if self._postgres is not None:
@@ -556,3 +571,31 @@ class Database:
             return await self._postgres.fetchall(sql, params)
         cursor = await self.conn.execute(sql, params)
         return list(await cursor.fetchall())
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[None]:
+        """Атомарная группа операций (BEGIN/COMMIT/ROLLBACK).
+
+        Пока транзакция открыта, чужие записи ждут её завершения, а свои
+        запросы внутри блока не коммитятся по отдельности. Вложенность
+        не поддерживается.
+        """
+        if self._tx_owner is asyncio.current_task():
+            raise RuntimeError("Вложенная транзакция не поддерживается")
+        async with self._tx_lock:
+            self._tx_owner = asyncio.current_task()
+            try:
+                if self._postgres is not None:
+                    async with self._postgres.transaction():
+                        yield
+                    return
+                await self.conn.execute("BEGIN")
+                try:
+                    yield
+                except BaseException:
+                    await self.conn.rollback()
+                    raise
+                else:
+                    await self.conn.commit()
+            finally:
+                self._tx_owner = None

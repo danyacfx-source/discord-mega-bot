@@ -15,6 +15,15 @@ logger = logging.getLogger("bot.services")
 _AUDIT_LOGGER = logger.getChild("audit")
 _AUDIT_LOGGER.setLevel(logging.INFO)
 
+_CATEGORY_KEYS = {
+    "general": "log_channel_id",
+    "bot": "bot_log_channel_id",
+    "member": "member_log_channel_id",
+    "message": "message_log_channel_id",
+    "voice": "voice_log_channel_id",
+    "mod": "mod_log_channel_id",
+}
+
 
 def _embed_to_text(embed: discord.Embed) -> str:
     """Превращает эмбед в компактный текст для веб-ленты."""
@@ -31,7 +40,7 @@ def _embed_to_text(embed: discord.Embed) -> str:
 
 
 class LoggingService:
-    """Записывает аудит-события в веб-ленту вместо отправки в Discord-каналы."""
+    """Пишет аудит-события в веб-ленту и (если настроен) в лог-каналы Discord."""
 
     def __init__(self, settings: SettingsService, bot: MegaBot) -> None:
         self._settings = settings
@@ -40,14 +49,50 @@ class LoggingService:
     async def target_channel(
         self, guild: discord.Guild, *, category: str | None = None
     ) -> discord.TextChannel | None:
-        """Сохраняет совместимый интерфейс, но реальные каналы не используются."""
-        return None
+        """Резолвит канал для категории логов: настройки сервера → env → общий лог."""
+        key = _CATEGORY_KEYS.get(category or "general")
+        if key is None:
+            return None
+        settings = await self._settings.get(guild.id)
+        config = getattr(self._bot, "config", None)
+        channel_id = settings.get(key) or getattr(config, key, None)
+        if not channel_id and key != "log_channel_id":
+            channel_id = settings.get("log_channel_id")
+        if not channel_id:
+            return None
+        channel = guild.get_channel(channel_id)
+        return channel if isinstance(channel, discord.TextChannel) else None
+
+    async def _post(
+        self,
+        guild: discord.Guild,
+        category: str,
+        *,
+        embed: discord.Embed | None = None,
+        text: str | None = None,
+    ) -> None:
+        """Дополнительно отправляет событие в лог-канал Discord (если настроен)."""
+        try:
+            channel = await self.target_channel(guild, category=category)
+        except Exception:
+            logger.debug("Не удалось определить лог-канал", exc_info=True)
+            return
+        if channel is None:
+            return
+        try:
+            if embed is not None:
+                await channel.send(embed=embed)
+            elif text:
+                await channel.send(text[:2000])
+        except discord.HTTPException:
+            logger.debug("Не удалось отправить лог в канал %s", getattr(channel, "id", "?"), exc_info=True)
 
     async def send_embed(self, guild: discord.Guild, embed: discord.Embed, *, category: str | None = None) -> None:
         cat = category or "general"
         text = _embed_to_text(embed)
         guild_name = guild.name if guild is not None else "?"
         self._emit(cat, f"[{guild_name}] {text}")
+        await self._post(guild, cat, embed=embed)
 
     async def log_event(
         self,
@@ -66,7 +111,9 @@ class LoggingService:
         if author is not None:
             parts.append(f"Инициатор: {author} ({author.id})")
         guild_name = guild.name if guild is not None else "?"
-        self._emit("general", f"[{guild_name}] " + (" | ".join(parts) if parts else "(пустое событие)"))
+        text = f"[{guild_name}] " + (" | ".join(parts) if parts else "(пустое событие)")
+        self._emit("general", text)
+        await self._post(guild, "general", text=text)
 
     async def log_mod_action(
         self,
@@ -86,7 +133,9 @@ class LoggingService:
         if reason:
             parts.append(f"Причина: {reason}")
         guild_name = guild.name if guild is not None else "?"
-        self._emit("mod", f"[{guild_name}] " + " | ".join(parts))
+        text = f"[{guild_name}] " + " | ".join(parts)
+        self._emit("mod", text)
+        await self._post(guild, "mod", text=text)
 
     def _emit(self, category: str, text: str) -> None:
         """Пишет событие в логгер bot.audit.<category> — его ловит веб-лента панели."""

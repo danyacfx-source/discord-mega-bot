@@ -76,24 +76,28 @@ class SetupCog(MegaCog, name="Setup"):
         self.settings = settings
 
     @setup_group.command(name="welcome-channel", description="Канал для приветствий новых участников")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def welcome_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         await self.settings.update(interaction.guild.id, welcome_channel_id=channel.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Приветствия → {channel.mention}"))
 
     @setup_group.command(name="farewell-channel", description="Канал для прощаний с участниками")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def farewell_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         await self.settings.update(interaction.guild.id, farewell_channel_id=channel.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Прощания → {channel.mention}"))
 
     @setup_group.command(name="log-channel", description="Канал для логов событий и модерации")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         await self.settings.update(interaction.guild.id, log_channel_id=channel.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Логи → {channel.mention}"))
 
     @setup_group.command(name="log-type", description="Отдельный канал для конкретного типа логов")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     @app_commands.choices(
         kind=[
@@ -115,18 +119,21 @@ class SetupCog(MegaCog, name="Setup"):
         await interaction.response.send_message(embed=embeds.success("Настройка", f"{label} → {channel.mention}"))
 
     @setup_group.command(name="donation-channel", description="Канал, куда присылать новые донаты")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def donation_channel(self, interaction: discord.Interaction, channel: discord.TextChannel) -> None:
         await self.settings.update(interaction.guild.id, donation_channel_id=channel.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Донаты → {channel.mention}"))
 
     @setup_group.command(name="ticket-category", description="Категория для создания тикетов")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def ticket_category(self, interaction: discord.Interaction, category: discord.CategoryChannel) -> None:
         await self.settings.update(interaction.guild.id, ticket_category_id=category.id)
         await interaction.response.send_message(embed=embeds.success("Настройка", f"Тикеты → {category.mention}"))
 
     @setup_group.command(name="unset", description="Сбросить настройку канала")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(option="Какую настройку сбросить")
     @app_commands.guild_only()
     async def unset(self, interaction: discord.Interaction, option: str) -> None:

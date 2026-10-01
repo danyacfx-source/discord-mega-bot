@@ -1,6 +1,7 @@
 """Планировщик: отложенные сообщения из вебпанели и команды форума."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -44,9 +45,24 @@ class SchedulerCog(MegaCog, name="Scheduler"):
             except Exception:
                 logger.exception("Ошибка при отправке отложенного сообщения #%s", row["id"])
                 await self.scheduled.release_claim(row["id"])
+                return
+
+    @delivery_loop.before_loop
+    async def _before_delivery(self) -> None:
+        try:
+            await self.bot.wait_until_ready()
+        except RuntimeError:
+            raise asyncio.CancelledError from None
 
     async def _dispatch(self, row: ScheduledMessageRow) -> None:
         channel = self.bot.get_channel(row["channel_id"])
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(row["channel_id"])
+            except discord.NotFound:
+                logger.warning("Канал %s для сообщения #%s удалён — доставка отменена", row["channel_id"], row["id"])
+                await self.scheduled.mark_done(row["id"])
+                return
         if not isinstance(channel, discord.TextChannel):
             await self.scheduled.mark_done(row["id"])
             return

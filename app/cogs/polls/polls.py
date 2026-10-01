@@ -23,6 +23,7 @@ class PollsCog(MegaCog, name="Polls"):
         self.polls = polls
 
     @app_commands.command(name="poll", description="Создать опрос (2–5 вариантов)")
+    @app_commands.default_permissions(manage_messages=True)
     @app_commands.describe(
         question="Вопрос опроса",
         option1="Вариант 1 (обязателен)",
