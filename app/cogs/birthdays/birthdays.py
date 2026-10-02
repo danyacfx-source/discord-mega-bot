@@ -12,7 +12,7 @@ import discord
 from discord import app_commands
 
 from app.core import embeds
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 from app.services.birthday_service import BirthdayService
 
 if TYPE_CHECKING:
@@ -41,7 +41,8 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
             self._task = None
 
     async def _loop(self) -> None:
-        await self.bot.wait_until_ready()
+        if not await wait_ready_or_stop(self.bot):
+            return
         hour = self.bot.config.birthday_announce_hour
         while True:
             now = datetime.now()

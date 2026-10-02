@@ -8,7 +8,7 @@ import discord
 from discord.ext import tasks
 
 from app.core import embeds
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -105,7 +105,7 @@ class RamReportCog(MegaCog, name="RamReport"):
 
     @ram_report_loop.before_loop
     async def before_ram_report_loop(self) -> None:
-        await self.bot.wait_until_ready()
+        await wait_ready_or_stop(self.bot, self.ram_report_loop)
 
     def _rss_mb(self) -> float:
         import psutil

@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import tasks
 
 from app.core import embeds
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 from app.services.donation_service import DonationService
 
 if TYPE_CHECKING:
@@ -246,7 +246,8 @@ class DonationsCog(MegaCog, name="Donations"):
             logger.debug("Donations: не удалось отправить уведомление", exc_info=True)
 
     async def _ensure_sponsor_message(self) -> None:
-        await self.bot.wait_until_ready()
+        if not await wait_ready_or_stop(self.bot):
+            return
         config = self.bot.config
         channel = self.bot.get_channel(config.donate_button_channel_id) if config.donate_button_channel_id else None
         if not isinstance(channel, discord.TextChannel) or not channel.permissions_for(channel.guild.me).send_messages:

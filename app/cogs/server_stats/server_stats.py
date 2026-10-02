@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord.ext import tasks
 
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -67,7 +67,7 @@ class ServerStatsCog(MegaCog, name="ServerStats"):
 
     @update_loop.before_loop
     async def _before(self) -> None:
-        await self.bot.wait_until_ready()
+        await wait_ready_or_stop(self.bot, self.update_loop)
 
     async def _update_guild(self, guild: discord.Guild) -> None:
         config = self.bot.config

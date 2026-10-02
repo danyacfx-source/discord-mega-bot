@@ -5,6 +5,8 @@ import os
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -1094,5 +1096,132 @@ async def test_webpanel_api_streams_watchers(tmp_path):
                 assert [t["name"] for t in data["top"]] == ["alice", "bob"], "топ по сообщениям за эфир"
                 assert data["top"][0]["name"] == "alice", "alice с двумя сообщениями впереди"
                 assert {r["name"] for r in data["active"]} == {"alice", "bob"}
+    finally:
+        await bot.close()
+
+
+def _cases_row(case_id: int, user_id: int = 111) -> dict:
+    return {
+        "case_id": case_id,
+        "guild_id": 1,
+        "user_id": user_id,
+        "moderator_id": 222,
+        "action": "ban",
+        "reason": "спам",
+        "created_at": "2026-10-01T12:00:00+00:00",
+        "expires_at": None,
+        "active": 0,
+    }
+
+
+def _cases_bot(tmp_path, cases) -> MegaBot:
+    bot = _panel_bot(tmp_path, guild_id=1)
+    member = SimpleNamespace(id=111, name="alice", display_name="Alice", discriminator=0)
+    guild = SimpleNamespace(
+        id=1,
+        # известные id резолвятся: иначе _member_name упрётся в bot.user (None до логина)
+        get_member=lambda uid: (
+            SimpleNamespace(id=uid, name=f"user{uid}", display_name=f"User{uid}")
+            if uid in {111, 222, 333}
+            else None
+        ),
+        members=[member],
+    )
+    bot.get_guild = lambda gid: guild
+    bot.services = SimpleNamespace(cases=cases)
+    return bot
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_moderation_cases_guild_scope(tmp_path):
+    cases = SimpleNamespace(
+        list_for_guild=AsyncMock(return_value=[_cases_row(1), _cases_row(2, user_id=333)]),
+        list_for_user=AsyncMock(),
+    )
+    bot = _cases_bot(tmp_path, cases)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            assert (await client.get("/api/moderation/cases")).status == 401
+            resp = await client.get("/api/moderation/cases", headers=headers)
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["ok"] is True
+            assert data["total"] == 2
+            assert data["cases"][0]["action"] == "ban"
+            assert data["cases"][0]["user_name"] == "User111"
+            assert data["cases"][0]["moderator_name"] == "User222"
+            assert data["cases"][1]["user_name"] == "User333"
+            cases.list_for_guild.assert_awaited_once_with(1, 200)
+            cases.list_for_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_moderation_cases_by_user(tmp_path):
+    cases = SimpleNamespace(
+        list_for_guild=AsyncMock(),
+        list_for_user=AsyncMock(return_value=[_cases_row(5)]),
+    )
+    bot = _cases_bot(tmp_path, cases)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.get("/api/moderation/cases?user_id=111", headers=headers)
+            assert resp.status == 200
+            data = await resp.json()
+            assert data["total"] == 1
+            assert data["cases"][0]["case_id"] == 5
+            cases.list_for_user.assert_awaited_once_with(1, 111, 200)
+            cases.list_for_guild.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_moderation_cases_unknown_member_404(tmp_path):
+    cases = SimpleNamespace(list_for_guild=AsyncMock(), list_for_user=AsyncMock())
+    bot = _cases_bot(tmp_path, cases)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.get("/api/moderation/cases?user_id=555", headers=headers)
+            assert resp.status == 404
+            cases.list_for_user.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_streams_archive_csv(tmp_path):
+    bot = _panel_bot(tmp_path, twitch_channels=("alice",))
+    await bot.setup_hook()
+    panel = WebPanel(bot)
+    try:
+        store = bot.services.twitch.archive_store("alice")
+        await store.append(
+            {
+                "platform": "twitch",
+                "title": "Привет; мир",
+                "category": "IRL",
+                "url": "https://twitch.tv/videos/1",
+                "vod": "123",
+                "started_at": "2026-10-01T18:00:00+00:00",
+                "ended_at": "2026-10-01T21:00:00+00:00",
+                "seconds": 10800,
+                "peak": 42,
+            }
+        )
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                assert (await client.get("/api/streams/archive/export")).status == 401
+                resp = await client.get("/api/streams/archive/export", headers=headers)
+                assert resp.status == 200
+                assert resp.headers["Content-Type"].startswith("text/csv")
+                assert "attachment" in resp.headers.get("Content-Disposition", "")
+                body = await resp.text()
+                assert body.startswith("\ufeff"), "BOM нужен для Excel"
+                assert "платформа;канал;название" in body
+                assert "Привет; мир" in body
+                assert "180" in body and "42" in body
     finally:
         await bot.close()

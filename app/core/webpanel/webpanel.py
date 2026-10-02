@@ -1556,6 +1556,51 @@ class WebPanel:
             )
         return self._json({"ok": True, **payload})
 
+    async def _api_streams_archive_csv(self, request: web.Request) -> web.Response:
+        """Экспорт архива завершённых эфиров всех настроенных каналов (CSV; BOM, разделитель ;)."""
+        config = self.bot.config
+        services = self.services
+        sources: list[tuple[str, str, Any]] = []
+        for login in config.twitch_channels:
+            sources.append(("twitch", login, services.twitch.archive_store(login)))
+        if config.kick_channel_slug:
+            sources.append(("kick", config.kick_channel_slug, services.kick.archive_store(config.kick_channel_slug)))
+        if config.vk_channel_slug:
+            sources.append(("vk_video", config.vk_channel_slug, services.vk_video.archive_store(config.vk_channel_slug)))
+
+        rows: list[list[Any]] = []
+        for platform, name, store in sources:
+            for entry in await store.list():
+                rows.append(
+                    [
+                        platform,
+                        name,
+                        entry.get("title") or "",
+                        entry.get("category") or "",
+                        entry.get("url") or "",
+                        entry.get("vod") or "",
+                        entry.get("started_at") or "",
+                        entry.get("ended_at") or "",
+                        int(entry.get("seconds") or 0) // 60,
+                        int(entry.get("peak") or 0),
+                    ]
+                )
+        rows.sort(key=lambda row: str(row[7]), reverse=True)
+
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=";", lineterminator="\r\n")
+        writer.writerow(
+            ["платформа", "канал", "название", "категория", "ссылка", "запись", "начало", "конец", "минуты", "пик"]
+        )
+        writer.writerows(rows)
+        filename = f"streams-archive-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.csv"
+        return web.Response(
+            text="\ufeff" + output.getvalue(),
+            content_type="text/csv",
+            charset="utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
     async def _ws_analytics(self, request: web.Request) -> web.StreamResponse:
         if not self._rate_ok(request) or not self._allowed_origin(request):
             return self._json({"ok": False, "error": "Unauthorized"}, status=401)
@@ -1903,6 +1948,37 @@ class WebPanel:
             for w in warns
         ]
         return self._json({"ok": True, "total": len(enriched), "warns": enriched})
+
+    async def _api_moderation_cases(self, request: web.Request) -> web.Response:
+        """История moderation cases: всего по серверу или по конкретному участнику."""
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        service = self.services.cases
+        user_value = (request.query.get("user_id") or "").strip()
+        if user_value:
+            member = self._resolve_member(guild, user_value)
+            if member is None:
+                return self._json({"ok": False, "error": "Участник не найден"}, status=404)
+            rows = await service.list_for_user(guild.id, member.id, 200)
+        else:
+            rows = await service.list_for_guild(guild.id, 200)
+        cases = [
+            {
+                "case_id": int(row["case_id"]),
+                "user_id": str(row["user_id"]),
+                "user_name": self._member_name(guild, int(row["user_id"])),
+                "moderator_id": str(row["moderator_id"]),
+                "moderator_name": self._member_name(guild, int(row["moderator_id"])),
+                "action": str(row["action"]),
+                "reason": row["reason"],
+                "created_at": row["created_at"],
+                "expires_at": row["expires_at"],
+                "active": bool(row.get("active")),
+            }
+            for row in rows
+        ]
+        return self._json({"ok": True, "total": len(cases), "cases": cases})
 
     def _member_name(self, guild: discord.Guild, user_id: int) -> str:
         member = guild.get_member(user_id)

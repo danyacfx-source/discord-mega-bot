@@ -14,6 +14,8 @@ async function findMember(query) {
   return exact || (list.length ? list[0] : null);
 }
 
+const ACTION_TONES = { ban: "bad", kick: "bad", timeout: "warn", warn: "warn", unban: "ok", untimeout: "ok" };
+
 export default function Moderation() {
   const [warns, setWarns] = useState(null);
   const [filter, setFilter] = useState("");
@@ -22,14 +24,32 @@ export default function Moderation() {
   const [notFound, setNotFound] = useState(false);
   const [reason, setReason] = useState("");
   const [minutes, setMinutes] = useState(10);
+  const [cases, setCases] = useState(null);
+  const [casesScope, setCasesScope] = useState("guild");
 
   async function loadWarns() {
     const r = await api("/api/moderation/warns");
     setWarns((r.data && r.data.warns) || []);
   }
 
+  async function loadCases(scope, memberArg) {
+    const s = scope || "guild";
+    const targetMember = memberArg !== undefined ? memberArg : member;
+    if (s === "user" && !targetMember) return;
+    setCasesScope(s);
+    setCases(null);
+    const url = s === "user" ? "/api/moderation/cases?user_id=" + targetMember.id : "/api/moderation/cases";
+    const r = await api(url);
+    if (r.status === 200 && r.data.ok) setCases(r.data.cases || []);
+    else {
+      setCases([]);
+      toast(errToast(r), false);
+    }
+  }
+
   useEffect(() => {
     loadWarns();
+    loadCases("guild");
   }, []);
 
   async function search() {
@@ -42,6 +62,7 @@ export default function Moderation() {
     }
     setNotFound(false);
     setMember(m);
+    loadCases("user", m);
   }
 
   async function act(url, body, okMsg, method) {
@@ -208,6 +229,42 @@ export default function Moderation() {
                 <button class="btn mini danger" type="button" title="Снять предупреждение" onClick={() => removeWarn(w.id)}>
                   ✖
                 </button>
+              </ListRow>
+            ))}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="sec">
+          📋 История действий {cases && cases.length ? <span class="muted small">· всего: {cases.length}</span> : null}
+        </h3>
+        <div class="row-inline" style={{ margin: "0 0 10px" }}>
+          <button class={"btn" + (casesScope === "guild" ? " success" : "")} type="button" onClick={() => loadCases("guild")}>
+            Все действия
+          </button>
+          <button
+            class={"btn" + (casesScope === "user" ? " success" : "")}
+            type="button"
+            disabled={!member}
+            title={member ? "" : "Сначала найдите участника"}
+            onClick={() => member && loadCases("user", member)}
+          >
+            По участнику
+          </button>
+        </div>
+        <div class="list">
+          {cases == null && <Loading />}
+          {cases != null && !cases.length && <Empty>Действий не было</Empty>}
+          {cases &&
+            cases.map((c) => (
+              <ListRow key={c.case_id}>
+                <Chip tone={ACTION_TONES[c.action]}>{c.action}</Chip>
+                <span class="grow">
+                  <b>{c.user_name || c.user_id}</b> <span class="sub">· модератор: {c.moderator_name || c.moderator_id}</span>
+                </span>
+                <span class="sub nowrap">{fmtDateTime(c.created_at)}</span>
+                <span class="sub grow ellipsis">{c.reason || "—"}</span>
+                {c.active ? <Chip tone="warn">active</Chip> : null}
               </ListRow>
             ))}
         </div>

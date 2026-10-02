@@ -1,6 +1,7 @@
 """Приветствия и прощания участников (порт welcome.js из Node)."""
 from __future__ import annotations
 
+import io
 import json
 import logging
 from typing import TYPE_CHECKING, Any
@@ -11,6 +12,7 @@ from discord.ext import commands
 from app.core import embeds
 from app.core.base import MegaCog
 from app.services.settings_service import SettingsService
+from app.utils.welcome_card import render_welcome_card
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -146,10 +148,32 @@ class GreetingsCog(MegaCog, name="Greetings"):
         if member.guild.rules_channel:
             embed.add_field(name="НАЧАТЬ ЗДЕСЬ", value=member.guild.rules_channel.mention, inline=True)
         embed.set_footer(text=f"Асуна Юки  •  USER ID {member.id}")
+        file = await self._welcome_card_file(member, embed) if self.bot.config.welcome_card else None
         try:
-            await channel.send(embed=embed)
+            if file is not None:
+                await channel.send(embed=embed, file=file)
+            else:
+                await channel.send(embed=embed)
         except discord.HTTPException:
             logger.warning("Welcome: ошибка отправки в %s", getattr(channel, "name", channel.id))
+
+    async def _welcome_card_file(
+        self, member: discord.Member, embed: discord.Embed
+    ) -> discord.File | None:
+        """PNG-карточка к эмбеду; любая ошибка — None, уходит обычный эмбед."""
+        try:
+            avatar = await member.display_avatar.with_format("png").with_size(256).read()
+            card = render_welcome_card(
+                avatar_png=avatar,
+                display_name=member.display_name,
+                member_count=member.guild.member_count,
+                guild_name=member.guild.name,
+            )
+        except Exception:
+            logger.debug("Welcome: карточка не построена", exc_info=True)
+            return None
+        embed.set_image(url="attachment://welcome.png")
+        return discord.File(io.BytesIO(card), filename="welcome.png")
 
     async def _public_leave(self, member: discord.Member) -> None:
         channel = await self._channel(member.guild, self.bot.config.welcome_leave_channel_id, "farewell_channel_id")

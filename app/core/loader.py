@@ -35,6 +35,7 @@ def _services(bot: MegaBot) -> Services:
 
 COG_PROVIDERS: dict[str, Callable[[MegaBot], object]] = {
     "settings": lambda b: _services(b).settings,
+    "kv": lambda b: _services(b).kv,
     "moderation": lambda b: _services(b).moderation,
     "cases": lambda b: _services(b).cases,
     "music": lambda b: _services(b).music,

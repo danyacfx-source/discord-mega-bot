@@ -1,4 +1,4 @@
-"""Тесты HeartbeatCog — алерт о тишине бота в канал логов."""
+﻿"""Тесты HeartbeatCog — алерт о тишине бота в канал логов."""
 from __future__ import annotations
 
 import os
@@ -29,9 +29,25 @@ class _Guild:
         return self._channels.get(channel_id)
 
 
-def _cog(*, guilds: list | None = None, silence: int = 30, bot_log: int | None = None, settings_get=None) -> HeartbeatCog:
-    config = SimpleNamespace(heartbeat_silence_minutes=silence, bot_log_channel_id=bot_log)
-    bot = SimpleNamespace(config=config, guilds=list(guilds or []))
+def _cog(
+    *,
+    guilds: list | None = None,
+    silence: int = 30,
+    bot_log: int | None = None,
+    settings_get=None,
+    disk_mb: int = 0,
+    latency: float = 0.0,
+    ws_latency: float = 0.05,
+    db_path: str = "data/bot.db",
+) -> HeartbeatCog:
+    config = SimpleNamespace(
+        heartbeat_silence_minutes=silence,
+        bot_log_channel_id=bot_log,
+        disk_alert_mb=disk_mb,
+        latency_alert_seconds=latency,
+        db_path=db_path,
+    )
+    bot = SimpleNamespace(config=config, guilds=list(guilds or []), latency=ws_latency)
     settings = SimpleNamespace(get=settings_get or AsyncMock(return_value={}))
     return HeartbeatCog(bot, settings)
 
@@ -179,3 +195,97 @@ async def test_cog_load_disabled_by_default() -> None:
     cog = _cog(silence=0)
     await cog.cog_load()
     await cog.cog_unload()
+    assert cog._enabled() is False
+
+
+def test_enabled_gates() -> None:
+    assert _cog(silence=0, disk_mb=0, latency=0.0)._enabled() is False
+    assert _cog(silence=0, disk_mb=100)._enabled() is True
+    assert _cog(silence=0, latency=1.5)._enabled() is True
+    assert _cog(silence=5)._enabled() is True
+
+
+@pytest.mark.asyncio
+async def test_disk_alert_fires_once_and_rearms(monkeypatch) -> None:
+    import app.cogs.monitoring.heartbeat as hb
+
+    cog = _cog(silence=0, disk_mb=1000)
+    cog._log_targets = AsyncMock(return_value=[])
+    monkeypatch.setattr(hb.shutil, "disk_usage", lambda p: SimpleNamespace(free=100 * 1024**2))
+    await cog._tick()
+    assert cog._log_targets.await_count == 1
+    assert cog._disk_alerted is True
+    await cog._tick()
+    assert cog._log_targets.await_count == 1  # не дублируем
+    # Места стало хватать — детектор перевзводится, затем срабатывает снова.
+    monkeypatch.setattr(hb.shutil, "disk_usage", lambda p: SimpleNamespace(free=500 * 1024**3))
+    await cog._tick()
+    assert cog._disk_alerted is False
+    monkeypatch.setattr(hb.shutil, "disk_usage", lambda p: SimpleNamespace(free=100 * 1024**2))
+    await cog._tick()
+    assert cog._log_targets.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_disk_alert_disabled_by_zero() -> None:
+    cog = _cog(silence=0, disk_mb=0)
+    cog._log_targets = AsyncMock(return_value=[])
+    assert cog._disk_check() is None
+    await cog._tick()
+    assert cog._log_targets.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_latency_alert_requires_strikes(monkeypatch) -> None:
+    cog = _cog(silence=0, latency=0.5, ws_latency=1.0)
+    cog._log_targets = AsyncMock(return_value=[])
+    await cog._tick()
+    await cog._tick()
+    assert cog._log_targets.await_count == 0  # пока 2 удара из 3
+    await cog._tick()
+    assert cog._log_targets.await_count == 1  # третий удар подряд
+    assert cog._latency_alerted is True
+    await cog._tick()
+    assert cog._log_targets.await_count == 1  # не дублируем
+    # Шлюз ожил — перевзвод; порог пробивается снова только после 3 тиков.
+    cog.bot.latency = 0.1
+    await cog._tick()
+    assert cog._latency_alerted is False
+    cog.bot.latency = 1.0
+    await cog._tick()
+    await cog._tick()
+    assert cog._log_targets.await_count == 1
+    await cog._tick()
+    assert cog._log_targets.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_latency_alert_ignores_not_ready_gateway() -> None:
+    cog = _cog(silence=0, latency=0.5, ws_latency=-1.0)
+    cog._log_targets = AsyncMock(return_value=[])
+    await cog._tick()
+    assert cog._log_targets.await_count == 0
+    assert cog._latency_strikes == 0
+
+
+@pytest.mark.asyncio
+async def test_silence_and_disk_report_together(monkeypatch) -> None:
+    """Обе проблемы в одном тике — один эмбед со всеми причинами."""
+    import app.cogs.monitoring.heartbeat as hb
+
+    channel = _Chan(7)
+    guild = _Guild(1, [channel])
+
+    async def get(guild_id: int) -> dict:
+        return {"bot_log_channel_id": 7}
+
+    cog = _cog(guilds=[guild], silence=30, disk_mb=1000, settings_get=get)
+    cog._last_activity = datetime.now(UTC) - timedelta(minutes=40)
+    monkeypatch.setattr(hb.shutil, "disk_usage", lambda p: SimpleNamespace(free=100 * 1024**2))
+    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+        await cog._tick()
+    channel.send.assert_awaited_once()
+    embed = channel.send.await_args.kwargs["embed"]
+    assert "нет сообщений" in (embed.description or "")
+    assert "на диске" in (embed.description or "")
+    assert cog._alerted is True

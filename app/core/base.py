@@ -1,7 +1,7 @@
 """Базовые классы архитектуры: ког с типизированными сервисами и сервис поверх репозитория."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from discord.ext import commands
 
@@ -9,6 +9,21 @@ if TYPE_CHECKING:
     from app.core.bot import MegaBot
     from app.db.base_repository import BaseRepository
     from app.services import Services
+
+
+async def wait_ready_or_stop(bot: Any, loop: Any = None) -> bool:
+    """Ждёт ready в before_loop/фоновых задачах; вне логина (тесты) — не роняет задачу.
+
+    discord.py кидает RuntimeError, если клиент не залогинен: тогда останавливаем
+    tasks.Loop (если передан) и возвращаем False; вызывающий выходит без ошибок.
+    """
+    try:
+        await bot.wait_until_ready()
+    except RuntimeError:
+        if loop is not None:
+            loop.stop()
+        return False
+    return True
 
 
 class MegaCog(commands.Cog):
@@ -52,4 +67,4 @@ class BaseService(Generic[RepoT]):
         return self._repo
 
 
-__all__ = ["MegaCog", "BaseService"]
+__all__ = ["MegaCog", "BaseService", "wait_ready_or_stop"]

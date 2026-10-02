@@ -52,6 +52,7 @@ def assemble(
     from app.services.donation_service import DonationService
     from app.services.giveaway_service import GiveawayService
     from app.services.kick_service import KickService
+    from app.services.kv_service import KvService
     from app.services.logging_service import LoggingService
     from app.services.moderation_case_service import ModerationCaseService
     from app.services.moderation_service import ModerationService
@@ -73,6 +74,7 @@ def assemble(
 
     # --- Сервисы, зависящие только от репозиториев ---
     settings = override_or(overrides, "settings", SettingsService, settings_repo)
+    kv = override_or(overrides, "kv", KvService, kv_repo)
     reminders = override_or(overrides, "reminders", ReminderService, RemindersRepository(db))
     polls = override_or(overrides, "polls", PollService, PollsRepository(db))
     giveaways = override_or(overrides, "giveaways", GiveawayService, GiveawaysRepository(db))
@@ -103,6 +105,7 @@ def assemble(
 
     services = Services(
         settings=settings,
+        kv=kv,
         moderation=moderation,
         cases=cases,
         music=music,

@@ -14,6 +14,7 @@ from app.services.birthday_service import BirthdayService
 from app.services.donation_service import DonationService
 from app.services.giveaway_service import GiveawayService
 from app.services.kick_service import KickService
+from app.services.kv_service import KvService
 from app.services.logging_service import LoggingService
 from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import ModerationService
@@ -33,6 +34,7 @@ from app.services.vk_video_service import VkVideoService
 @dataclass(slots=True)
 class Services:
     settings: SettingsService
+    kv: KvService
     moderation: ModerationService
     cases: ModerationCaseService
     music: MusicService

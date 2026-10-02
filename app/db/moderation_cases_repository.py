@@ -58,6 +58,33 @@ class ModerationCasesRepository(BaseRepository):
         )
         return [cast(ModerationCaseRow, dict(row)) for row in rows]
 
+    async def list_for_user(
+        self, guild_id: int, user_id: int, limit: int = 100
+    ) -> list[ModerationCaseRow]:
+        rows = await self.db.fetchall(
+            """
+            SELECT * FROM moderation_cases
+            WHERE guild_id = ? AND user_id = ?
+            ORDER BY case_id DESC
+            LIMIT ?
+            """,
+            (guild_id, user_id, max(1, min(limit, 500))),
+        )
+        return [cast(ModerationCaseRow, dict(row)) for row in rows]
+
+    async def daily_stats(self, guild_id: int, start_iso: str, end_iso: str) -> dict[str, int]:
+        """Счётчик действий модерации за окно [start_iso, end_iso) по created_at."""
+        rows = await self.db.fetchall(
+            """
+            SELECT action, COUNT(*) AS n
+            FROM moderation_cases
+            WHERE guild_id = ? AND created_at >= ? AND created_at < ?
+            GROUP BY action
+            """,
+            (guild_id, start_iso, end_iso),
+        )
+        return {str(row["action"]): int(row["n"]) for row in rows}
+
     async def close(self, guild_id: int, case_id: int) -> bool:
         cursor = await self.db.execute(
             "UPDATE moderation_cases SET active = 0 WHERE guild_id = ? AND case_id = ? AND active = 1",

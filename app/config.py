@@ -24,6 +24,21 @@ def _strs(value: str | None) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
+def _pair_rules(value: str | None) -> tuple[tuple[str, str], ...]:
+    """``триггер=>ответ|триггер2=>ответ2`` → кортеж пар; куски без => пропускаются."""
+    if not value:
+        return ()
+    rules: list[tuple[str, str]] = []
+    for part in value.split("|"):
+        if "=>" not in part:
+            continue
+        trigger, _, reply = part.partition("=>")
+        trigger, reply = trigger.strip().lower(), reply.strip()
+        if trigger and reply:
+            rules.append((trigger, reply))
+    return tuple(rules)
+
+
 def _hour_range(value: str | None) -> tuple[int, int] | None:
     """``23-8`` → ``(23, 8)``: окно тихих часов; мусор или равные границы → None."""
     if not value:
@@ -132,6 +147,26 @@ class Config:
 
     # Heartbeat: алерт в канал логов, если бот молчит дольше N минут (0 — выкл)
     heartbeat_silence_minutes: int = 0
+    # Алерт о нехватке места на диске рядом с БД: свободно меньше N МБ (0 — выкл)
+    disk_alert_mb: int = 0
+    # Алерт о деградации Discord-шлюза: стабильно дольше N секунд (0 — выкл)
+    latency_alert_seconds: float = 0.0
+    # Час публикации ежедневного дайджеста в канал логов (-1 — выкл)
+    digest_hour: int = 21
+    # Starboard: канал «звёздных» постов (не задан — выкл), порог и эмодзи
+    starboard_channel_id: int | None = None
+    starboard_threshold: int = 5
+    starboard_emoji: str = "⭐"
+    # Автореспондер: правила "триггер=>ответ" через | (пусто — выкл)
+    autorespond_rules: tuple[tuple[str, str], ...] = ()
+    # Выдача роли за точную фразу: "фраза1,фраза2" и AUTORESPOND_ROLE_ID
+    autorespond_role_phrases: tuple[str, ...] = ()
+    autorespond_role_id: int | None = None
+    autorespond_cooldown: int = 15
+    # Авто-пост нового расписания Twitch в канал (не задан — выкл)
+    twitch_schedule_channel_id: int | None = None
+    # Час отправки (0..23); -1 — проверять каждый цикл (дедуп по сегментам)
+    schedule_post_hour: int = -1
 
     # Правила-гейт
     rules_message_id: int | None = None
@@ -231,6 +266,8 @@ class Config:
     welcome_send_dm: bool = True
     welcome_channel_id: int | None = None
     welcome_channel_enabled: bool = False
+    # PNG-карточка приветствия вместо плоского эмбеда (нужен Pillow)
+    welcome_card: bool = False
     welcome_leave_channel_id: int | None = None
     welcome_leave_channel_enabled: bool = False
     welcome_title: str = "Добро пожаловать на дискорд сервер dendich!"
@@ -347,6 +384,18 @@ class Config:
             voice_log_channel_id=_single_int(os.getenv("VOICE_LOG_CHANNEL_ID")),
             mod_log_channel_id=_single_int(os.getenv("MOD_LOG_CHANNEL_ID")),
             heartbeat_silence_minutes=max(0, min(1440, int(os.getenv("HEARTBEAT_SILENCE_MINUTES", "0") or "0"))),
+            disk_alert_mb=max(0, int(os.getenv("DISK_ALERT_MB", "0") or "0")),
+            latency_alert_seconds=max(0.0, float(os.getenv("DISCORD_LATENCY_ALERT_SECONDS", "0") or "0")),
+            digest_hour=max(-1, min(23, int(os.getenv("DIGEST_HOUR", "21") or "21"))),
+            starboard_channel_id=_single_int(os.getenv("STARBOARD_CHANNEL_ID")),
+            starboard_threshold=max(1, int(os.getenv("STARBOARD_THRESHOLD", "5") or "5")),
+            starboard_emoji=os.getenv("STARBOARD_EMOJI", "⭐") or "⭐",
+            autorespond_rules=_pair_rules(os.getenv("AUTORESPOND_RULES")),
+            autorespond_role_phrases=_strs(os.getenv("AUTORESPOND_ROLE_RULES")),
+            autorespond_role_id=_single_int(os.getenv("AUTORESPOND_ROLE_ID")),
+            autorespond_cooldown=max(0, int(os.getenv("AUTORESPOND_COOLDOWN", "15") or "15")),
+            twitch_schedule_channel_id=_single_int(os.getenv("TWITCH_SCHEDULE_CHANNEL_ID")),
+            schedule_post_hour=max(-1, min(23, int(os.getenv("SCHEDULE_POST_HOUR", "-1") or "-1"))),
             rules_message_id=_single_int(os.getenv("RULES_MESSAGE_ID")),
             rules_role_id=_single_int(os.getenv("RULES_ROLE_ID")),
             temp_voice_trigger_ids=_ints(os.getenv("TEMP_VOICE_TRIGGER_IDS")),
@@ -417,6 +466,7 @@ class Config:
             welcome_send_dm=_bool(os.getenv("WELCOME_SEND_DM", "1")),
             welcome_channel_id=_single_int(os.getenv("WELCOME_CHANNEL_ID")),
             welcome_channel_enabled=_bool(os.getenv("WELCOME_CHANNEL_ENABLED")),
+            welcome_card=_bool(os.getenv("WELCOME_CARD")),
             welcome_leave_channel_id=_single_int(os.getenv("WELCOME_LEAVE_CHANNEL_ID")),
             welcome_leave_channel_enabled=_bool(os.getenv("WELCOME_LEAVE_CHANNEL_ENABLED")),
             welcome_title=os.getenv("WELCOME_TITLE", "Добро пожаловать на дискорд сервер dendich!"),

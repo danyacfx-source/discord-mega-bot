@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
 
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -27,7 +27,8 @@ class RulesGateCog(MegaCog, name="RulesGate"):
 
     async def _prepare_gate(self) -> None:
         config = self.bot.config
-        await self.bot.wait_until_ready()
+        if not await wait_ready_or_stop(self.bot):
+            return
         for guild in self.bot.guilds:
             for channel in guild.text_channels:
                 try:

@@ -38,5 +38,13 @@ class ModerationCaseService:
     async def list_for_guild(self, guild_id: int, limit: int = 100) -> list[ModerationCaseRow]:
         return await self._repo.list_for_guild(guild_id, limit)
 
+    async def list_for_user(
+        self, guild_id: int, user_id: int, limit: int = 100
+    ) -> list[ModerationCaseRow]:
+        return await self._repo.list_for_user(guild_id, user_id, limit)
+
+    async def daily_stats(self, guild_id: int, start_iso: str, end_iso: str) -> dict[str, int]:
+        return await self._repo.daily_stats(guild_id, start_iso, end_iso)
+
     async def close(self, guild_id: int, case_id: int) -> bool:
         return await self._repo.close(guild_id, case_id)

@@ -17,7 +17,7 @@ from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
 from app.cogs.streams.stream_cards import live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
-from app.core.base import MegaCog
+from app.core.base import MegaCog, wait_ready_or_stop
 from app.core.embeds import BOT_NAME
 from app.core.stream_state import stream_activity
 from app.services.twitch_service import TwitchService
@@ -70,7 +70,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
 
     @poll_loop.before_loop
     async def _before_poll(self) -> None:
-        await self.bot.wait_until_ready()
+        await wait_ready_or_stop(self.bot, self.poll_loop)
 
     async def _check(self, channel: str) -> dict[str, Any] | None:
         status = await self.twitch.channel_status(channel)

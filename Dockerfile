@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # curl + ca-certificates — для загрузки sing-box
 # postgresql-client — pg_dump для периодических backup-ов PostgreSQL
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu postgresql-client \
+    && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu postgresql-client fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # sing-box — опциональный прокси только для Gemini (если хост в EEA/NL, где API недоступен).

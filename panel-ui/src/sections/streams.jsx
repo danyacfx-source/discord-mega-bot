@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, toast } from "../lib/exports.js";
+import { api, toast, downloadAuthed } from "../lib/exports.js";
 import { Chip, Empty, Field, ListRow, Loading } from "../components/ui.jsx";
 
 function liveFor(session) {
@@ -14,6 +14,7 @@ function liveFor(session) {
 export default function Streams() {
   const [data, setData] = useState(null);
   const [watch, setWatch] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   async function load() {
     const r = await api("/api/streams");
@@ -27,6 +28,16 @@ export default function Streams() {
   async function loadWatch() {
     const r = await api("/api/streams/watchers");
     if (r.status === 200) setWatch(r.data);
+  }
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      const ok = await downloadAuthed("/api/streams/archive/export", "streams-archive.csv");
+      if (ok) toast("✅ Архив эфиров выгружен", true);
+    } finally {
+      setExporting(false);
+    }
   }
 
   useEffect(() => {
@@ -46,7 +57,12 @@ export default function Streams() {
       <div class="card">
         <div class="card-head">
           <h3>📺 Стримы</h3>
-          <button class="btn mini" type="button" onClick={load}>↻ Обновить</button>
+          <div class="row-inline">
+            <button class="btn mini" type="button" onClick={exportCsv} disabled={exporting} title="Экспорт архива завершённых эфиров в CSV">
+              ⬇ CSV
+            </button>
+            <button class="btn mini" type="button" onClick={load}>↻ Обновить</button>
+          </div>
         </div>
         <div class="list">
           {!data && <Loading />}

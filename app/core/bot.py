@@ -260,12 +260,12 @@ class MegaBot(commands.Bot):
         return None
 
     async def _notify_error_feed(self, guild: discord.Guild | None, text: str) -> None:
-        """Дублирует ошибку в веб-ленту панели (/audit), если она доступна."""
+        """Ошибки — эмбедом в канал модерации Discord и в веб-ленту панели (/audit)."""
         services = getattr(self, "services", None)
         if services is None or services.logging is None:
             return
         try:
-            await services.logging.log_event(guild, "⛔ Ошибка", text[:1500])
+            await services.logging.send_embed(guild, embeds.error("⛔ Ошибка", text[:1500]), category="mod")
         except Exception:
             logger.debug("Не удалось записать ошибку в веб-ленту", exc_info=True)
 
