@@ -430,6 +430,19 @@ def _raw_embed_to_client(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def overlay_url_base(config: Any) -> str:
+    """База ссылки для OBS: публичный URL (Traefik, без порта) или прямой хост:порт."""
+    if not config.overlay_port:
+        return ""
+    public = (config.overlay_public_url or "").strip().rstrip("/")
+    if public:
+        return public
+    host = (config.overlay_host or "").strip()
+    if host in ("", "0.0.0.0", "::"):
+        return ""
+    return f"http://{host}:{config.overlay_port}"
+
+
 class WebPanel:
     def __init__(self, bot: MegaBot) -> None:
         self.bot = bot
@@ -3149,6 +3162,9 @@ class WebPanel:
 
     # ------------------------------------------------------ оверлей (раскладки)
 
+    def _overlay_url_base(self) -> str:
+        return overlay_url_base(self.bot.config)
+
     async def _api_overlay_get(self, request: web.Request) -> web.Response:
         config = self.bot.config
         overlay = getattr(self.bot, "overlay", None)
@@ -3158,6 +3174,7 @@ class WebPanel:
                 "enabled": bool(config.overlay_port),
                 "host": config.overlay_host,
                 "port": config.overlay_port,
+                "url_base": self._overlay_url_base(),
                 "token": overlay.token if overlay is not None else "",
                 "layouts": await list_layouts(self.services.kv),
                 "canvas_presets": [list(p) for p in CANVAS_PRESETS],

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from app.services.birthday_service import BirthdayService
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService
+from app.services.chat_feed import ChatFeed
 from app.services.donation_service import DonationService
 from app.services.event_bus import EventBus
 from app.services.giveaway_service import GiveawayService
@@ -57,4 +58,5 @@ class Services:
     scheduled: ScheduledMessagesService
     chat_coins: ChatCoinsService
     chat_commands: ChatCommandsService
+    chat_feed: ChatFeed
     events: EventBus

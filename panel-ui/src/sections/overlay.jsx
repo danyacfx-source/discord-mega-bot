@@ -10,6 +10,7 @@ const TYPE_META = {
   slots: { icon: "🎰", label: "Выигрыш слотов" },
   poll: { icon: "📊", label: "Последний опрос" },
   chat_top: { icon: "🏆", label: "Топ чата" },
+  chat: { icon: "💬", label: "Лента чата" },
   countdown: { icon: "⏳", label: "Обратный отсчёт" },
   text: { icon: "🔤", label: "Текст" },
   image: { icon: "🖼", label: "Картинка" },
@@ -22,6 +23,7 @@ const SIZES = {
   slots: [270, 150],
   poll: [320, 160],
   chat_top: [270, 150],
+  chat: [340, 260],
   countdown: [300, 140],
   text: [400, 120],
   image: [400, 240],
@@ -41,6 +43,7 @@ function defaultProps(type) {
   if (type === "image") return { ...base, url: "" };
   if (type === "countdown") return { ...base, label: "До стрима", date: "", color: "#ff5a36" };
   if (type === "chat_top") return { ...base, title: "Топ чата", limit: 3 };
+  if (type === "chat") return { ...base, title: "Лента чата", limit: 10 };
   if (type === "stream") return { ...base, title: "" };
   const titles = { goal: "Донат-цель", donation: "Последний донат", slots: "Последний выигрыш", poll: "Последний опрос" };
   return { ...base, title: titles[type] || "" };
@@ -95,6 +98,18 @@ function widgetPreview(w) {
       <div class="ovl-ph">
         <b>🏆 {p.title || "Топ чата"}</b>
         <div class="muted">1. Алиса — 120 · 2. Боб — 90</div>
+      </div>
+    );
+  }
+  if (w.type === "chat") {
+    return (
+      <div class="ovl-ph">
+        <b>💬 {p.title || "Лента чата"}</b>
+        <div class="muted">
+          <b style={{ color: "#53fc18" }}>Алиса:</b> привет всем
+          <br />
+          <b style={{ color: "#9146ff" }}>Борис:</b> кота покажи
+        </div>
       </div>
     );
   }
@@ -267,7 +282,11 @@ export default function OverlaySection() {
     } else toast(errToast(r), false);
   }
 
-  const overlayUrl = layout && meta.enabled ? `${location.protocol}//${meta.host}:${meta.port}/overlay/${layout.id}?token=${meta.token}` : "";
+  const obsHost = meta.host === "0.0.0.0" || meta.host === "::" ? location.hostname : meta.host;
+  const overlayUrl =
+    layout && meta.enabled
+      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/${layout.id}?token=${meta.token}`
+      : "";
 
   async function copyUrl() {
     try {
@@ -530,6 +549,19 @@ export default function OverlaySection() {
                       min="1"
                       max="10"
                       value={widget.props.limit || 3}
+                      onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, limit: +e.target.value } }))}
+                    />
+                  </label>
+                )}
+                {widget.type === "chat" && (
+                  <label class="ovl-field">
+                    Сообщений — {widget.props.limit || 10}
+                    <input
+                      class="range"
+                      type="range"
+                      min="1"
+                      max="25"
+                      value={widget.props.limit || 10}
                       onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, limit: +e.target.value } }))}
                     />
                   </label>

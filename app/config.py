@@ -214,6 +214,7 @@ class Config:
     overlay_host: str = "127.0.0.1"
     overlay_port: int | None = None
     overlay_token: str | None = None
+    overlay_public_url: str | None = None
     overlay_donation_goal_enabled: bool = False
     overlay_donation_goal_target: float = 0.0
     overlay_donation_goal_currency: str = "₽"
@@ -436,6 +437,7 @@ class Config:
             overlay_host=os.getenv("OVERLAY_HOST", "127.0.0.1"),
             overlay_port=_single_int(os.getenv("OVERLAY_PORT")),
             overlay_token=os.getenv("OVERLAY_TOKEN"),
+            overlay_public_url=os.getenv("OVERLAY_PUBLIC_URL"),
             overlay_donation_goal_enabled=_bool(os.getenv("OVERLAY_DONATION_GOAL_ENABLED")),
             overlay_donation_goal_target=float(os.getenv("OVERLAY_DONATION_GOAL_TARGET") or 0),
             overlay_donation_goal_currency=os.getenv("OVERLAY_DONATION_GOAL_CURRENCY", "₽"),

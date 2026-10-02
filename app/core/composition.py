@@ -52,6 +52,7 @@ def assemble(
     from app.services.birthday_service import BirthdayService
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService
+    from app.services.chat_feed import ChatFeed
     from app.services.donation_service import DonationService
     from app.services.event_bus import EventBus
     from app.services.giveaway_service import GiveawayService
@@ -107,7 +108,8 @@ def assemble(
     kick = override_or(overrides, "kick", KickService, kv_repo, config)
     vk_video = override_or(overrides, "vk_video", VkVideoService, kv_repo, config)
     chat_coins = override_or(overrides, "chat_coins", ChatCoinsService, ChatCoinsRepository(db))
-    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv)
+    chat_feed = override_or(overrides, "chat_feed", ChatFeed)
+    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv, chat_feed)
     events = override_or(overrides, "events", EventBus)
 
     services = Services(
@@ -132,6 +134,7 @@ def assemble(
         scheduled=scheduled,
         chat_coins=chat_coins,
         chat_commands=chat_commands,
+        chat_feed=chat_feed,
         events=events,
     )
 

@@ -16,6 +16,12 @@ body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;co
 @keyframes pulse{70%{box-shadow:0 0 0 10px rgba(255,90,54,0)}100%{box-shadow:0 0 0 0 rgba(255,90,54,0)}}
 .topline{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:3px 0}
 .topline span:last-child{color:var(--accent);font-weight:700}
+.chatw{display:flex;flex-direction:column;height:100%;justify-content:flex-start;overflow:hidden}
+.crow{display:flex;gap:7px;font-size:13.5px;line-height:1.5;padding:2px 0;align-items:baseline}
+.crow b{font-weight:800;white-space:nowrap;color:#9146ff;flex-shrink:0}
+.crow b.p-kick{color:#53fc18}
+.crow b.mod{color:var(--accent)}
+.crow span{color:var(--text);word-break:break-word}
 .money{font-size:26px;font-weight:800;color:var(--accent);line-height:1.2}
 .msg{font-size:13px;color:var(--muted);margin-top:6px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .cd{font-size:30px;font-weight:800;letter-spacing:-.02em}
@@ -82,6 +88,15 @@ function content(w,d){
       out+='<div class="topline"><span>'+(i+1)+". "+esc(row.name)+'</span><span>'+num(row.messages)+"</span></div>";
     });
     return out;
+  }
+  if(w.type==="chat"){
+    const rows=d.chat||[],lim=p.limit||10;
+    let out='<div class="chatw">'+h3(p.title||"Лента чата");
+    if(!rows.length)return out+'<div class="empty">Сообщений пока нет</div></div>';
+    rows.slice(-lim).forEach(function(m){
+      out+='<div class="crow"><b class="p-'+esc(m.platform)+(m.mod?" mod":"")+'">'+esc(m.name)+"</b><span>"+esc(m.text)+"</span></div>";
+    });
+    return out+"</div>";
   }
   if(w.type==="countdown"){
     if(!p.date)return h3(p.label||"Обратный отсчёт")+'<div class="empty">Дата не задана</div>';

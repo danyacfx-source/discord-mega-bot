@@ -91,7 +91,7 @@ app/
     ├── format.py              # плюрализация, относительное время
     └── pagination.py          # PaginatorView (кнопки ◀ ▶)
 
-tests/                         # 335 тестов: структуры (модель-без-контейнера), времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc, heartbeat/дайджеста/starboard/автореспондера/welcome-карточки/команд чата стримов, конструктора оверлея, пресетов карточек стримов, PWA и smoke-сборки
+tests/                         # 340 тестов: структуры (модель-без-контейнера), времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc, heartbeat/дайджеста/starboard/автореспондера/welcome-карточки/команд чата стримов, конструктора оверлея, ленты чата, пресетов карточек стримов, PWA и smoke-сборки
 ```
 
 ### Как собираются объекты: composition root вместо DI-контейнеров
@@ -286,10 +286,17 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 - **Конструктор раскладок** в вебпанели (раздел «🪟 Оверлей»): именованные раскладки (KV, префикс
   `overlay:layout:`, до 30 виджетов), canvas-доска с drag/resize (сетка 8px), инспектор свойств,
   пресеты холста 1920×1080/1280×720/800×600/420×720; виджеты: стрим, донат-цель, последний донат,
-  выигрыш слотов, последний опрос, топ чата, обратный отсчёт, текст, картинка
+  выигрыш слотов, последний опрос, топ чата, лента чата, обратный отсчёт, текст, картинка
 - Страница раскладки `/overlay/{id}?token=…` (прозрачный фон для OBS Browser Source, `zoom` под
   ширину окна, данные тянутся `/overlay/api/{id}` раз в 5 с); события пишут донаты (`overlay:last_donation`),
   слоты (`overlay:last_slot`), опросы (`overlay:last_poll`) и топ чата
+- **Лента чата** (`💬 Лента чата`, 1–25 сообщений): `ChatFeed` — кольцо последних 300 сообщений
+  в памяти, кормится из диспетчера команд (Kick Pusher + Twitch IRC) до всех фильтров команд;
+  ник цветом по платформе (Kick — зелёный, Twitch — фиолет), модераторы — акцентным;
+  отдаётся в payload оверлея (`data.chat`), bot-сообщения не попадают
+- **Ссылка для OBS**: панель отдаёт `url_base` — если задан `OVERLAY_PUBLIC_URL` (напр. `https://dendich.ru`),
+  ссылка идёт через Traefik (`/overlay/*` → порт оверлея, роутер `megabot-overlay` в docker-compose),
+  иначе прямой `http://хост:порт`; без публичного URL при bind `0.0.0.0` фолбэк — origin панели
 
 ### Отчёт по ОЗУ (RamReport)
 - Каждые `RAM_REPORT_INTERVAL_MINUTES` мин (первый сразу после старта) в канал `RAM_REPORT_CHANNEL_ID`
@@ -527,7 +534,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 | `TWITCH_CHAT_TOKEN` | пусто (Twitch-чат read-only) |
 | `PANEL_PORT` | пусто (вебпанель выключена) |
 | `PANEL_HOST` / `PANEL_PASSWORD` / `PANEL_PUBLIC_URL` | `127.0.0.1` / пусто / пусто |
-| `OVERLAY_PORT` / `OVERLAY_HOST` / `OVERLAY_TOKEN` | пусто (оверлей выключен) / `127.0.0.1` / пусто |
+| `OVERLAY_PORT` / `OVERLAY_HOST` / `OVERLAY_TOKEN` / `OVERLAY_PUBLIC_URL` | пусто (оверлей выключен) / `127.0.0.1` / пусто / пусто |
 | `OVERLAY_DONATION_GOAL_ENABLED/_TARGET/_CURRENCY/_LABEL/_CURRENT` | `0` / `500` / `₽` / `Донат-цель` / `0` |
 | `RAM_REPORT_CHANNEL_ID` / `RAM_REPORT_INTERVAL_MINUTES` / `RAM_REPORT_TRACEMALLOC` | пусто (выключен) / `30` / `1` |
 | `BIRTHDAY_CHANNEL_ID` / `BIRTHDAY_ANNOUNCE_HOUR` / `BIRTHDAY_PING_ROLE_ID` | пусто / `9` / пусто |
@@ -543,7 +550,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 
 ## Качество
 
-- 335 юнит- и интеграционных тестов (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея/живой ленты/конструктора раскладок
+- 340 юнит- и интеграционных тестов (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея/живой ленты/конструктора раскладок
 - `ruff check .` — чисто (line-length 140)
 - Единые паттерны: cog → service → repository → БД; граф собирается в composition root (`app/core/composition.py`)
 - Деплой на Ubuntu: `scripts/install_ubuntu.sh` + `systemd/discord-mega-bot.service`

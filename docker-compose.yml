@@ -31,6 +31,13 @@ services:
       - "traefik.http.routers.megabot.tls=true"
       - "traefik.http.routers.megabot.tls.certresolver=letsencrypt"
       - "traefik.http.services.megabot.loadbalancer.server.port=3000"
+      # Оверлей (OBS): тот же домен, путь /overlay → отдельный порт оверлея
+      - "traefik.http.routers.megabot-overlay.rule=(Host(`dendich.ru`) || Host(`www.dendich.ru`)) && PathPrefix(`/overlay`)"
+      - "traefik.http.routers.megabot-overlay.entrypoints=websecure"
+      - "traefik.http.routers.megabot-overlay.tls=true"
+      - "traefik.http.routers.megabot-overlay.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.megabot-overlay.priority=20"
+      - "traefik.http.services.megabot-overlay.loadbalancer.server.port=8765"
     networks:
       - traefik
       - internal

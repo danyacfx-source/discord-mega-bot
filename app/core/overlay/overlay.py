@@ -168,6 +168,7 @@ class Overlay:
         data["last_slot"] = await self._kv_json("overlay:last_slot")
         data["last_poll"] = await self._kv_json("overlay:last_poll")
         data["chat_top"] = await self._chat_top()
+        data["chat"] = self._feed_recent()
         return web.json_response({"layout": layout, "data": data})
 
     async def _load_layout(self, layout_id: str) -> dict[str, Any] | None:
@@ -193,6 +194,16 @@ class Overlay:
         except (TypeError, ValueError):
             return None
         return parsed if isinstance(parsed, dict) else None
+
+    def _feed_recent(self) -> list[dict[str, Any]]:
+        services = self.bot.services
+        if services is None:
+            return []
+        try:
+            return services.chat_feed.recent(limit=80)
+        except Exception:
+            logger.debug("Overlay: лента чата не прочитана", exc_info=True)
+            return []
 
     async def _chat_top(self) -> list[dict[str, Any]]:
         services = self.bot.services

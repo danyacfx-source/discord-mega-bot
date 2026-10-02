@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 LAYOUTS_KEY = "overlay:layouts"
 _PREFIX = "overlay:layout:"
 
-WIDGET_TYPES = ("stream", "goal", "donation", "slots", "poll", "chat_top", "countdown", "text", "image")
+WIDGET_TYPES = ("stream", "goal", "donation", "slots", "poll", "chat_top", "chat", "countdown", "text", "image")
 CANVAS_PRESETS: tuple[tuple[int, int], ...] = ((1920, 1080), (1280, 720), (800, 600), (420, 720))
 MAX_WIDGETS = 30
 
@@ -83,6 +83,8 @@ def _props(widget_type: str, raw: object) -> dict[str, Any]:
         }
     if widget_type == "chat_top":
         return {**base, "title": _text(data.get("title"), _DEFAULT_TITLES["chat_top"], 80), "limit": _num(data.get("limit"), 1, 10, 3)}
+    if widget_type == "chat":
+        return {**base, "title": _text(data.get("title"), "Лента чата", 80), "limit": _num(data.get("limit"), 1, 25, 10)}
     if widget_type == "stream":
         return {**base, "title": _text(data.get("title"), "", 80)}
     if widget_type in _DEFAULT_TITLES:

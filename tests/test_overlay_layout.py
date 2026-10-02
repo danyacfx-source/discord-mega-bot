@@ -18,7 +18,7 @@ from app.core.overlay.layout import (
     save_layouts,
 )
 from app.core.overlay.overlay import Overlay
-from app.core.webpanel.webpanel import WebPanel
+from app.core.webpanel.webpanel import WebPanel, overlay_url_base
 
 
 class _KV:
@@ -79,6 +79,17 @@ def test_sanitize_caps_widgets_and_clamps_boxes() -> None:
     assert first["y"] + first["h"] <= 600
 
 
+def test_sanitize_chat_widget_props() -> None:
+    layout = sanitize_layout(
+        {"widgets": [{"type": "chat", "props": {"limit": 9999, "title": "   ", "bg": "red"}}]},
+        layout_id="c",
+    )
+    props = layout["widgets"][0]["props"]
+    assert props["limit"] == 25, "лимит сообщений зажат верхней границей виджета"
+    assert props["title"] == "Лента чата"
+    assert props["bg"] == ""
+
+
 def test_default_layout_has_widgets() -> None:
     layout = default_layout("abc123")
     assert layout["id"] == "abc123"
@@ -109,6 +120,7 @@ async def test_overlay_layout_page_and_api(tmp_path) -> None:
     try:
         saved = await save_layout(bot.services.kv, default_layout("main"))  # type: ignore[union-attr]
         await save_layouts(bot.services.kv, [{"id": saved["id"], "name": saved["name"]}])  # type: ignore[union-attr]
+        bot.services.chat_feed.push("kick", "Алиса", "привет эфиру", is_mod=True)  # type: ignore[union-attr]
         async with TestServer(overlay._create_app()) as server:
             async with TestClient(server) as client:
                 headers = {"X-Overlay-Token": "overlay-secret-token-32chars"}
@@ -126,6 +138,8 @@ async def test_overlay_layout_page_and_api(tmp_path) -> None:
                 assert len(data["layout"]["widgets"]) == 4
                 assert data["data"]["donation_goal"] == {"enabled": False}
                 assert data["data"]["chat_top"] == []
+                assert data["data"]["chat"][0]["name"] == "Алиса"
+                assert data["data"]["chat"][0]["mod"] is True
                 # неизвестная раскладка — 404; старые маршруты не тронуты
                 assert (await client.get("/overlay/nope", headers=headers)).status == 404
                 assert (await client.get("/overlay/api", headers=headers)).status == 200
@@ -147,6 +161,7 @@ async def test_webpanel_overlay_api_roundtrip(tmp_path) -> None:
                 body = await (await client.get("/api/overlay", headers=headers)).json()
                 assert body["ok"] and body["layouts"] == []
                 assert body["enabled"] is False and body["token"] == ""
+                assert body["url_base"] == ""
 
                 body = await (await client.post("/api/overlay/layouts", json={"name": "Моя"}, headers=headers)).json()
                 assert body["ok"] and body["layout"]["name"] == "Моя"
@@ -172,3 +187,14 @@ async def test_webpanel_overlay_api_roundtrip(tmp_path) -> None:
                 assert again["ok"] is False
     finally:
         await bot.close()
+
+
+def test_overlay_url_base(tmp_path) -> None:
+    cfg = _config(tmp_path, overlay_port=8765, overlay_host="0.0.0.0", overlay_public_url="https://dendich.ru")
+    assert overlay_url_base(cfg) == "https://dendich.ru"
+    object.__setattr__(cfg, "overlay_public_url", None)
+    assert overlay_url_base(cfg) == ""
+    object.__setattr__(cfg, "overlay_host", "127.0.0.1")
+    assert overlay_url_base(cfg) == "http://127.0.0.1:8765"
+    object.__setattr__(cfg, "overlay_port", None)
+    assert overlay_url_base(cfg) == ""

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from app.config import Config
     from app.services.chat_coins_service import ChatCoinsService
+    from app.services.chat_feed import ChatFeed
     from app.services.kv_service import KvService
 
 logger = logging.getLogger("bot.services")
@@ -76,10 +77,11 @@ class _Poll:
 class ChatCommandsService:
     """Диспетчер команд чата: единая логика для всех платформ."""
 
-    def __init__(self, config: Config, coins: ChatCoinsService, kv: KvService) -> None:
+    def __init__(self, config: Config, coins: ChatCoinsService, kv: KvService, feed: ChatFeed | None = None) -> None:
         self._config = config
         self._coins = coins
         self._kv = kv
+        self._feed = feed
         self._platforms: dict[str, ChatPlatform] = {}
         self._polls: dict[str, _Poll] = {}
         self._cmd_ready: dict[tuple[str, str], float] = {}
@@ -114,10 +116,13 @@ class ChatCommandsService:
     # ------------------------------------------------------------- диспетчер
 
     async def handle(self, msg: ChatMessage) -> None:
-        """Единый вход: пассивные монеты, голосование, команды."""
+        """Единый вход: лента оверлея, пассивные монеты, голосование, команды."""
+        text = msg.content.strip()
+        if text and not msg.is_bot and self._feed is not None:
+            self._feed.push(msg.platform, msg.display_name or msg.username, text, is_mod=msg.is_mod)
         if not self._config.chat_commands_enabled or msg.is_bot:
             return
-        content = msg.content.strip()
+        content = text
         if not content or msg.platform not in self._platforms:
             return
         self._sweep()
