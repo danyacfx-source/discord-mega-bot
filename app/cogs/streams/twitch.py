@@ -14,7 +14,7 @@ from app.cogs.streams.archive import needs_seal, seal_archive
 from app.cogs.streams.poll_guard import PollGuard
 from app.cogs.streams.quiet import is_quiet
 from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
-from app.cogs.streams.stream_cards import live_card, offline_card
+from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
@@ -33,6 +33,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
         super().__init__(bot)
         self.twitch = twitch
         self._guard = PollGuard()
+        self._stream_feed_key: tuple[str, str, str] | None = None
 
     async def cog_load(self) -> None:
         if self.bot.config.twitch_channels:
@@ -74,11 +75,25 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
 
     async def _check(self, channel: str) -> dict[str, Any] | None:
         status = await self.twitch.channel_status(channel)
+        self._publish_stream(status, channel)
         if status is not None:
             await self._sticky_live(status)
             return status
         await self._sticky_offline(channel)
         return None
+
+    def _publish_stream(self, status: dict[str, Any] | None, channel: str) -> None:
+        """Публикует переход live/offline в живую ленту (не чаще реальных переходов)."""
+        state = "live" if status is not None else "offline"
+        key = ("twitch", channel, state)
+        if key == self._stream_feed_key:
+            return
+        self._stream_feed_key = key
+        data: dict[str, Any] = {"platform": "twitch", "status": state, "url": f"https://www.twitch.tv/{channel}"}
+        if status is not None:
+            data["title"] = str(status.get("title") or "")
+            data["viewers"] = int(status.get("viewers") or 0)
+        self.publish_event("stream", data)
 
     async def _sticky_live(self, status: dict[str, Any]) -> None:
         await update_stream_role(self.bot, enable=True)
@@ -90,7 +105,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
         url = f"https://www.twitch.tv/{login}"
         store = self.twitch.session_store(login)
         session = await store.capture(status, url=url)
-        embed = live_card("twitch", url=url, status=status, session=session)
+        embed = live_card("twitch", url=url, status=status, session=session, preset=await card_presets(self.services.kv))
         message_id = await self.twitch.sticky_message_id(login)
         if message_id is not None:
             try:
@@ -138,7 +153,11 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
             return
         try:
             message = await channel.fetch_message(message_id)
-            await message.edit(embed=offline_card("twitch", url=url, session=session, vod_url=vod_url), content="")
+            await message.edit(
+                embed=offline_card("twitch", url=url, session=session, vod_url=vod_url,
+                                   preset=await card_presets(self.services.kv)),
+                content="",
+            )
             await unpin_sticky(message)
         except discord.HTTPException:
             pass
@@ -248,8 +267,9 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
         url = f"https://www.twitch.tv/{login}"
         store = self.twitch.session_store(login)
         session = await store.load()
+        preset = await card_presets(self.services.kv)
         if status is None:
-            embed = offline_card("twitch", url=url, session=session, vod_url=await self._vod_url(login, session))
+            embed = offline_card("twitch", url=url, session=session, vod_url=await self._vod_url(login, session), preset=preset)
         else:
-            embed = live_card("twitch", url=url, status=status, session=session)
+            embed = live_card("twitch", url=url, status=status, session=session, preset=preset)
         await interaction.response.send_message(embed=embed)

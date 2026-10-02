@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Overlay layout</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--accent:#ff5a36;--text:#f6f7fb;--muted:#98a1b4;--surface:rgba(12,15,22,.88)}
+body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;color:var(--text);overflow:hidden}
+#root{position:relative}
+.w{position:absolute;overflow:hidden;background:linear-gradient(145deg,var(--surface),rgba(22,27,39,.82));border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:16px 18px;box-shadow:0 18px 55px rgba(0,0,0,.42);backdrop-filter:blur(18px) saturate(140%);display:flex;flex-direction:column;justify-content:center}
+.w h3{font-size:10px;text-transform:uppercase;letter-spacing:1.7px;color:var(--muted);margin-bottom:8px;font-weight:800}
+.value{font-size:17px;font-weight:700;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+.empty{color:var(--muted);font-size:13px}
+.counters{font-size:13px;line-height:1.7;color:var(--muted)}.counters b{color:var(--text)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:8px;animation:pulse 1.8s infinite}
+.spark{font-size:15px;letter-spacing:1px;color:var(--accent)}
+.progress{height:6px;margin-top:10px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.progress i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),#ff9a76)}
+@keyframes pulse{70%{box-shadow:0 0 0 10px rgba(255,90,54,0)}100%{box-shadow:0 0 0 0 rgba(255,90,54,0)}}
+.topline{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:3px 0}
+.topline span:last-child{color:var(--accent);font-weight:700}
+.money{font-size:26px;font-weight:800;color:var(--accent);line-height:1.2}
+.msg{font-size:13px;color:var(--muted);margin-top:6px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cd{font-size:30px;font-weight:800;letter-spacing:-.02em}
+.textw{display:flex;height:100%;white-space:pre-wrap;word-break:break-word;overflow:hidden}
+.imgw{width:100%;height:100%;object-fit:cover}
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
+</style></head><body><div id="root"></div>
+<script>
+const TOKEN = "__TOKEN__";
+const LID = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
+function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+function num(n){try{return Number(n).toLocaleString("ru-RU")}catch(e){return String(n)}}
+function h3(t){return "<h3>"+esc(t)+"</h3>"}
+function content(w,d){
+  const p=w.props||{};
+  if(w.type==="stream"){
+    const s=d.stream;
+    if(!s)return h3(p.title||"Трансляция")+'<div class="empty">Не настроен канал</div>';
+    if(s.live){
+      let out=h3(p.title||("В эфире · "+s.platform))+'<div class="value"><span class="dot"></span>'+esc(s.title||"Без названия")+"</div>";
+      const bits=["Зрители <b>"+num(s.viewers)+"</b>"];
+      if(s.peak)bits.push("Пик <b>"+num(s.peak)+"</b>");
+      const dur=fmtDur(s.startedAt);if(dur)bits.push("⏱ "+dur);
+      if(s.trend!=null)bits.push((s.trend>=0?"▲ +":"▼ ")+esc(s.trend)+" за 10 мин");
+      out+='<div class="counters">'+bits.join(" · ")+"</div>";
+      if(s.spark)out+='<div class="counters spark">'+esc(s.spark)+"</div>";
+      if(s.category)out+='<div class="counters">Категория · '+esc(s.category)+"</div>";
+      return out;
+    }
+    const last=s.last;
+    if(last&&last.title)return h3(p.title||"Трансляция")+'<div class="value">'+esc(last.title)+'</div><div class="counters">Последний эфир · Пик <b>'+num(last.peak)+"</b></div>";
+    return h3(p.title||"Трансляция")+'<div class="empty">Сейчас офлайн</div>';
+  }
+  if(w.type==="goal"){
+    const g=d.donation_goal;
+    if(!g||!g.enabled)return h3(p.title||"Донат-цель")+'<div class="empty">Цель выключена (OVERLAY_DONATION_GOAL_ENABLED)</div>';
+    const cur=Number(g.current)||0,tgt=Math.max(1,Number(g.target)||1);
+    const pct=Math.max(0,Math.min(100,cur/tgt*100));
+    return h3(p.title||g.label||"Донат-цель")+'<div class="value">'+num(cur)+" / "+num(g.target)+" "+esc(g.currency)+'</div><div class="progress"><i style="width:'+pct+'%"></i></div>';
+  }
+  if(w.type==="donation"){
+    const nd=d.last_donation;
+    if(!nd)return h3(p.title||"Последний донат")+'<div class="empty">Донатов пока нет</div>';
+    return h3(p.title||"Последний донат")+'<div class="value">'+esc(nd.username)+'</div><div class="money">'+num(nd.amount)+" "+esc(nd.currency)+"</div>"+
+      (nd.message?'<div class="msg">'+esc(nd.message)+"</div>":"");
+  }
+  if(w.type==="slots"){
+    const sl=d.last_slot;
+    if(!sl)return h3(p.title||"Последний выигрыш")+'<div class="empty">Выигрышей пока нет</div>';
+    return h3(p.title||"Последний выигрыш")+'<div class="value">'+esc(sl.result||"—")+'</div><div class="counters">'+esc(sl.user||"?")+" · выигрыш <b>"+num(sl.win)+"</b></div>";
+  }
+  if(w.type==="poll"){
+    const pl=d.last_poll;
+    if(!pl)return h3(p.title||"Последний опрос")+'<div class="empty">Опросов пока нет</div>';
+    let out=h3(p.title||"Последний опрос")+'<div class="value">'+esc(pl.question||"")+"</div>";
+    out+='<div class="counters">'+(pl.winner?"🏆 <b>"+esc(pl.winner)+"</b> · ":"")+"голосов <b>"+num(pl.total||0)+"</b></div>";
+    return out;
+  }
+  if(w.type==="chat_top"){
+    const rows=d.chat_top||[];
+    let out=h3(p.title||"Топ чата");
+    if(!rows.length)return out+'<div class="empty">Пока нет сообщений</div>';
+    rows.slice(0,p.limit||3).forEach(function(row,i){
+      out+='<div class="topline"><span>'+(i+1)+". "+esc(row.name)+'</span><span>'+num(row.messages)+"</span></div>";
+    });
+    return out;
+  }
+  if(w.type==="countdown"){
+    if(!p.date)return h3(p.label||"Обратный отсчёт")+'<div class="empty">Дата не задана</div>';
+    return h3(p.label||"Обратный отсчёт")+'<div class="cd" data-date="'+esc(p.date)+'" style="color:'+esc(p.color||"#ff5a36")+'">—</div>';
+  }
+  if(w.type==="text"){
+    return '<div class="textw" style="font-size:'+(p.size||36)+"px;color:"+esc(p.color||"#ffffff")+";text-align:"+(p.align||"left")+";font-weight:"+(p.bold?800:400)+'">'+esc(p.text||"")+"</div>";
+  }
+  if(w.type==="image"){
+    return p.url?'<img class="imgw" src="'+esc(p.url)+'" alt="">':'<div class="empty">Картинка не задана</div>';
+  }
+  return "";
+}
+function fmtDur(started){
+  if(!started)return "";
+  const ms=Date.now()-Date.parse(started);if(isNaN(ms)||ms<0)return "";
+  const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);
+  return h?h+" ч "+m+" мин":m+" мин";
+}
+function render(d){
+  const root=document.getElementById("root");
+  root.style.width=d.layout.width+"px";
+  root.style.height=d.layout.height+"px";
+  root.style.zoom=window.innerWidth/d.layout.width;
+  root.innerHTML=(d.layout.widgets||[]).map(function(w){
+    const p=w.props||{};
+    let style="left:"+w.x+"px;top:"+w.y+"px;width:"+w.w+"px;height:"+w.h+"px;";
+    if(p.bg)style+="background:"+p.bg+";";
+    if(p.radius!=null)style+="border-radius:"+p.radius+"px;";
+    return '<div class="w" style="'+style+'">'+content(w,d.data)+"</div>";
+  }).join("");
+  tickCountdowns();
+}
+function tickCountdowns(){
+  document.querySelectorAll("[data-date]").forEach(function(el){
+    const target=Date.parse(el.getAttribute("data-date"));
+    if(isNaN(target)){el.textContent="—";return}
+    let ms=target-Date.now();
+    if(ms<=0){el.textContent="старт!";return}
+    const s=Math.floor(ms/1000),d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),sec=s%60;
+    el.textContent=(d?d+" д ":"")+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(sec).padStart(2,"0");
+  });
+}
+async function load(){
+  try{
+    const r=await fetch("/overlay/api/"+encodeURIComponent(LID),{headers:{"X-Overlay-Token":TOKEN}});
+    if(!r.ok)return;
+    render(await r.json());
+  }catch(e){}
+}
+load();setInterval(load,5000);setInterval(tickCountdowns,1000);
+</script></body></html>

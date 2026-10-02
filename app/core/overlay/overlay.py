@@ -1,6 +1,7 @@
 """Overlay для OBS: статус стрима, каналы, донат-цель. Порт Node ``overlay.js``."""
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import time
@@ -10,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
+from app.core.overlay.layout import load_layout
 from app.utils.stream_history import sparkline, trend
 
 if TYPE_CHECKING:
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("bot.overlay")
 
 _PAGE_FILE = Path(__file__).resolve().parent / "page.html"
+_LAYOUT_PAGE_FILE = Path(__file__).resolve().parent / "layout.html"
 
 #: OBS опрашивает оверлей каждые 5 с — статус стрима кэшируем, чтобы не
 #: долбить Twitch/Kick API на каждый запрос страницы.
@@ -42,7 +45,13 @@ class Overlay:
         self._site: web.TCPSite | None = None
         self._token = self._resolve_token()
         self._page = _read_page().replace("__TOKEN__", self._token)
+        self._layout_page = _LAYOUT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
         self._status_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+
+    @property
+    def token(self) -> str:
+        """Токен доступа (вебпанель отдаёт его admin'у для ссылки в OBS)."""
+        return self._token
 
     # ------------------------------------------------------------------ токен
     def _resolve_token(self) -> str:
@@ -108,6 +117,8 @@ class Overlay:
         app.router.add_get("/overlay", self._page_handler)
         app.router.add_get("/overlay/api", self._api_handler)
         app.router.add_get("/overlay/health", self._health_handler)
+        app.router.add_get("/overlay/api/{layout_id}", self._layout_api_handler)
+        app.router.add_get("/overlay/{layout_id}", self._layout_page_handler)
         return app
 
     def _valid_auth(self, request: web.Request) -> bool:
@@ -135,6 +146,75 @@ class Overlay:
         if not self._valid_api_auth(request):
             return self._unauthorized()
         return web.json_response(await self._payload())
+
+    # ------------------------------------------------------- раскладки (KV)
+
+    async def _layout_page_handler(self, request: web.Request) -> web.Response:
+        if not self._valid_auth(request):
+            return self._unauthorized()
+        layout = await self._load_layout(request.match_info["layout_id"])
+        if layout is None:
+            return web.json_response({"error": "layout not found"}, status=404)
+        return web.Response(text=self._layout_page, content_type="text/html", charset="utf-8")
+
+    async def _layout_api_handler(self, request: web.Request) -> web.Response:
+        if not self._valid_api_auth(request):
+            return self._unauthorized()
+        layout = await self._load_layout(request.match_info["layout_id"])
+        if layout is None:
+            return web.json_response({"error": "layout not found"}, status=404)
+        data = await self._payload()
+        data["last_donation"] = await self._kv_json("overlay:last_donation")
+        data["last_slot"] = await self._kv_json("overlay:last_slot")
+        data["last_poll"] = await self._kv_json("overlay:last_poll")
+        data["chat_top"] = await self._chat_top()
+        return web.json_response({"layout": layout, "data": data})
+
+    async def _load_layout(self, layout_id: str) -> dict[str, Any] | None:
+        services = self.bot.services
+        if services is None:
+            return None
+        try:
+            return await load_layout(services.kv, layout_id)
+        except Exception:
+            logger.debug("Overlay: раскладка %s не прочитана", layout_id, exc_info=True)
+            return None
+
+    async def _kv_json(self, key: str) -> dict[str, Any] | None:
+        services = self.bot.services
+        if services is None:
+            return None
+        try:
+            raw = await services.kv.get(key)
+            if not raw:
+                return None
+
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    async def _chat_top(self) -> list[dict[str, Any]]:
+        services = self.bot.services
+        config = self.bot.config
+        if services is None:
+            return []
+        platform = "kick" if config.kick_channel_slug else ("twitch" if config.twitch_channels else "")
+        if not platform:
+            return []
+        try:
+            rows = await services.chat_coins.top(platform, limit=3)
+        except Exception:
+            logger.debug("Overlay: топ чата не прочитан", exc_info=True)
+            return []
+        return [
+            {
+                "name": str(row.get("display_name") or row.get("username") or "?")[:32],
+                "messages": int(row.get("messages") or 0),
+                "coins": int(row.get("coins") or 0),
+            }
+            for row in rows[:3]
+        ]
 
     async def _payload(self) -> dict[str, Any]:
         return {

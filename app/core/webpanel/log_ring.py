@@ -4,7 +4,9 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 
 _AUDIT_PREFIX = "bot.services.audit."
 
@@ -12,11 +14,16 @@ _AUDIT_PREFIX = "bot.services.audit."
 class RingBufferHandler(logging.Handler):
     """Хранит последние N записей лога в памяти (не блокирует приложение)."""
 
-    def __init__(self, capacity: int = 2000) -> None:
+    def __init__(
+        self,
+        capacity: int = 2000,
+        on_record: Callable[[dict[str, str]], Any] | None = None,
+    ) -> None:
         super().__init__(level=logging.INFO)
         self.capacity = capacity
         self._records: deque[dict[str, str]] = deque(maxlen=capacity)
         self._lock = threading.Lock()
+        self._on_record = on_record
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
@@ -37,6 +44,8 @@ class RingBufferHandler(logging.Handler):
             }
             with self._lock:
                 self._records.append(entry)
+            if self._on_record is not None:
+                self._on_record(entry)
         except Exception:
             pass
 

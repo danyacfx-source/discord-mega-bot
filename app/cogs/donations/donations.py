@@ -1,6 +1,7 @@
 """Донаты DonationAlerts: поллинг, персональный код, роль «Спонсор» по порогу суммы, спонсор-кнопка."""
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import TYPE_CHECKING, Any
@@ -228,6 +229,32 @@ class DonationsCog(MegaCog, name="Donations"):
         return channel if isinstance(channel, discord.TextChannel) else None
 
     async def _notify(self, donation: dict[str, Any], rewarded: bool, guild_id: int | None = None) -> None:
+        self.publish_event(
+            "donation",
+            {
+                "username": str(donation.get("username") or "?"),
+                "amount": float(donation.get("amount") or 0),
+                "currency": str(donation.get("currency") or ""),
+                "message": str(donation.get("message") or ""),
+            },
+        )
+        try:
+            services = self.bot.services
+            if services is not None:
+                await services.kv.set(
+                    "overlay:last_donation",
+                    json.dumps(
+                        {
+                            "username": str(donation.get("username") or "?")[:32],
+                            "amount": float(donation.get("amount") or 0),
+                            "currency": str(donation.get("currency") or "")[:8],
+                            "message": str(donation.get("message") or "")[:300],
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+        except Exception:
+            logger.debug("Donations: last_donation не записан в KV", exc_info=True)
         config = self.bot.config
         channel = await self._donation_channel(guild_id)
         if channel is None:

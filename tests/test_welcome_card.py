@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,7 +11,7 @@ import pytest
 
 from app.cogs.administration.greetings import GreetingsCog
 from app.config import Config
-from app.utils.welcome_card import render_welcome_card
+from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
 
 def _config(**overrides) -> Config:
@@ -87,6 +88,7 @@ class _CaptureChannel(discord.TextChannel):
 
 def _cog(config: Config) -> tuple[GreetingsCog, _CaptureChannel, SimpleNamespace]:
     settings = SimpleNamespace(get=AsyncMock(return_value={"welcome_channel_id": None}))
+    kv = SimpleNamespace(get=AsyncMock(return_value=None))
     channel = _CaptureChannel()
     guild = SimpleNamespace(
         id=1,
@@ -96,7 +98,7 @@ def _cog(config: Config) -> tuple[GreetingsCog, _CaptureChannel, SimpleNamespace
         name="Тестовый",
     )
     bot = SimpleNamespace(config=config)
-    return GreetingsCog(bot, settings), channel, guild  # type: ignore[arg-type]
+    return GreetingsCog(bot, settings, kv), channel, guild  # type: ignore[arg-type]
 
 
 def _member(guild, avatar: _Avatar) -> SimpleNamespace:
@@ -157,3 +159,60 @@ def test_welcome_card_env_flag(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Non
     assert Config.from_env(tmp_path / "absent.env").welcome_card is True
     monkeypatch.setenv("WELCOME_CARD", "0")
     assert Config.from_env(tmp_path / "absent.env").welcome_card is False
+
+
+def test_preset_defaults_match_legacy_look() -> None:
+    preset = WelcomePreset()
+    assert preset.bg_top == "#1e2444"
+    assert preset.bg_bottom == "#3d2a63"
+    assert preset.name_color == "#ffd678"
+    assert preset.avatar_size == 180
+    assert WelcomePreset.from_json(None) == preset
+
+
+def test_preset_from_json_validates_fields() -> None:
+    # мусор вместо JSON и мусорные значения полей — всё падает на дефолты
+    assert WelcomePreset.from_json("не json {") == WelcomePreset()
+    assert WelcomePreset.from_json("[1,2]") == WelcomePreset()
+    dirty = json.dumps({"bg_top": "red; DROP", "avatar_size": "abc", "font_scale": "буквы", "title": "  "})
+    assert WelcomePreset.from_json(dirty) == WelcomePreset()
+    # выбросы чисел зажимаются в разрешённые диапазоны
+    clamped = WelcomePreset.from_json(json.dumps({"avatar_size": 9999, "font_scale": 99}))
+    assert clamped.avatar_size == 240
+    assert clamped.font_scale == 1.5
+    # частичный JSON: известные поля берутся, неизвестные игнорируются
+    partial = WelcomePreset.from_json(json.dumps({"name_color": "#123456", "avatar_size": 150, "evil": 1}))
+    assert partial.name_color == "#123456"
+    assert partial.avatar_size == 150
+    assert not hasattr(partial, "evil")
+
+
+def test_render_with_custom_preset_changes_output() -> None:
+    avatar = _avatar_png()
+    default_png = render_welcome_card(avatar_png=avatar, display_name="Алиса", member_count=42, guild_name="Тест")
+    hot = WelcomePreset.from_json(json.dumps({"bg_top": "#ff0000", "bg_bottom": "#000000", "font_scale": 1.3}))
+    custom_png = render_welcome_card(
+        avatar_png=avatar, display_name="Алиса", member_count=42, guild_name="Тест", preset=hot
+    )
+    assert custom_png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert custom_png != default_png
+
+
+def test_placeholder_avatar_is_png() -> None:
+    out = make_placeholder_avatar("алиса")
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+    assert make_placeholder_avatar("x", bg="мусор")[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.asyncio
+async def test_cog_loads_preset_from_kv() -> None:
+    stored = json.dumps({"name_color": "#abcdef", "subtitle": "{name}, счёт {count}"})
+    kv = SimpleNamespace(get=AsyncMock(return_value=stored))
+    cog = GreetingsCog(SimpleNamespace(config=_config()), SimpleNamespace(), kv)  # type: ignore[arg-type]
+    preset = await cog._load_preset()
+    assert preset is not None
+    assert preset.name_color == "#abcdef"
+    assert preset.subtitle == "{name}, счёт {count}"
+    # пустой KV — пресет не навязывается
+    cog2 = GreetingsCog(SimpleNamespace(config=_config()), SimpleNamespace(), SimpleNamespace(get=AsyncMock(return_value=None)))  # type: ignore[arg-type]
+    assert await cog2._load_preset() is None

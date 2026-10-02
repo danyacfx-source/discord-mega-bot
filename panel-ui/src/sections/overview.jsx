@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../api.js";
 import { navigate } from "../store.js";
+import { subscribeEvents } from "../lib/events.js";
 import { Sparkline, Stat } from "../components/widgets.jsx";
 
 const EMPTY = {
@@ -13,10 +14,52 @@ const EMPTY = {
   mem_peak_mb: 0,
 };
 
+function feedLine(ev) {
+  const d = ev.data || {};
+  const t = String(ev.ts || "").slice(11, 19);
+  if (ev.type === "stream") {
+    const live = d.status === "live";
+    const label = d.platform === "kick" ? "Kick" : "Twitch";
+    return {
+      key: ev.seq,
+      icon: "📺",
+      tag: `${label}${live ? " ● LIVE" : " ○ офлайн"}`,
+      tone: live ? "tone-ok" : "tone-bad",
+      msg: live
+        ? `${d.title || "Без названия"}${d.viewers ? ` · 👁 ${d.viewers}` : ""}`
+        : d.url || "",
+      t,
+    };
+  }
+  if (ev.type === "donation") {
+    return {
+      key: ev.seq,
+      icon: "💰",
+      tag: "Донат",
+      tone: "tone-ok",
+      msg: `${d.username} — ${d.amount} ${d.currency}${d.message ? ` · ${String(d.message).slice(0, 120)}` : ""}`,
+      t,
+    };
+  }
+  if (ev.type === "error") {
+    return { key: ev.seq, icon: "⛔", tag: "Ошибка", tone: "tone-bad", msg: d.msg || "", t };
+  }
+  const audit = Boolean(d.cat && d.cat !== "sys");
+  return {
+    key: ev.seq,
+    icon: audit ? "🛰️" : "⚠️",
+    tag: audit ? `Аудит · ${d.cat}` : d.level || "WARNING",
+    tone: audit ? "" : "warn",
+    msg: d.msg || "",
+    t,
+  };
+}
+
 export default function Overview() {
   const [ov, setOv] = useState(EMPTY);
   const [mon, setMon] = useState({ latency: [], mem: [], online: [] });
   const [streams, setStreams] = useState([]);
+  const [feed, setFeed] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -36,6 +79,14 @@ export default function Overview() {
       clearInterval(t);
     };
   }, []);
+
+  useEffect(
+    () =>
+      subscribeEvents((ev) => {
+        setFeed((prev) => [feedLine(ev), ...prev].slice(0, 40));
+      }),
+    [],
+  );
 
   const g = ov.guild || {};
   const online = ov.bot_online;
@@ -89,6 +140,28 @@ export default function Overview() {
             <span class="muted small">участники в сети</span>
           </div>
           <Sparkline points={mon.online} label="online" color="#23a55a" />
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>📡 Лента</h3>
+          <span class="muted small">живые события · стримы, донаты, ошибки, аудит</span>
+        </div>
+        <div class="list">
+          {feed.length === 0 && (
+            <div class="muted small">Событий пока нет — появятся здесь в реальном времени.</div>
+          )}
+          {feed.map((f) => (
+            <div class="listline" key={f.key}>
+              <span class={"chip " + (f.tone || "")}>
+                {f.icon} {f.tag}
+              </span>
+              <span class="grow">
+                <div class="sub">{f.msg}</div>
+              </span>
+              <span class="muted small">{f.t}</span>
+            </div>
+          ))}
         </div>
       </div>
       {streams.length > 0 && (

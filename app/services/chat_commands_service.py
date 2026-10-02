@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
@@ -17,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from app.config import Config
     from app.services.chat_coins_service import ChatCoinsService
+    from app.services.kv_service import KvService
 
 logger = logging.getLogger("bot.services")
 
@@ -74,13 +76,21 @@ class _Poll:
 class ChatCommandsService:
     """Диспетчер команд чата: единая логика для всех платформ."""
 
-    def __init__(self, config: Config, coins: ChatCoinsService) -> None:
+    def __init__(self, config: Config, coins: ChatCoinsService, kv: KvService) -> None:
         self._config = config
         self._coins = coins
+        self._kv = kv
         self._platforms: dict[str, ChatPlatform] = {}
         self._polls: dict[str, _Poll] = {}
         self._cmd_ready: dict[tuple[str, str], float] = {}
         self._passive_ready: dict[tuple[str, str], float] = {}
+
+    async def _remember(self, key: str, payload: dict[str, Any]) -> None:
+        """Персистентное событие для оверлея (последний выигрыш/опрос)."""
+        try:
+            await self._kv.set(key, json.dumps(payload, ensure_ascii=False))
+        except Exception:
+            logger.debug("ChatCommands: не удалось записать %s", key, exc_info=True)
 
     # ------------------------------------------------------------- регистрация
 
@@ -223,6 +233,16 @@ class ChatCommandsService:
         head = f"📊 Опрос завершён: {poll.question} — голосов {total}"
         if len(winners) == 1:
             head += f"\n🏆 Победил: **{winners[0]}**"
+        await self._remember(
+            "overlay:last_poll",
+            {
+                "question": poll.question[:200],
+                "options": [{"name": option[:80], "votes": counts[i]} for i, option in enumerate(poll.options)],
+                "winner": winners[0][:80] if len(winners) == 1 else "",
+                "total": total,
+                "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+            },
+        )
         await self._send(
             ChatMessage(platform=platform, username="", display_name="", content=""),
             head + "\n" + "\n".join(lines),
@@ -348,6 +368,15 @@ class ChatCommandsService:
         if win:
             balance = await self._coins.add(msg.platform, msg.username, msg.display_name, win)
             verdict = f"🎉 ВЫИГРЫШ {win} 💰 (баланс {balance})"
+            await self._remember(
+                "overlay:last_slot",
+                {
+                    "user": msg.display_name[:32],
+                    "result": " | ".join(reels),
+                    "win": win,
+                    "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+                },
+            )
         else:
             verdict = "😵 Минус ставка. Удачи в следующий раз!"
         return f"🎰 {' | '.join(reels)} — {verdict}"

@@ -16,7 +16,7 @@ from app.cogs.streams.archive import needs_seal, seal_archive
 from app.cogs.streams.poll_guard import PollGuard
 from app.cogs.streams.quiet import is_quiet
 from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
-from app.cogs.streams.stream_cards import live_card, offline_card
+from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
@@ -50,6 +50,7 @@ class KickCog(MegaCog, name="Kick"):
         self._chat_task: asyncio.Task[None] | None = None
         self._guard = PollGuard()
         self._stream_key: str | None = None
+        self._stream_feed_key: tuple[str, str, str] | None = None
 
     async def cog_load(self) -> None:
         if self.bot.config.kick_channel_slug:
@@ -84,6 +85,7 @@ class KickCog(MegaCog, name="Kick"):
             return
         try:
             status = await self.kick.channel_status(slug)
+            self._publish_stream(status, slug)
             if status is not None:
                 await self._sticky_live(status)
                 await self._set_presence(status["title"], int(status.get("viewers") or 0))
@@ -119,6 +121,19 @@ class KickCog(MegaCog, name="Kick"):
         except Exception:
             logger.debug("Kick: не удалось сменить присутствие", exc_info=True)
 
+    def _publish_stream(self, status: dict[str, Any] | None, slug: str) -> None:
+        """Публикует переход live/offline в живую ленту (поллинг дёргает это каждый тик)."""
+        state = "live" if status is not None else "offline"
+        key = ("kick", slug, state)
+        if key == self._stream_feed_key:
+            return
+        self._stream_feed_key = key
+        data: dict[str, Any] = {"platform": "kick", "status": state, "url": f"https://kick.com/{slug}"}
+        if status is not None:
+            data["title"] = str(status.get("title") or "")
+            data["viewers"] = int(status.get("viewers") or 0)
+        self.publish_event("stream", data)
+
     async def _sticky_live(self, status: dict[str, Any]) -> None:
         await update_stream_role(self.bot, enable=True)
         # Ключ текущего эфира — для сброса счётчика топа говорящих.
@@ -130,7 +145,7 @@ class KickCog(MegaCog, name="Kick"):
         slug = str(status["slug"])
         url = f"https://kick.com/{slug}"
         session = await self.kick.session_store(slug).capture(status, url=url)
-        embed = live_card("kick", url=url, status=status, session=session)
+        embed = live_card("kick", url=url, status=status, session=session, preset=await card_presets(self.services.kv))
         message_id = await self.kick.sticky_message_id()
         if message_id is not None:
             try:
@@ -199,7 +214,10 @@ class KickCog(MegaCog, name="Kick"):
         try:
             message = await channel.fetch_message(message_id)
             await message.edit(
-                embed=offline_card("kick", url=url, session=session, vod_url=vod_url, top_talkers=top),
+                embed=offline_card(
+                    "kick", url=url, session=session, vod_url=vod_url, top_talkers=top,
+                    preset=await card_presets(self.services.kv),
+                ),
                 content="",
             )
             await unpin_sticky(message)
@@ -238,10 +256,11 @@ class KickCog(MegaCog, name="Kick"):
         status = await self.kick.channel_status(slug)
         url = f"https://kick.com/{slug}"
         session = await self.kick.session_store(slug).load()
+        preset = await card_presets(self.services.kv)
         if status is None:
-            embed = offline_card("kick", url=url, session=session, vod_url=f"{url}/videos")
+            embed = offline_card("kick", url=url, session=session, vod_url=f"{url}/videos", preset=preset)
         else:
-            embed = live_card("kick", url=url, status=status, session=session)
+            embed = live_card("kick", url=url, status=status, session=session, preset=preset)
         await interaction.response.send_message(embed=embed)
 
     # ---------------------------------------------------------------- отправка в чат

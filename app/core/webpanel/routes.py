@@ -11,6 +11,28 @@ from typing import Any
 
 from aiohttp import web
 
+_DIST_DIR = Path(__file__).parent / "dist"
+
+
+async def _serve_pwa_file(request: web.Request, name: str, headers: dict[str, str] | None = None) -> web.Response:
+    """Отдаёт ассет PWA из сборки panel-ui (manifest/service worker/иконка)."""
+    path = _DIST_DIR / name
+    if not path.is_file():
+        return web.Response(status=404, text="Not Found")
+    return web.FileResponse(path, headers=headers)
+
+
+async def _serve_manifest(request: web.Request) -> web.Response:
+    return await _serve_pwa_file(request, "manifest.webmanifest")
+
+
+async def _serve_sw(request: web.Request) -> web.Response:
+    return await _serve_pwa_file(request, "sw.js", {"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+async def _serve_icon(request: web.Request) -> web.Response:
+    return await _serve_pwa_file(request, "icon.svg")
+
 
 def register_routes(panel: Any, app: web.Application) -> None:
     """Подключает публичные и защищённые маршруты панели к ``aiohttp`` app."""
@@ -22,6 +44,9 @@ def register_routes(panel: Any, app: web.Application) -> None:
     assets_dir = Path(__file__).parent / "dist" / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
     router.add_static("/assets", str(assets_dir), show_index=False)
+    router.add_get("/manifest.webmanifest", _serve_manifest)
+    router.add_get("/sw.js", _serve_sw)
+    router.add_get("/icon.svg", _serve_icon)
     router.add_get("/logs", panel._serve_logs_page)
     router.add_get("/audit", panel._serve_audit_page)
     router.add_get("/wardogs/join", panel._wardogs_join_page)
@@ -44,6 +69,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/api/analytics", viewer(panel._api_analytics))
     router.add_get("/api/analytics/export", viewer(panel._api_analytics_export, "admin"))
     router.add_get("/ws/analytics", panel._ws_analytics)
+    router.add_get("/ws/events", panel._ws_events)
     router.add_get("/api/server", viewer(panel._api_server))
     router.add_get("/api/server/members", viewer(panel._api_server_members))
     router.add_post("/api/server/members/roles", viewer(panel._api_server_members_roles))
@@ -82,6 +108,17 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/tempvoice/{channel_id}/transfer", bridge(panel._api_tempvoice_transfer, "admin"))
     router.add_get("/api/ai", viewer(panel._api_ai_get))
     router.add_post("/api/ai", viewer(panel._api_ai_post))
+    router.add_get("/api/welcome", viewer(panel._api_welcome_get))
+    router.add_post("/api/welcome", viewer(panel._api_welcome_post, "admin"))
+    router.add_post("/api/welcome/preview", viewer(panel._api_welcome_preview, "viewer"))
+    router.add_get("/api/overlay", viewer(panel._api_overlay_get))
+    router.add_post("/api/overlay/layouts", viewer(panel._api_overlay_layouts_create, "admin"))
+    router.add_post("/api/overlay/layout", viewer(panel._api_overlay_layout_save, "admin"))
+    router.add_get("/api/overlay/layout", viewer(panel._api_overlay_layout_load))
+    router.add_post("/api/overlay/layout/delete", viewer(panel._api_overlay_layout_delete, "admin"))
+    router.add_post("/api/overlay/layout/rename", viewer(panel._api_overlay_layout_rename, "admin"))
+    router.add_get("/api/stream-cards", viewer(panel._api_stream_cards_get))
+    router.add_post("/api/stream-cards", viewer(panel._api_stream_cards_post, "admin"))
     router.add_get("/api/schedule", viewer(panel._api_schedule))
     router.add_post("/api/schedule", viewer(panel._api_schedule_create))
     router.add_delete("/api/schedule/{schedule_id}", viewer(panel._api_schedule_delete))

@@ -53,6 +53,7 @@ def assemble(
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService
     from app.services.donation_service import DonationService
+    from app.services.event_bus import EventBus
     from app.services.giveaway_service import GiveawayService
     from app.services.kick_service import KickService
     from app.services.kv_service import KvService
@@ -106,7 +107,8 @@ def assemble(
     kick = override_or(overrides, "kick", KickService, kv_repo, config)
     vk_video = override_or(overrides, "vk_video", VkVideoService, kv_repo, config)
     chat_coins = override_or(overrides, "chat_coins", ChatCoinsService, ChatCoinsRepository(db))
-    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins)
+    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv)
+    events = override_or(overrides, "events", EventBus)
 
     services = Services(
         settings=settings,
@@ -130,6 +132,7 @@ def assemble(
         scheduled=scheduled,
         chat_coins=chat_coins,
         chat_commands=chat_commands,
+        events=events,
     )
 
     # --- Прошиваем корень в бота (то же, что делал контейнер через supplied) ---

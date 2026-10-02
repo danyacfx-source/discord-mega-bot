@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import os
 import time
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -34,11 +36,16 @@ def _config(tmp_path, monkeypatch, **overrides) -> Config:
     return config
 
 
+def _kv() -> SimpleNamespace:
+    """Фейковый KV: сервис пишет в оверлей-слоты, тесту нужен только шумоглот."""
+    return SimpleNamespace(set=AsyncMock(), get=AsyncMock(return_value=None), delete=AsyncMock())
+
+
 @pytest.fixture
 def service(db, tmp_path, monkeypatch) -> ChatCommandsService:
     config = _config(tmp_path, monkeypatch)
     coins = ChatCoinsService(ChatCoinsRepository(db))
-    return ChatCommandsService(config, coins)
+    return ChatCommandsService(config, coins, _kv())
 
 
 class _Recorder:
@@ -132,7 +139,7 @@ async def test_help_lists_commands(kick) -> None:
 @pytest.mark.asyncio
 async def test_disabled_config_silent(db, tmp_path, monkeypatch) -> None:
     config = _config(tmp_path, monkeypatch, CHAT_COMMANDS_ENABLED="0")
-    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)))
+    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)), _kv())
     recorder = _Recorder()
     service.register_platform("kick", reply=recorder)
     await service.handle(_msg("!ping"))
@@ -209,7 +216,7 @@ async def test_flip_win(kick, monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_top_leaderboard(db, tmp_path, monkeypatch) -> None:
     config = _config(tmp_path, monkeypatch)
-    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)))
+    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)), _kv())
     recorder = _Recorder()
     service.register_platform("kick", reply=recorder)
     await service._coins.add("kick", "alice", "Alice", 500)
@@ -301,7 +308,7 @@ async def test_links_from_config(service, tmp_path, monkeypatch) -> None:
         KICK_CHANNEL_SLUG="mychannel",
         SOCIALS_DISCORD="https://discord.gg/test",
     )
-    service = ChatCommandsService(config, service._coins)
+    service = ChatCommandsService(config, service._coins, _kv())
     recorder = _Recorder()
     service.register_platform("kick", reply=recorder)
     await service.handle(_msg("!links"))

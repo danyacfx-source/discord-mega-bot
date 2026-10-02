@@ -1069,3 +1069,192 @@ select.input { cursor: pointer; }
 }
 .file-size { font-size: 11.5px; }
 .file-actions { display: flex; gap: 6px; }
+
+/* welcome constructor */
+.welcome-preview {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+}
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-row input[type="color"] {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card2);
+  cursor: pointer;
+}
+input[type="range"].range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+/* overlay constructor */
+.ovl-top {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ovl-name { flex: 1; min-width: 160px; }
+.ovl-size { width: auto; }
+.ovl-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.ovl-add { cursor: pointer; }
+.ovl-editor {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.ovl-canvas-wrap { flex: 1; min-width: 0; }
+.ovl-canvas {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  overflow: hidden;
+  background: repeating-conic-gradient(rgba(255, 255, 255, 0.04) 0% 25%, transparent 0% 50%) 50% / 24px 24px, #0c0f16;
+}
+.ovl-w {
+  position: absolute;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  cursor: move;
+  user-select: none;
+  padding: 8px 10px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(20, 25, 38, 0.92), rgba(28, 34, 52, 0.86));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.ovl-w.sel {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+.ovl-wlabel {
+  position: absolute;
+  top: 3px;
+  left: 8px;
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.ovl-h {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 13px;
+  height: 13px;
+  background: var(--accent);
+  border: 2px solid var(--card);
+  border-radius: 4px;
+  cursor: nwse-resize;
+  z-index: 2;
+}
+.ovl-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.ovl-ph {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+.ovl-text {
+  width: 100%;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.25;
+}
+.ovl-img { width: 100%; height: 100%; object-fit: cover; }
+.ovl-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 6px;
+}
+.ovl-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #ff9a76);
+}
+.ovl-inspector {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ovl-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 650;
+}
+.ovl-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+@media (max-width: 1100px) {
+  .ovl-editor { flex-direction: column; }
+  .ovl-inspector { width: 100%; }
+}
+.chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* stream cards preview */
+.sc-tab { cursor: pointer; }
+.sc-preview {
+  border-left: 6px solid var(--accent);
+  background: #2b2f3a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  min-height: 200px;
+}
+.sc-embed { display: flex; flex-direction: column; gap: 6px; color: #dbdee1; }
+.sc-title { font-size: 16px; font-weight: 700; color: #f2f3f5; }
+.sc-desc { font-size: 13.5px; color: #dbdee1; }
+.sc-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+.sc-field { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.sc-field b { color: #f2f3f5; font-size: 13px; }
+.sc-field span { color: #b5bac1; }
+.sc-footer { font-size: 11.5px; color: #949ba4; margin-top: 6px; }

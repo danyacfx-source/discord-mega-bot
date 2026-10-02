@@ -14,6 +14,7 @@ from app.services.birthday_service import BirthdayService
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService
 from app.services.donation_service import DonationService
+from app.services.event_bus import EventBus
 from app.services.giveaway_service import GiveawayService
 from app.services.kick_service import KickService
 from app.services.kv_service import KvService
@@ -56,3 +57,4 @@ class Services:
     scheduled: ScheduledMessagesService
     chat_coins: ChatCoinsService
     chat_commands: ChatCommandsService
+    events: EventBus

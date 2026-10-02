@@ -52,6 +52,16 @@ class MegaCog(commands.Cog):
     def config(self):
         return self.bot.config
 
+    def publish_event(self, event_type: str, data: dict[str, Any]) -> None:
+        """Публикует событие в шину живой ленты вебпанели; вне сборки — no-op."""
+        services = getattr(self.bot, "services", None)
+        if services is None:
+            return
+        events = getattr(services, "events", None)
+        if events is None:
+            return
+        events.publish(event_type, data)
+
 
 RepoT = TypeVar("RepoT", bound="BaseRepository")
 

@@ -1,11 +1,12 @@
-"""Карточки стримов: сессия в KV (пик/сброс) и embed-построители."""
+"""Карточки стримов: сессия в KV (пик/сброс), embed-построители и пресеты."""
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.cogs.streams.stream_cards import _duration, live_card, offline_card
+from app.cogs.streams.stream_cards import CARDS_KEY, _duration, card_presets, live_card, offline_card
 from app.services.stream_session import StreamSessionStore
 
 
@@ -172,3 +173,73 @@ def test_offline_card_without_talkers_has_no_field():
     session = {"title": "Вечерний стрим", "peak": 100, "started_at": _SAME_STREAM_STARTED}
     card = offline_card("kick", url="https://kick.com/x", session=session)
     assert not any(f.name == "💬 Говорили в чате" for f in card.fields)
+
+
+def test_live_card_preset_overrides_everything():
+    preset = {
+        "live": {
+            "titles": {"twitch": "В эфире, заходи"},
+            "colors": {"twitch": "#123456"},
+            "footer": "{label} • {bot}",
+            "fields": {"viewers": "Зрители онлайн", "bogus": "мусор не проходит"},
+        }
+    }
+    started = datetime.now(UTC) - timedelta(minutes=5)
+    embed = live_card("twitch", url="https://www.twitch.tv/alice",
+                      status=_status(started_at=started.isoformat()), session={"peak": 5}, preset=preset)
+
+    assert embed.title == "В эфире, заходи"
+    assert embed.color.value == 0x123456
+    assert embed.footer.text is not None and "Twitch" in embed.footer.text
+    fields = {f.name: f.value for f in embed.fields}
+    assert fields["Зрители онлайн"] == "100"
+    assert "👁 Зрители" not in fields
+    assert "bogus" not in fields and "мусор не проходит" not in fields
+
+
+def test_live_card_preset_blank_values_fall_back_to_defaults():
+    preset = {"live": {"titles": {"twitch": "   "}, "colors": {"twitch": "red"}, "footer": ""}}
+    embed = live_card("twitch", url=None, status=_status(), preset=preset)
+    assert embed.title.startswith("🔴")
+    assert embed.color.value == 0x9146FF
+    assert embed.footer.text is not None and "Twitch" in embed.footer.text
+
+
+def test_offline_card_preset_overrides():
+    preset = {
+        "offline": {
+            "titles": {"kick": "Эфир окончен"},
+            "colors": {"kick": "#abcdef"},
+            "footer": "Пока!",
+            "fields": {"peak": "Максимум зрителей"},
+        }
+    }
+    session = {"title": "Вечерний стрим", "peak": 100, "started_at": _SAME_STREAM_STARTED}
+    embed = offline_card("kick", url="https://kick.com/x", session=session, preset=preset)
+
+    assert embed.title == "Эфир окончен"
+    assert embed.color.value == 0xABCDEF
+    assert embed.footer.text == "Пока!"
+    fields = {f.name: f.value for f in embed.fields}
+    assert fields["Максимум зрителей"] == "100"
+
+
+def test_offline_card_preset_without_override_keeps_neutral():
+    embed = offline_card("kick", url="https://kick.com/x", session={"title": "x", "peak": 1}, preset={})
+    assert embed.color.value == 0x272D3A
+    assert any(f.name == "📈 Пик зрителей" for f in embed.fields)
+
+
+@pytest.mark.asyncio
+async def test_card_presets_reads_kv_and_survives_garbage():
+    kv = FakeKv()
+    assert await card_presets(kv) == {}, "нет ключа → пустой пресет"
+
+    await kv.set(CARDS_KEY, "это не json")
+    assert await card_presets(kv) == {}
+
+    await kv.set(CARDS_KEY, json.dumps(["не", "словарь"]))
+    assert await card_presets(kv) == {}
+
+    await kv.set(CARDS_KEY, json.dumps({"live": {"footer": "Прямой эфир"}}))
+    assert (await card_presets(kv))["live"]["footer"] == "Прямой эфир"

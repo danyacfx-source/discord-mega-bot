@@ -11,8 +11,9 @@ from discord.ext import commands
 
 from app.core import embeds
 from app.core.base import MegaCog
+from app.services.kv_service import KvService
 from app.services.settings_service import SettingsService
-from app.utils.welcome_card import render_welcome_card
+from app.utils.welcome_card import WelcomePreset, render_welcome_card
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -25,9 +26,10 @@ _DEFAULT_VOICE_DESC = "Голосовой канал"
 
 
 class GreetingsCog(MegaCog, name="Greetings"):
-    def __init__(self, bot: MegaBot, settings: SettingsService) -> None:
+    def __init__(self, bot: MegaBot, settings: SettingsService, kv: KvService) -> None:
         super().__init__(bot)
         self.settings = settings
+        self.kv = kv
 
     # ------------------------------------------------------------- catalog LD
 
@@ -157,6 +159,15 @@ class GreetingsCog(MegaCog, name="Greetings"):
         except discord.HTTPException:
             logger.warning("Welcome: ошибка отправки в %s", getattr(channel, "name", channel.id))
 
+    async def _load_preset(self) -> WelcomePreset | None:
+        """Пресет из KV (конструктор вебпанели); пусто/ошибка — дефолтный вид."""
+        try:
+            raw = await self.kv.get("welcome_preset")
+        except Exception:
+            logger.debug("Welcome: пресет не прочитан", exc_info=True)
+            return None
+        return WelcomePreset.from_json(raw) if raw else None
+
     async def _welcome_card_file(
         self, member: discord.Member, embed: discord.Embed
     ) -> discord.File | None:
@@ -168,6 +179,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
                 display_name=member.display_name,
                 member_count=member.guild.member_count,
                 guild_name=member.guild.name,
+                preset=await self._load_preset(),
             )
         except Exception:
             logger.debug("Welcome: карточка не построена", exc_info=True)

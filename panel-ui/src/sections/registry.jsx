@@ -12,6 +12,9 @@ import Streams from "./streams.jsx";
 import AIChat from "./ai.jsx";
 import Scheduler from "./scheduler.jsx";
 import EmbedBuilder from "./embed.jsx";
+import WelcomeSection from "./welcome.jsx";
+import OverlaySection from "./overlay.jsx";
+import StreamCardsSection from "./streamcards.jsx";
 import SettingsSection from "./settings.jsx";
 import TestSection from "./test.jsx";
 import FilesSection from "./files.jsx";
@@ -46,6 +49,9 @@ export const NAV = [
     label: "Контент",
     items: [
       { id: "embed", icon: "📝", title: "Эмбеды", desc: "Создание сообщений и эмбедов с предпросмотром.", Component: EmbedBuilder },
+      { id: "welcome", icon: "👋", title: "Приветствие", desc: "Конструктор PNG-карточки для новых участников.", Component: WelcomeSection },
+      { id: "overlay", icon: "🪟", title: "Оверлей", desc: "Конструктор раскладки виджетов для OBS.", Component: OverlaySection },
+      { id: "streamcards", icon: "🎴", title: "Карточки стримов", desc: "Заголовки, цвета и поля анонсов Twitch/Kick/VK.", Component: StreamCardsSection },
       { id: "scheduler", icon: "⏰", title: "Планировщик", desc: "Планирование будущих публикаций.", Component: Scheduler },
     ],
   },

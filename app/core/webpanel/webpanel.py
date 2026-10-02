@@ -27,10 +27,22 @@ from argon2.exceptions import VerificationError
 
 from app.core import embeds
 from app.core.api_client import ApiClient
+from app.core.overlay.layout import (
+    CANVAS_PRESETS,
+    WIDGET_TYPES,
+    default_layout,
+    delete_layout,
+    list_layouts,
+    load_layout,
+    new_id,
+    save_layout,
+    save_layouts,
+)
 from app.core.webpanel.log_ring import RingBufferHandler
 from app.core.webpanel.routes import register_routes
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
 from app.utils.stream_history import trend
+from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -86,6 +98,49 @@ _CSP = (
     "frame-ancestors 'none'"
 )
 _LOG_RING_SIZE = 2000
+_WELCOME_PRESET_KEY = "welcome_preset"
+
+#: Пресеты карточек стримов (см. app.cogs.streams.stream_cards.CARDS_KEY).
+_STREAM_CARDS_KEY = "stream:cards"
+_CARD_PLATFORMS = ("twitch", "kick", "vk_video")
+_CARD_HEX_RE = re.compile(r"#?[0-9a-fA-F]{6}\Z")
+_CARD_FIELDS_LIVE = ("viewers", "peak", "duration", "trend", "category", "description")
+_CARD_FIELDS_OFFLINE = ("vod", "peak", "duration", "category", "talkers")
+
+
+def _clean_cards_str(value: Any, limit: int = 200) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.strip()[:limit]
+
+
+def _clean_cards_hex(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    if not _CARD_HEX_RE.fullmatch(text):
+        return ""
+    return text if text.startswith("#") else f"#{text}"
+
+
+def _clean_cards_section(raw: Any, field_keys: tuple[str, ...]) -> dict[str, Any]:
+    data = raw if isinstance(raw, dict) else {}
+    titles = data.get("titles") if isinstance(data.get("titles"), dict) else {}
+    colors = data.get("colors") if isinstance(data.get("colors"), dict) else {}
+    fields = data.get("fields") if isinstance(data.get("fields"), dict) else {}
+    return {
+        "titles": {p: t for p in _CARD_PLATFORMS if (t := _clean_cards_str(titles.get(p), 256))},
+        "colors": {p: c for p in _CARD_PLATFORMS if (c := _clean_cards_hex(colors.get(p)))},
+        "footer": _clean_cards_str(data.get("footer"), 100),
+        "fields": {k: v for k in field_keys if (v := _clean_cards_str(fields.get(k), 120))},
+    }
+
+
+def _clean_cards_preset(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "live": _clean_cards_section(raw.get("live"), _CARD_FIELDS_LIVE),
+        "offline": _clean_cards_section(raw.get("offline"), _CARD_FIELDS_OFFLINE),
+    }
 _MAX_COMPONENT_ROWS = 5
 _MAX_COMPONENT_PER_ROW = 5
 _MAX_BUTTON_LABEL = 80
@@ -427,6 +482,9 @@ class WebPanel:
         self._analytics_task: asyncio.Task[None] | None = None
         self._pending_activity: dict[tuple[int, str], int] = defaultdict(int)
         self._analytics_clients: set[web.WebSocketResponse] = set()
+        self._events_task: asyncio.Task[None] | None = None
+        self._event_clients: set[asyncio.Queue[dict[str, Any]]] = set()
+        self._events_seq: int = 0
 
     @property
     def services(self) -> Services:
@@ -498,8 +556,9 @@ class WebPanel:
             self.bot.add_listener(self._on_message_hook, "on_message")
             self._listener_registered = True
         self._analytics_task = asyncio.create_task(self._analytics_flush_loop())
-        self._ring = RingBufferHandler(_LOG_RING_SIZE)
+        self._ring = RingBufferHandler(_LOG_RING_SIZE, on_record=self._on_ring_record)
         logging.getLogger().addHandler(self._ring)
+        self._events_task = asyncio.create_task(self._events_loop())
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
 
     async def stop(self) -> None:
@@ -510,6 +569,14 @@ class WebPanel:
             except asyncio.CancelledError:
                 pass
             self._analytics_task = None
+        if self._events_task is not None:
+            self._events_task.cancel()
+            try:
+                await self._events_task
+            except asyncio.CancelledError:
+                pass
+            self._events_task = None
+        self._event_clients.clear()
         await self._flush_activity()
         for websocket in tuple(self._analytics_clients):
             await websocket.close()
@@ -1629,6 +1696,95 @@ class WebPanel:
                     break
         finally:
             self._analytics_clients.discard(websocket)
+        return websocket
+
+    def _on_ring_record(self, entry: dict[str, str]) -> None:
+        """WARNING+ и аудит-записи уходят в шину живой ленты (из любого потока)."""
+        if entry.get("audit") != "1" and entry.get("level") not in ("WARNING", "ERROR", "CRITICAL"):
+            return
+        services = getattr(self.bot, "services", None)
+        events = getattr(services, "events", None) if services is not None else None
+        if events is None:
+            return
+        events.publish(
+            "log",
+            {
+                "level": entry.get("level", "INFO"),
+                "msg": entry.get("msg", ""),
+                "cat": entry.get("cat", "sys"),
+                "t": entry.get("t", ""),
+            },
+        )
+
+    async def _events_loop(self) -> None:
+        """Раздаёт события шины подключённым ws-клиентам живой ленты."""
+        while True:
+            await asyncio.sleep(0.4)
+            try:
+                services = getattr(self.bot, "services", None)
+                events = getattr(services, "events", None) if services is not None else None
+                if events is None:
+                    continue
+                if not self._event_clients:
+                    # клиентов нет — не копим буфер, новое только после подключения
+                    self._events_seq = events.seq
+                    continue
+                batch = events.drain(self._events_seq)
+                if not batch:
+                    continue
+                self._events_seq = batch[-1]["seq"]
+                for queue in tuple(self._event_clients):
+                    for event in batch:
+                        if queue.full():
+                            try:
+                                queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                pass
+                        try:
+                            queue.put_nowait(event)
+                        except asyncio.QueueFull:
+                            pass
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                logger.debug("Живая лента: сбой рассылки событий", exc_info=True)
+
+    async def _ws_events(self, request: web.Request) -> web.StreamResponse:
+        if not self._rate_ok(request) or not self._allowed_origin(request):
+            return self._json({"ok": False, "error": "Unauthorized"}, status=401)
+        websocket = web.WebSocketResponse(heartbeat=30)
+        await websocket.prepare(request)
+        try:
+            first = await websocket.receive(timeout=5)
+        except TimeoutError:
+            await websocket.close(code=4401, message=b"Unauthorized")
+            return websocket
+        token = ""
+        if first.type == web.WSMsgType.TEXT:
+            try:
+                token = str(json.loads(first.data).get("token") or "")
+            except (TypeError, ValueError):
+                token = ""
+        role = self._check_token_value(token)
+        if role is None or self._role_rank(role) < self._role_rank("viewer"):
+            await websocket.close(code=4401, message=b"Unauthorized")
+            return websocket
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
+        self._event_clients.add(queue)
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
+                except TimeoutError:
+                    if websocket.closed:
+                        break
+                    await websocket.send_json({"type": "ping"})
+                    continue
+                await websocket.send_json(event)
+        except (ConnectionResetError, ConnectionError, RuntimeError):
+            pass
+        finally:
+            self._event_clients.discard(queue)
         return websocket
 
     async def _api_monitor(self, request: web.Request) -> web.Response:
@@ -2926,6 +3082,146 @@ class WebPanel:
         if not changed:
             return self._json({"ok": False, "error": "Нечего обновить"}, status=400)
         return self._json({"ok": True, "paused": bool(cog._paused)})
+
+    async def _api_stream_cards_get(self, request: web.Request) -> web.Response:
+        raw = await self.services.kv.get(_STREAM_CARDS_KEY)
+        try:
+            preset = json.loads(raw) if raw else {}
+        except (ValueError, TypeError):
+            preset = {}
+        if not isinstance(preset, dict):
+            preset = {}
+        return self._json({"ok": True, "preset": preset})
+
+    async def _api_stream_cards_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        if payload.get("reset"):
+            await self.services.kv.delete(_STREAM_CARDS_KEY)
+            return self._json({"ok": True, "preset": {}, "custom": False})
+        preset = _clean_cards_preset(payload.get("preset") if isinstance(payload.get("preset"), dict) else {})
+        await self.services.kv.set(_STREAM_CARDS_KEY, json.dumps(preset, ensure_ascii=False))
+        return self._json({"ok": True, "preset": preset, "custom": True})
+
+    async def _api_welcome_get(self, request: web.Request) -> web.Response:
+        raw = await self.services.kv.get(_WELCOME_PRESET_KEY)
+        preset = WelcomePreset.from_json(raw)
+        return self._json(
+            {
+                "ok": True,
+                "preset": preset.to_json(),
+                "custom": bool(raw),
+                "card_enabled": bool(self.bot.config.welcome_card),
+            }
+        )
+
+    async def _api_welcome_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        if payload.get("reset"):
+            await self.services.kv.delete(_WELCOME_PRESET_KEY)
+            preset = WelcomePreset()
+        else:
+            preset = WelcomePreset.from_json(payload.get("preset") if isinstance(payload.get("preset"), dict) else payload)
+            await self.services.kv.set(_WELCOME_PRESET_KEY, json.dumps(preset.to_json(), ensure_ascii=False))
+        return self._json({"ok": True, "preset": preset.to_json(), "custom": not payload.get("reset")})
+
+    async def _api_welcome_preview(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        preset = WelcomePreset.from_json(payload.get("preset") if isinstance(payload.get("preset"), dict) else {})
+        name = str(payload.get("name") or "Алиса")[:32]
+        guild = str(payload.get("guild") or "Тестовый сервер")[:32]
+        try:
+            count = max(1, int(payload.get("count") or 42))
+        except (TypeError, ValueError):
+            count = 42
+        try:
+            avatar = make_placeholder_avatar(name, bg=preset.bg_bottom)
+            png = render_welcome_card(
+                avatar_png=avatar,
+                display_name=name,
+                member_count=count,
+                guild_name=guild,
+                preset=preset,
+            )
+        except Exception:
+            logger.debug("Превью welcome-карточки не построено", exc_info=True)
+            return self._json({"ok": False, "error": "Не удалось построить превью"}, status=500)
+        return web.Response(body=png, content_type="image/png")
+
+    # ------------------------------------------------------ оверлей (раскладки)
+
+    async def _api_overlay_get(self, request: web.Request) -> web.Response:
+        config = self.bot.config
+        overlay = getattr(self.bot, "overlay", None)
+        return self._json(
+            {
+                "ok": True,
+                "enabled": bool(config.overlay_port),
+                "host": config.overlay_host,
+                "port": config.overlay_port,
+                "token": overlay.token if overlay is not None else "",
+                "layouts": await list_layouts(self.services.kv),
+                "canvas_presets": [list(p) for p in CANVAS_PRESETS],
+                "widget_types": list(WIDGET_TYPES),
+            }
+        )
+
+    async def _api_overlay_layouts_create(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        kv = self.services.kv
+        layouts = await list_layouts(kv)
+        layout_id = new_id()
+        name = str(payload.get("name") or "").strip()[:60] or f"Раскладка {len(layouts) + 1}"
+        layout = default_layout(layout_id)
+        layout["name"] = name
+        layout = await save_layout(kv, layout)
+        layouts.append({"id": layout_id, "name": name})
+        await save_layouts(kv, layouts)
+        return self._json({"ok": True, "layout": layout, "layouts": layouts})
+
+    async def _api_overlay_layout_save(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        raw_layout = payload.get("layout") if isinstance(payload.get("layout"), dict) else {}
+        kv = self.services.kv
+        layout = await save_layout(kv, raw_layout)
+        layouts = await list_layouts(kv)
+        entry = {"id": layout["id"], "name": layout["name"]}
+        known = next((item for item in layouts if item["id"] == layout["id"]), None)
+        if known is None:
+            layouts.append(entry)
+        else:
+            known["name"] = entry["name"]
+        await save_layouts(kv, layouts)
+        return self._json({"ok": True, "layout": layout, "layouts": layouts})
+
+    async def _api_overlay_layout_load(self, request: web.Request) -> web.Response:
+        layout_id = str(request.query.get("id") or "")
+        layout = await load_layout(self.services.kv, layout_id)
+        if layout is None:
+            return self._json({"ok": False, "error": "Раскладка не найдена"}, status=404)
+        return self._json({"ok": True, "layout": layout})
+
+    async def _api_overlay_layout_delete(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        layout_id = str(payload.get("id") or "")
+        deleted = await delete_layout(self.services.kv, layout_id)
+        return self._json({"ok": deleted, "layouts": await list_layouts(self.services.kv)})
+
+    async def _api_overlay_layout_rename(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        layout_id = str(payload.get("id") or "")
+        name = str(payload.get("name") or "").strip()[:60]
+        kv = self.services.kv
+        layouts = await list_layouts(kv)
+        entry = next((item for item in layouts if item["id"] == layout_id), None)
+        if entry is None or not name:
+            return self._json({"ok": False, "error": "Раскладка не найдена"}, status=404)
+        entry["name"] = name
+        await save_layouts(kv, layouts)
+        stored = await load_layout(kv, layout_id)
+        if stored is not None:
+            stored["name"] = name
+            await save_layout(kv, stored)
+        return self._json({"ok": True, "layouts": layouts})
 
     async def _api_schedule(self, request: web.Request) -> web.Response:
         service = self.services.scheduled

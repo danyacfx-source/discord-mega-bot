@@ -13,7 +13,7 @@ from app.cogs.streams.archive import needs_seal, seal_archive
 from app.cogs.streams.poll_guard import PollGuard
 from app.cogs.streams.quiet import is_quiet
 from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
-from app.cogs.streams.stream_cards import live_card, offline_card
+from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
@@ -82,7 +82,7 @@ class VkVideoCog(MegaCog, name="VkVideo"):
         slug = str(status["slug"])
         url = str(status.get("url") or f"https://live.vkvideo.ru/{slug}")
         session = await self.vk_video.session_store(slug).capture(status, url=url)
-        embed = live_card("vk_video", url=url, status=status, session=session)
+        embed = live_card("vk_video", url=url, status=status, session=session, preset=await card_presets(self.services.kv))
         message_id = await self.vk_video.sticky_message_id()
         if message_id is not None:
             try:
@@ -128,7 +128,11 @@ class VkVideoCog(MegaCog, name="VkVideo"):
             return
         try:
             message = await channel.fetch_message(message_id)
-            await message.edit(embed=offline_card("vk_video", url=url, session=session, vod_url=vod_url), content="")
+            await message.edit(
+                embed=offline_card("vk_video", url=url, session=session, vod_url=vod_url,
+                                   preset=await card_presets(self.services.kv)),
+                content="",
+            )
             await unpin_sticky(message)
         except discord.HTTPException:
             pass
@@ -165,10 +169,11 @@ class VkVideoCog(MegaCog, name="VkVideo"):
         status = await self.vk_video.channel_status(slug)
         store = self.vk_video.session_store(slug)
         session = await store.load()
+        preset = await card_presets(self.services.kv)
         if status is None or not status.get("live"):
             url = (session or {}).get("url") or f"https://live.vkvideo.ru/{slug}"
-            embed = offline_card("vk_video", url=url, session=session, vod_url=f"https://vkvideo.ru/@{slug}")
+            embed = offline_card("vk_video", url=url, session=session, vod_url=f"https://vkvideo.ru/@{slug}", preset=preset)
         else:
             url = str(status.get("url") or f"https://live.vkvideo.ru/{slug}")
-            embed = live_card("vk_video", url=url, status=status, session=session)
+            embed = live_card("vk_video", url=url, status=status, session=session, preset=preset)
         await interaction.response.send_message(embed=embed)

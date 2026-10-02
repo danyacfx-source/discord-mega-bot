@@ -262,7 +262,11 @@ class MegaBot(commands.Bot):
     async def _notify_error_feed(self, guild: discord.Guild | None, text: str) -> None:
         """Ошибки — эмбедом в канал модерации Discord и в веб-ленту панели (/audit)."""
         services = getattr(self, "services", None)
-        if services is None or services.logging is None:
+        if services is None:
+            return
+        if getattr(services, "events", None) is not None:
+            services.events.publish("error", {"msg": text[:500]})
+        if services.logging is None:
             return
         try:
             await services.logging.send_embed(guild, embeds.error("⛔ Ошибка", text[:1500]), category="mod")
