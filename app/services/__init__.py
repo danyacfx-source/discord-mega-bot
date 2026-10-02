@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.services.birthday_service import BirthdayService
+from app.services.chat_coins_service import ChatCoinsService
+from app.services.chat_commands_service import ChatCommandsService
 from app.services.donation_service import DonationService
 from app.services.giveaway_service import GiveawayService
 from app.services.kick_service import KickService
@@ -52,3 +54,5 @@ class Services:
     birthdays: BirthdayService
     seasons: SeasonService
     scheduled: ScheduledMessagesService
+    chat_coins: ChatCoinsService
+    chat_commands: ChatCommandsService

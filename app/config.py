@@ -130,6 +130,14 @@ class Config:
     kick_chat_link_text: str = "Стрим уже на Kick! Ссылка на стрим в шапке канала."
     kick_chat_send_as_user: bool = False
 
+    # Команды чата стримов (Kick/Twitch): монеты, опросы, топ
+    chat_commands_enabled: bool = True
+    chat_command_prefix: str = "!"
+    chat_coin_reward: int = 5
+    chat_cmd_cooldown: float = 3.0
+    chat_poll_seconds: int = 90
+    twitch_chat_token: str = ""  # oauth с chat:edit — без него Twitch читается read-only
+
     # VK Видео Live
     vk_channel_slug: str | None = None
     vk_notify_channel_id: int | None = None
@@ -372,6 +380,12 @@ class Config:
             kick_chat_send_as_user=_bool(os.getenv("KICK_CHAT_SEND_AS_USER")),
             kick_pusher_app_key=os.getenv("KICK_PUSHER_APP_KEY", "32cbd69e4b950bf97679"),
             kick_pusher_host=os.getenv("KICK_PUSHER_HOST", "ws-us2.pusher.com"),
+            chat_commands_enabled=_bool(os.getenv("CHAT_COMMANDS_ENABLED"), True),
+            chat_command_prefix=(os.getenv("CHAT_COMMAND_PREFIX") or "!")[:4].strip() or "!",
+            chat_coin_reward=max(0, int(os.getenv("CHAT_COIN_REWARD", "5") or "5")),
+            chat_cmd_cooldown=max(0.0, float(os.getenv("CHAT_CMD_COOLDOWN", "3") or "3")),
+            chat_poll_seconds=max(30, min(600, int(os.getenv("CHAT_POLL_SECONDS", "90") or "90"))),
+            twitch_chat_token=os.getenv("TWITCH_CHAT_TOKEN", ""),
             vk_channel_slug=os.getenv("VK_CHANNEL_SLUG"),
             vk_notify_channel_id=_single_int(os.getenv("VK_NOTIFY_CHANNEL_ID")),
             vk_ping_role_id=_single_int(os.getenv("VK_PING_ROLE_ID")),

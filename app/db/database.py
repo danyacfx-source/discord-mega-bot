@@ -384,6 +384,24 @@ class Database:
             await conn.execute(
                 "INSERT INTO schema_migrations(version, applied_at) VALUES (8, datetime('now'))"
             )
+        if 9 not in applied:
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS chat_coins (
+                    platform TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    coins INTEGER NOT NULL DEFAULT 0,
+                    messages INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (platform, username)
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_coins_top ON chat_coins(platform, coins DESC);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (9, datetime('now'))"
+            )
         conn = self.conn
         cursor = await conn.execute("PRAGMA table_info(guild_settings)")
         rows = await cursor.fetchall()

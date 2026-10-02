@@ -91,7 +91,7 @@ app/
     ├── format.py              # плюрализация, относительное время
     └── pagination.py          # PaginatorView (кнопки ◀ ▶)
 
-tests/                         # 285 тестов: структуры (модель-без-контейнера), времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc, heartbeat/дайджеста/starboard/автореспондера/welcome-карточки и smoke-сборки
+tests/                         # 307 тестов: структуры (модель-без-контейнера), времени, формата, автомода, БД, репозиториев, вебпанели, оверлея, tracemalloc, heartbeat/дайджеста/starboard/автореспондера/welcome-карточки/команд чата стримов и smoke-сборки
 ```
 
 ### Как собираются объекты: composition root вместо DI-контейнеров
@@ -330,6 +330,26 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
   при смене расписания Twitch в канал падает пост со списком ближайших эфиров
 - Дедуп по сегментам в KV (`schedpost:{login}:{start_iso}`) — один сегмент постится один раз
 
+### Команды чата стримов (Kick + Twitch)
+- Единый диспетчер `ChatCommandsService`: Kick слушает чат через существующий Pusher,
+  Twitch — через собственный анонимный IRC-клиент (чтение без токена всегда, запись —
+  с `TWITCH_CHAT_TOKEN` scope chat:edit; без него режим read-only: команды и голосование
+  работают, ответы бота не отправляются)
+- Зрительские команды: `!ping`, `!uptime` (длительность эфира из live-статуса платформы),
+  `!links` (Discord/Kick/Twitch/донат), `!расписание` (ближайшие 3 сегмента Twitch),
+  `!8ball [вопрос]`, `!help`; неизвестные команды игнорируются (чат не засоряется)
+- **Экономика на монетах** (`chat_coins`, миграция 9): пассив `CHAT_COIN_REWARD=5` за
+  сообщение (окно 45 сек), `!баланс`, `!топ` (топ-10 с медалями),
+  `!слоты [ставка]` (три барабана: 7️⃣ ×10, 💎 ×8, 🔔 ×5, 🍋 ×3, 🍒 ×2, пара = возврат),
+  `!монетка [ставка] [орёл|решка]` (×2) — списание атомарное (`coins >= ставка`)
+- **Опросы в чате**: `!poll вопрос|вар1|вар2` (только модераторы чата: Twitch-моды/broadcaster,
+  Kick-модераторы из identity) — зрители голосуют голой цифрой (1..9), повторный голос
+  перебивает, через `CHAT_POLL_SECONDS` публикуются итоги с процентами и победителем
+- `!so ник` — шоуаут для модераторов; кулдаун `CHAT_CMD_COOLDOWN` на пользователя;
+  сообщения ботов игнорируются; `CHAT_COMMANDS_ENABLED=0` выключает весь диспетчер
+- Реконнект Twitch IRC с backoff; ошибка логина токена — отказ навсегда с ошибкой в лог,
+  запись rate-limited (1.7 сек/сообщение — лимит Twitch 20/30с)
+
 ### Ошибки → канал модерации
 - Необработанные ошибки команд/слушателей дополнительно уходят embed-ом в канал модерации
   (`/setup log-channel mod` или `MOD_LOG_CHANNEL_ID`) — видно, что сломалось, не листая лог бота
@@ -409,9 +429,10 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 - `activity_hourly` — почасовая активность сообщений (графики панели)
 - `donations`, `temp_voices`, `birthdays`, `season_points`, `scheduled_messages`
 - `music_playlists`, `music_playlist_tracks`, `music_queue`, `music_history`
+- `chat_coins` — монеты чата стримов (баланс и счётчик сообщений по платформе)
 
 Схема эволюционирует через версионированные миграции: `schema_migrations`
-(`_run_migrations` в `app/db/database.py`, версии 1–8) — при старте применяются
+(`_run_migrations` в `app/db/database.py`, версии 1–9) — при старте применяются
 только недостающие версии, повторный запуск идемпотентен. PostgreSQL-бэкенд
 держит финальную схему сразу (`app/db/postgres_database.py`).
 
@@ -467,6 +488,9 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 | `AUTORESPOND_RULES` / `AUTORESPOND_ROLE_RULES` / `AUTORESPOND_ROLE_ID` / `AUTORESPOND_COOLDOWN` | пусто / пусто / пусто / `15` |
 | `TWITCH_SCHEDULE_CHANNEL_ID` / `SCHEDULE_POST_HOUR` | пусто (выключен) / `-1` |
 | `WELCOME_CARD` | `0` (карточка выключена) |
+| `CHAT_COMMANDS_ENABLED` / `CHAT_COMMAND_PREFIX` | `1` / `!` |
+| `CHAT_COIN_REWARD` / `CHAT_CMD_COOLDOWN` / `CHAT_POLL_SECONDS` | `5` / `3` / `90` |
+| `TWITCH_CHAT_TOKEN` | пусто (Twitch-чат read-only) |
 | `PANEL_PORT` | пусто (вебпанель выключена) |
 | `PANEL_HOST` / `PANEL_PASSWORD` / `PANEL_PUBLIC_URL` | `127.0.0.1` / пусто / пусто |
 | `OVERLAY_PORT` / `OVERLAY_HOST` / `OVERLAY_TOKEN` | пусто (оверлей выключен) / `127.0.0.1` / пусто |
@@ -485,7 +509,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 
 ## Качество
 
-- 285 юнит- и интеграционных тестов (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея
+- 307 юнит- и интеграционных тестов (pytest, asyncio), в т.ч. smoke-сборка бота без сети и тесты вебпанели/оверлея
 - `ruff check .` — чисто (line-length 140)
 - Единые паттерны: cog → service → repository → БД; граф собирается в composition root (`app/core/composition.py`)
 - Деплой на Ubuntu: `scripts/install_ubuntu.sh` + `systemd/discord-mega-bot.service`

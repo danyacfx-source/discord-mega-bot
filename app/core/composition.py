@@ -33,6 +33,7 @@ def assemble(
     """Строит и возвращает Root со всеми сервисами и ботом."""
     from app.core.bot import MegaBot
     from app.db.birthdays_repository import BirthdaysRepository
+    from app.db.chat_coins_repository import ChatCoinsRepository
     from app.db.donations_repository import DonationsRepository
     from app.db.giveaways_repository import GiveawaysRepository
     from app.db.kv_repository import KvRepository
@@ -49,6 +50,8 @@ def assemble(
     from app.db.warns_repository import WarnsRepository
     from app.services import Services
     from app.services.birthday_service import BirthdayService
+    from app.services.chat_coins_service import ChatCoinsService
+    from app.services.chat_commands_service import ChatCommandsService
     from app.services.donation_service import DonationService
     from app.services.giveaway_service import GiveawayService
     from app.services.kick_service import KickService
@@ -102,6 +105,8 @@ def assemble(
     twitch = override_or(overrides, "twitch", TwitchService, kv_repo, config)
     kick = override_or(overrides, "kick", KickService, kv_repo, config)
     vk_video = override_or(overrides, "vk_video", VkVideoService, kv_repo, config)
+    chat_coins = override_or(overrides, "chat_coins", ChatCoinsService, ChatCoinsRepository(db))
+    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins)
 
     services = Services(
         settings=settings,
@@ -123,6 +128,8 @@ def assemble(
         birthdays=birthdays,
         seasons=seasons,
         scheduled=scheduled,
+        chat_coins=chat_coins,
+        chat_commands=chat_commands,
     )
 
     # --- Прошиваем корень в бота (то же, что делал контейнер через supplied) ---

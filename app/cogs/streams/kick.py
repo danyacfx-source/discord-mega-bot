@@ -21,6 +21,7 @@ from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
 from app.core.stream_state import stream_activity
+from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.kick_service import KickService, truncate_chat_content
 from app.services.viewer_sessions import OFFLINE_AFTER_SECONDS
 from app.utils.format import plural
@@ -42,9 +43,10 @@ def _can_moderate(interaction: discord.Interaction) -> bool:
 
 
 class KickCog(MegaCog, name="Kick"):
-    def __init__(self, bot: MegaBot, kick: KickService) -> None:
+    def __init__(self, bot: MegaBot, kick: KickService, chat_commands: ChatCommandsService) -> None:
         super().__init__(bot)
         self.kick = kick
+        self.chat_commands = chat_commands
         self._chat_task: asyncio.Task[None] | None = None
         self._guard = PollGuard()
         self._stream_key: str | None = None
@@ -59,11 +61,18 @@ class KickCog(MegaCog, name="Kick"):
                     "KICK_MOD_CHANNEL_ID больше не используется — chatroom определяется из KICK_CHANNEL_SLUG через API"
                 )
             self._chat_task = self.bot.loop.create_task(self._chat_watcher())
+        if self.bot.config.chat_commands_enabled and self.bot.config.kick_channel_slug:
+            self.chat_commands.register_platform(
+                "kick",
+                reply=self._reply_chat,
+                live=self._live_status,
+            )
 
     async def cog_unload(self) -> None:
         self.poll_loop.cancel()
         if self._chat_task is not None:
             self._chat_task.cancel()
+        self.chat_commands.unregister_platform("kick")
         await self.kick.aclose()
 
     # ---------------------------------------------------------------- стримы
@@ -445,6 +454,7 @@ class KickCog(MegaCog, name="Kick"):
                 await self.kick.viewer_store().touch(username, stream_id=self._stream_key)
             except Exception:
                 logger.debug("Kick: не удалось обновить сессию зрителя %s", username, exc_info=True)
+            await self._dispatch_command(sender, username, data)
         content = (data.get("content") or "")[:200].lower()
         ban_words = self.bot.config.kick_ban_words
         if not ban_words or not any(word.lower() in content for word in ban_words):
@@ -460,3 +470,31 @@ class KickCog(MegaCog, name="Kick"):
             "Kick: автомод %s (%s) — удаление=%s, бан=%s, совпадение среди %s: %s",
             sender.get("username"), user_id, ok_delete, ok_ban, words, content[:60],
         )
+
+    async def _dispatch_command(self, sender: dict[str, Any], username: str, data: dict[str, Any]) -> None:
+        """Передаёт сообщение чата в диспетчер команд (не роняет автомод)."""
+        if not self.bot.config.chat_commands_enabled:
+            return
+        identity = sender.get("identity") or {}
+        try:
+            await self.chat_commands.handle(
+                ChatMessage(
+                    platform="kick",
+                    username=username.lower(),
+                    display_name=str(sender.get("username") or username),
+                    content=str(data.get("content") or ""),
+                    is_mod=bool(identity.get("is_moderator") or identity.get("is_owner")),
+                    reply_to="",
+                )
+            )
+        except Exception:
+            logger.debug("Kick: сбой диспетчера команд чата", exc_info=True)
+
+    async def _reply_chat(self, reply_to: str, text: str) -> None:
+        await self.kick.send_chat_message(text, as_user=self.bot.config.kick_chat_send_as_user)
+
+    async def _live_status(self) -> dict[str, Any] | None:
+        slug = self.bot.config.kick_channel_slug
+        if not slug:
+            return None
+        return await self.kick.channel_status(slug)
