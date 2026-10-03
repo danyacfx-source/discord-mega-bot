@@ -51,6 +51,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/audit", panel._serve_audit_page)
     router.add_get("/wardogs/join", panel._wardogs_join_page)
     router.add_get("/api/wardogs/join-link", panel._api_wardogs_join_link)
+    router.add_get("/overlay{tail:.*}", panel._overlay_proxy)
     router.add_post("/api/login", panel._api_login)
     router.add_get("/oauth/discord", panel._oauth_start)
     router.add_get("/oauth/discord/callback", panel._oauth_callback)

@@ -3165,6 +3165,41 @@ class WebPanel:
     def _overlay_url_base(self) -> str:
         return overlay_url_base(self.bot.config)
 
+    async def _overlay_proxy(self, request: web.Request) -> web.StreamResponse:
+        """Проксирует ``/overlay*`` на локальный оверлей-сервер.
+
+        Оба сервиса живут в одном контейнере и слушают разные порты, но
+        хостинг пропускает трафик домена только на один порт панели.
+        Панель выступает шлюзом: запрос уходит на ``127.0.0.1:OVERLAY_PORT``,
+        ответ потоково возвращается клиенту без аутентификации (та же
+        проверка токена остаётся на стороне оверлея).
+        """
+        config = self.bot.config
+        if not config.overlay_port:
+            return web.Response(status=404, text="Overlay disabled")
+        url = f"http://127.0.0.1:{int(config.overlay_port)}{request.raw_path}"
+        headers = {
+            key: value
+            for key, value in request.headers.items()
+            if key.lower() not in {"host", "content-length", "connection", "keep-alive"}
+        }
+        try:
+            async with self._require_http().get(url, headers=headers, allow_redirects=False) as resp:
+                out = web.StreamResponse(status=resp.status)
+                for key, value in resp.headers.items():
+                    # тело декомпрессируется сессией — заголовки кодирования устаревают
+                    if key.lower() in {"connection", "keep-alive", "transfer-encoding", "content-length", "content-encoding"}:
+                        continue
+                    out.headers[key] = value
+                await out.prepare(request)
+                async for chunk in resp.content.iter_chunked(65536):
+                    await out.write(chunk)
+                await out.write_eof()
+                return out
+        except (aiohttp.ClientError, TimeoutError):
+            logger.debug("Оверлей недоступен: %s", url, exc_info=True)
+            return web.Response(status=502, text="Overlay offline")
+
     async def _api_overlay_get(self, request: web.Request) -> web.Response:
         config = self.bot.config
         overlay = getattr(self.bot, "overlay", None)
