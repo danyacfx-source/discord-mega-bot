@@ -9,6 +9,10 @@ services:
       # не сможет достучаться до веб-панели.
       PANEL_HOST: 0.0.0.0
       OVERLAY_HOST: 0.0.0.0
+      # Дефолты на случай, если платформа хостинга не передаёт их через свой env:
+      # панель проксирует /overlay с 3000 на этот порт (один порт на домен).
+      OVERLAY_PORT: 8765
+      OVERLAY_PUBLIC_URL: https://dendich.ru
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
