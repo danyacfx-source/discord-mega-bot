@@ -289,6 +289,10 @@ export default function OverlaySection() {
     layout && meta.enabled
       ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/${layout.id}?token=${meta.token}`
       : "";
+  const chatUrl =
+    meta.enabled && meta.token
+      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}`
+      : "";
 
   async function copyUrl() {
     try {
@@ -296,6 +300,15 @@ export default function OverlaySection() {
       toast("Ссылка скопирована — вставьте в OBS Browser Source", true);
     } catch (_) {
       prompt("Ссылка для OBS:", overlayUrl);
+    }
+  }
+
+  async function copyChatUrl() {
+    try {
+      await navigator.clipboard.writeText(chatUrl);
+      toast("Ссылка на ленту чата скопирована", true);
+    } catch (_) {
+      prompt("Лента чата для OBS:", chatUrl);
     }
   }
 
@@ -382,6 +395,11 @@ export default function OverlaySection() {
           {meta.enabled && meta.token ? (
             <button class="btn" type="button" onClick={copyUrl}>
               🔗 Ссылка для OBS
+            </button>
+          ) : null}
+          {meta.enabled && meta.token ? (
+            <button class="btn" type="button" onClick={copyChatUrl}>
+              💬 Лента чата для OBS
             </button>
           ) : null}
           <button class="btn danger" type="button" onClick={deleteLayout}>

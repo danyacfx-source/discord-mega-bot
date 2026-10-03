@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><title>Chat overlay</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;overflow:hidden}
+#feed{display:flex;flex-direction:column;justify-content:flex-end;gap:3px}
+.m{font-size:16px;line-height:1.45;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45);word-break:break-word}
+.m b{font-weight:800;color:#9146ff}
+.m b.p-kick{color:#53fc18}
+.m b.p-discord{color:#5865f2}
+.m b.mod{color:#ff5a36}
+</style></head><body><div id="feed"></div>
+<script>
+const TOKEN="__TOKEN__";
+const LIMIT=Math.max(1,Math.min(80,Number(new URLSearchParams(location.search).get("limit"))||20));
+function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+let sig="";
+async function load(){
+  try{
+    const r=await fetch("/overlay/api",{headers:{"X-Overlay-Token":TOKEN}});
+    if(!r.ok)return;
+    const d=await r.json();
+    const rows=(d.chat||[]).slice(-LIMIT);
+    const next=JSON.stringify(rows);
+    if(next===sig)return;
+    sig=next;
+    document.getElementById("feed").innerHTML=rows.map(function(m){
+      return '<div class="m"><b class="p-'+esc(m.platform)+(m.mod?" mod":"")+'">'+esc(m.name)+"</b>: "+esc(m.text)+"</div>";
+    }).join("");
+  }catch(e){}
+}
+load();setInterval(load,3000);
+</script></body></html>

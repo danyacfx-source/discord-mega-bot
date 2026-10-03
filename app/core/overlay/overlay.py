@@ -21,6 +21,7 @@ logger = logging.getLogger("bot.overlay")
 
 _PAGE_FILE = Path(__file__).resolve().parent / "page.html"
 _LAYOUT_PAGE_FILE = Path(__file__).resolve().parent / "layout.html"
+_CHAT_PAGE_FILE = Path(__file__).resolve().parent / "chat.html"
 
 #: OBS опрашивает оверлей каждые 5 с — статус стрима кэшируем, чтобы не
 #: долбить Twitch/Kick API на каждый запрос страницы.
@@ -46,6 +47,7 @@ class Overlay:
         self._token = self._resolve_token()
         self._page = _read_page().replace("__TOKEN__", self._token)
         self._layout_page = _LAYOUT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
+        self._chat_page = _CHAT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
         self._status_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
     @property
@@ -117,6 +119,7 @@ class Overlay:
         app.router.add_get("/overlay", self._page_handler)
         app.router.add_get("/overlay/api", self._api_handler)
         app.router.add_get("/overlay/health", self._health_handler)
+        app.router.add_get("/overlay/chat", self._chat_page_handler)
         app.router.add_get("/overlay/api/{layout_id}", self._layout_api_handler)
         app.router.add_get("/overlay/{layout_id}", self._layout_page_handler)
         return app
@@ -138,6 +141,12 @@ class Overlay:
         if not self._valid_auth(request):
             return self._unauthorized()
         return web.Response(text=self._page, content_type="text/html", charset="utf-8")
+
+    async def _chat_page_handler(self, request: web.Request) -> web.Response:
+        """Отдельная страница ленты чата для OBS: прозрачный фон, только сообщения."""
+        if not self._valid_auth(request):
+            return self._unauthorized()
+        return web.Response(text=self._chat_page, content_type="text/html", charset="utf-8")
 
     async def _health_handler(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True})
@@ -233,6 +242,7 @@ class Overlay:
             "channels": self._safe_channels(),
             "counters": [],
             "donation_goal": self._donation_goal(),
+            "chat": self._feed_recent(),
         }
 
     def _safe_channels(self) -> dict[str, str]:

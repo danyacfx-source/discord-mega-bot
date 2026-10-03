@@ -198,3 +198,29 @@ def test_overlay_url_base(tmp_path) -> None:
     assert overlay_url_base(cfg) == "http://127.0.0.1:8765"
     object.__setattr__(cfg, "overlay_port", None)
     assert overlay_url_base(cfg) == ""
+
+
+@pytest.mark.asyncio
+async def test_chat_overlay_page(tmp_path) -> None:
+    config = _config(tmp_path, overlay_token="overlay-secret-token-32chars")
+    bot = MegaBot(config)
+    await bot.setup_hook()
+    overlay = Overlay(bot)
+    try:
+        bot.services.chat_feed.push("kick", "Алиса", "привет эфиру")  # type: ignore[union-attr]
+        async with TestServer(overlay._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Overlay-Token": "overlay-secret-token-32chars"}
+                # без токена — 401; маршрут /overlay/chat не перехватывается раскладкой
+                assert (await client.get("/overlay/chat")).status == 401
+                page = await client.get("/overlay/chat", headers=headers)
+                assert page.status == 200
+                html = await page.text()
+                assert 'id="feed"' in html
+                assert "overlay-secret-token-32chars" in html
+                # общая выдача /overlay/api теперь несёт ленту чата
+                data = await (await client.get("/overlay/api", headers=headers)).json()
+                assert data["chat"][0]["name"] == "Алиса"
+                assert data["chat"][0]["text"] == "привет эфиру"
+    finally:
+        await bot.close()
