@@ -1134,15 +1134,15 @@ input[type="range"].range {
   user-select: none;
   padding: 8px 10px;
   overflow: hidden;
-  background: linear-gradient(145deg, rgba(20, 25, 38, 0.92), rgba(28, 34, 52, 0.86));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  background: none;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 5px rgba(0, 0, 0, 0.75), 0 0 16px rgba(0, 0, 0, 0.45);
 }
 .ovl-w.sel {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .ovl-wlabel {
   position: absolute;
@@ -1195,7 +1195,7 @@ input[type="range"].range {
 .ovl-bar {
   height: 6px;
   border-radius: 99px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.16);
   overflow: hidden;
   margin-top: 6px;
 }

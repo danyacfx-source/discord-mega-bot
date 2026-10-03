@@ -80,7 +80,7 @@ function widgetPreview(w) {
   if (w.type === "stream") {
     return (
       <div class="ovl-ph">
-        <b>📺 {p.title || "В эфире · название"}</b>
+        <b>{p.title || "В эфире · название"}</b>
         <div class="muted">Зрители 123 · Пик 456</div>
       </div>
     );
@@ -88,37 +88,39 @@ function widgetPreview(w) {
   if (w.type === "goal") {
     return (
       <div class="ovl-ph">
-        <b>🎯 {p.title || "Донат-цель"}</b>
-        <div class="ovl-bar"><i style={{ width: "42%" }} /></div>
+        <b>{p.title || "Донат-цель"}</b>
+        <div class="muted">1 200 / 3 000 ₽</div>
+        <div class="ovl-bar">
+          <i style={{ width: "40%" }} />
+        </div>
       </div>
     );
   }
   if (w.type === "chat_top") {
     return (
       <div class="ovl-ph">
-        <b>🏆 {p.title || "Топ чата"}</b>
-        <div class="muted">1. Алиса — 120 · 2. Боб — 90</div>
+        <b>{p.title || "Топ чата"}</b>
+        <div class="muted">1. Алиса · 120</div>
+        <div class="muted">2. Боб · 90</div>
       </div>
     );
   }
   if (w.type === "chat") {
     return (
       <div class="ovl-ph">
-        <b>💬 {p.title || "Лента чата"}</b>
+        <b>{p.title || "Лента чата"}</b>
         <div class="muted">
           <b style={{ color: "#53fc18" }}>Алиса:</b> привет всем
-          <br />
+        </div>
+        <div class="muted">
           <b style={{ color: "#9146ff" }}>Борис:</b> кота покажи
         </div>
       </div>
     );
   }
-  const icons = { donation: "💰", slots: "🎰", poll: "📊" };
   return (
     <div class="ovl-ph">
-      <b>
-        {icons[w.type]} {p.title || TYPE_META[w.type].label}
-      </b>
+      <b>{p.title || TYPE_META[w.type].label}</b>
       <div class="muted">пример данных</div>
     </div>
   );
