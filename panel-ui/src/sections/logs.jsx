@@ -39,7 +39,7 @@ export default function LogsSection() {
   return (
     <div class="card">
       <div class="row-inline" style={{ justifyContent: "space-between" }}>
-        <h3 class="sec" style={{ margin: 0 }}>📄 Логи бота</h3>
+        <h3 class="sec" style={{ margin: 0 }}>Логи бота</h3>
         <div class="row-inline" style={{ margin: 0 }}>
           <select class="input mini-select" value={level} onChange={(e) => setLevel(e.target.value)}>
             <option value="">Все уровни</option>
@@ -54,7 +54,7 @@ export default function LogsSection() {
             </span>
             <span>Авто</span>
           </label>
-          <button class="btn mini" type="button" onClick={load}>⟳ Обновить</button>
+          <button class="btn mini" type="button" onClick={load}>Обновить</button>
         </div>
       </div>
 

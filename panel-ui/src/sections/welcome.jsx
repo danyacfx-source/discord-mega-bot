@@ -95,7 +95,7 @@ export default function WelcomeSection() {
     setSaving(false);
     if (r.status === 200 && r.data.ok) {
       setCustom(true);
-      toast("👋 Приветствие сохранено", true);
+      toast("Приветствие сохранено", true);
     } else {
       toast(errToast(r), false);
     }
@@ -116,7 +116,7 @@ export default function WelcomeSection() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">👋 Приветственная карточка</h3>
+        <h3 class="sec">Приветственная карточка</h3>
         {!cardEnabled && (
           <div class="env-box muted small" style={{ marginBottom: 10 }}>
             В .env выключен <b>WELCOME_CARD</b> — карточка в Discord не отправляется, но пресет здесь сохранится.
@@ -180,11 +180,10 @@ export default function WelcomeSection() {
               )}
             </Field>
             <div class="row-inline">
-              <button class="btn success" type="button" onClick={save} disabled={saving}>
-                💾 Сохранить
+              <button class="btn success" type="button" onClick={save} disabled={saving}>Сохранить
               </button>
               <button class="btn" type="button" onClick={reset}>
-                ↩ Сброс
+                Сброс
               </button>
             </div>
             <span class="muted small">

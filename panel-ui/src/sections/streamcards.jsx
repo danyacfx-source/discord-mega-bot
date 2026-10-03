@@ -8,16 +8,16 @@ const PLATFORMS = [
 ];
 
 const TABS = [
-  { id: "live", label: "🔴 Во время эфира" },
-  { id: "offline", label: "📺 После эфира" },
+  { id: "live", label: "Во время эфира" },
+  { id: "offline", label: "После эфира" },
 ];
 
 const DEFAULTS = {
   live: {
     titles: {
-      twitch: "🔴 Twitch: стрим идёт",
-      kick: "🔴 Kick: стрим идёт",
-      vk_video: "🔴 VK Видео: трансляция идёт",
+      twitch: "Twitch: стрим идёт",
+      kick: "Kick: стрим идёт",
+      vk_video: "VK Видео: трансляция идёт",
     },
     colors: { twitch: "#9146ff", kick: "#53fc18", vk_video: "#0077ff" },
     footer: "",
@@ -25,9 +25,9 @@ const DEFAULTS = {
   },
   offline: {
     titles: {
-      twitch: "📺 Twitch: стрим завершён",
-      kick: "📺 Kick: стрим завершён",
-      vk_video: "📺 VK Видео: трансляция завершена",
+      twitch: "Twitch: стрим завершён",
+      kick: "Kick: стрим завершён",
+      vk_video: "VK Видео: трансляция завершена",
     },
     colors: { twitch: "#272d3a", kick: "#272d3a", vk_video: "#272d3a" },
     footer: "",
@@ -37,19 +37,19 @@ const DEFAULTS = {
 
 const FIELD_DEFS = {
   live: [
-    ["viewers", "Зрители", "👁 Зрители", "100"],
-    ["peak", "Пик", "📈 Пик", "300"],
-    ["duration", "В эфире", "⏱ В эфире", "1:05:00"],
-    ["trend", "Тренд", "📈 Тренд", "▲ 12 за 10 мин · ▂▃▅▇"],
-    ["category", "Категория", "🎮 Категория", "Just Chatting"],
-    ["description", "Описание", "📝 Описание", "Сегодня играем в хоррор"],
+    ["viewers", "Зрители", "Зрители", "100"],
+    ["peak", "Пик", "Пик", "300"],
+    ["duration", "В эфире", "В эфире", "1:05:00"],
+    ["trend", "Тренд", "Тренд", "▲ 12 за 10 мин · ▂▃▅▇"],
+    ["category", "Категория", "Категория", "Just Chatting"],
+    ["description", "Описание", "Описание", "Сегодня играем в хоррор"],
   ],
   offline: [
-    ["vod", "Запись", "📼 Запись", "Посмотреть запись"],
-    ["peak", "Пик зрителей", "📈 Пик зрителей", "450"],
-    ["duration", "Длительность", "⏱ Длительность", "2:05:00"],
-    ["category", "Категория", "🎮 Категория", "Just Chatting"],
-    ["talkers", "Говорили в чате", "💬 Говорили в чате", "vasya — 42"],
+    ["vod", "Запись", "Запись", "Посмотреть запись"],
+    ["peak", "Пик зрителей", "Пик зрителей", "450"],
+    ["duration", "Длительность", "Длительность", "2:05:00"],
+    ["category", "Категория", "Категория", "Just Chatting"],
+    ["talkers", "Говорили в чате", "Говорили в чате", "vasya — 42"],
   ],
 };
 
@@ -133,7 +133,7 @@ export default function StreamCardsSection() {
     if (r.status === 200 && r.data.ok) {
       setPreset(normalize(r.data.preset));
       setDirty(false);
-      toast("🎴 Карточки сохранены", true);
+      toast("Карточки сохранены", true);
     } else toast(errToast(r), false);
   }
 
@@ -152,7 +152,7 @@ export default function StreamCardsSection() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🎴 Карточки стримов</h3>
+        <h3 class="sec">Карточки стримов</h3>
         <div class="muted small" style={{ marginBottom: 10 }}>
           Заголовки, цвета, футер и названия полей для анонсов Twitch/Kick/VK. Пустое поле — используется стандартный вид.
         </div>
@@ -164,8 +164,7 @@ export default function StreamCardsSection() {
             </button>
           ))}
           <span class="grow" />
-          <button class="btn success" type="button" onClick={save} disabled={saving || !dirty}>
-            💾 Сохранить{dirty ? "*" : ""}
+          <button class="btn success" type="button" onClick={save} disabled={saving || !dirty}>Сохранить{dirty ? "*" : ""}
           </button>
           <button class="btn" type="button" onClick={reset}>
             Сброс

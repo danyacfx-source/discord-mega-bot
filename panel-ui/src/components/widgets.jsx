@@ -1,3 +1,5 @@
+import { Icon } from "./icons.jsx";
+
 export function Sparkline({ points = [], height = 56, color = "var(--accent)", label = "" }) {
   const values = points.map((p) => (typeof p === "number" ? p : p.v)).filter((v) => Number.isFinite(v));
   if (values.length < 2) {
@@ -38,7 +40,7 @@ function hash(s) {
 export function Stat({ icon, label, value, sub, tone }) {
   return (
     <div class={"stat-card" + (tone ? " tone-" + tone : "")}>
-      <div class="stat-ic">{icon}</div>
+      <div class="stat-ic">{typeof icon === "string" ? <Icon name={icon} size={18} /> : icon}</div>
       <div class="stat-body">
         <div class="stat-label">{label}</div>
         <div class="stat-value">{value}</div>

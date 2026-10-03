@@ -10,7 +10,7 @@ export default function Birthdays() {
   async function load() {
     const r = await api("/api/birthdays");
     if (r.status !== 200) {
-      if (r.data.error) toast("❌ " + r.data.error, false);
+      if (r.data.error) toast(r.data.error, false);
       return;
     }
     setData(r.data);
@@ -27,7 +27,7 @@ export default function Birthdays() {
     if (!m) return toast("Дата в формате дд.мм (например, 15.08)", false);
     const r = await api("/api/birthdays", { member_id: memberId, day: +m[1], month: +m[2] });
     if (r.status === 200 && r.data.ok) {
-      toast("🎂 Добавлено: " + r.data.name, true);
+      toast("Добавлено: " + r.data.name, true);
       setDate("");
       load();
     } else toast(errToast(r), false);
@@ -36,7 +36,7 @@ export default function Birthdays() {
   async function remove(b) {
     if (!confirm(`Убрать день рождения ${b.name}?`)) return;
     const r = await api(`/api/birthdays/${b.user_id}/remove`, {}, "POST");
-    if (r.status === 200 && r.data.ok) toast("🎂 Удалено", true);
+    if (r.status === 200 && r.data.ok) toast("Удалено", true);
     else toast(errToast(r), false);
     load();
   }
@@ -47,7 +47,7 @@ export default function Birthdays() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🎂 Дни рождения</h3>
+        <h3 class="sec">Дни рождения</h3>
         <div class="two">
           <div class="stack">
             <Field label="Участник">
@@ -73,7 +73,7 @@ export default function Birthdays() {
               </div>
             </Field>
             <div class="row-inline">
-              <button class="btn success" type="button" onClick={add}>🎂 Добавить</button>
+              <button class="btn success" type="button" onClick={add}>Добавить</button>
               <span class="muted small">Анонс в указанный час — как у /birthday.</span>
             </div>
           </div>
@@ -94,7 +94,7 @@ export default function Birthdays() {
                 <b>{b.name}</b> <span class="sub">· {b.user_id}</span>
               </span>
               <button class="btn mini danger" type="button" title="Удалить" onClick={() => remove(b)}>
-                ✕
+                ×
               </button>
             </ListRow>
           ))}

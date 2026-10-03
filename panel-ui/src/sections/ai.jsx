@@ -8,7 +8,7 @@ export default function AIChat() {
   async function load() {
     const r = await api("/api/ai");
     if (r.status !== 200) {
-      if (r.data.error) toast("❌ " + r.data.error, false);
+      if (r.data.error) toast(r.data.error, false);
       return;
     }
     setData(r.data);
@@ -21,7 +21,7 @@ export default function AIChat() {
   async function togglePause() {
     const r = await api("/api/ai", { paused: !data.paused });
     if (r.status === 200 && r.data.ok) {
-      toast(data.paused ? "▶ AI-чат снят с паузы" : "⏸ AI-чат на паузе", true);
+      toast(data.paused ? "AI-чат снят с паузы" : "AI-чат на паузе", true);
       load();
     } else toast(errToast(r), false);
   }
@@ -33,23 +33,21 @@ export default function AIChat() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🤖 AI-чат (Gemini)</h3>
+        <h3 class="sec">AI-чат (Gemini)</h3>
         <div class="row-inline">
           <button class="btn primary" type="button" onClick={togglePause}>
-            {data.paused ? "▶ Снять паузу" : "⏸ Пауза"}
+            {data.paused ? "Снять паузу" : "Пауза"}
           </button>
           <span class="muted small">
             {data.paused ? (
               <>
-                ⏸ <b>пауза</b> — ответы временно приостановлены
+                <b>пауза</b> — ответы временно приостановлены
               </>
             ) : data.enabled ? (
-              <>
-                🟢 <b>активен</b>
+              <><b>активен</b>
               </>
             ) : (
-              <>
-                ⚫ <b>выключен</b> — включите AI_ENABLED + GEMINI_API_KEY + AI_CHANNELS в .env
+              <><b>выключен</b> — включите AI_ENABLED + GEMINI_API_KEY + AI_CHANNELS в .env
               </>
             )}
           </span>

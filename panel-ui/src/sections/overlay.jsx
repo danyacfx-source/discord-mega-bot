@@ -4,16 +4,16 @@ import { api, toast, errToast } from "../lib/exports.js";
 const EMPTY_LAYOUT = null;
 
 const TYPE_META = {
-  stream: { icon: "📺", label: "Стрим" },
-  goal: { icon: "🎯", label: "Донат-цель" },
-  donation: { icon: "💰", label: "Последний донат" },
-  slots: { icon: "🎰", label: "Выигрыш слотов" },
-  poll: { icon: "📊", label: "Последний опрос" },
-  chat_top: { icon: "🏆", label: "Топ чата" },
-  chat: { icon: "💬", label: "Лента чата" },
-  countdown: { icon: "⏳", label: "Обратный отсчёт" },
-  text: { icon: "🔤", label: "Текст" },
-  image: { icon: "🖼", label: "Картинка" },
+  stream: { label: "Стрим" },
+  goal: { label: "Донат-цель" },
+  donation: { label: "Последний донат" },
+  slots: { label: "Выигрыш слотов" },
+  poll: { label: "Последний опрос" },
+  chat_top: { label: "Топ чата" },
+  chat: { label: "Лента чата" },
+  countdown: { label: "Обратный отсчёт" },
+  text: { label: "Текст" },
+  image: { label: "Картинка" },
 };
 
 const SIZES = {
@@ -227,7 +227,7 @@ export default function OverlaySection() {
       setLayout(r.data.layout);
       setSelected("");
       setDirty(false);
-      toast("📐 Раскладка создана", true);
+      toast("Раскладка создана", true);
     } else toast(errToast(r), false);
   }
 
@@ -268,7 +268,7 @@ export default function OverlaySection() {
       setLayout(r.data.layout);
       setMeta((m) => ({ ...m, layouts: r.data.layouts }));
       setDirty(false);
-      toast("💾 Раскладка сохранена", true);
+      toast("Раскладка сохранена", true);
     } else toast(errToast(r), false);
   }
 
@@ -317,7 +317,7 @@ export default function OverlaySection() {
     return (
       <div class="stack">
         <div class="card">
-          <h3 class="sec">🪟 Оверлей для OBS</h3>
+          <h3 class="sec">Оверлей для OBS</h3>
           {!meta.enabled && (
             <div class="env-box muted small" style={{ marginBottom: 10 }}>
               Оверлей выключен — задайте <b>OVERLAY_PORT</b> в .env. Раскладки сохранятся и заработают после перезапуска.
@@ -333,16 +333,15 @@ export default function OverlaySection() {
             {!meta.layouts?.length && <div class="muted small">Раскладок пока нет — создайте первую.</div>}
             {(meta.layouts || []).map((l) => (
               <div class="listline" key={l.id}>
-                <span class="chip">📐 {l.name}</span>
+                <span class="chip">{l.name}</span>
                 <span class="grow sub">/overlay/{l.id}</span>
                 <button class="btn mini" type="button" onClick={() => openLayout(l.id)}>
                   Открыть
                 </button>
                 <button class="btn mini" type="button" onClick={() => renameLayout(l.id, l.name)}>
-                  ✎
                 </button>
                 <button class="btn mini danger" type="button" onClick={() => removeLayout(l.id, l.name)}>
-                  ✕
+                  ×
                 </button>
               </div>
             ))}
@@ -389,28 +388,25 @@ export default function OverlaySection() {
               </option>
             )}
           </select>
-          <button class="btn success" type="button" onClick={saveLayout} disabled={saving || !dirty}>
-            💾 Сохранить{dirty ? "*" : ""}
+          <button class="btn success" type="button" onClick={saveLayout} disabled={saving || !dirty}>Сохранить{dirty ? "*" : ""}
           </button>
           {meta.enabled && meta.token ? (
-            <button class="btn" type="button" onClick={copyUrl}>
-              🔗 Ссылка для OBS
+            <button class="btn" type="button" onClick={copyUrl}>Ссылка для OBS
             </button>
           ) : null}
           {meta.enabled && meta.token ? (
-            <button class="btn" type="button" onClick={copyChatUrl}>
-              💬 Лента чата для OBS
+            <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS
             </button>
           ) : null}
           <button class="btn danger" type="button" onClick={deleteLayout}>
-            🗑
+            Удалить
           </button>
         </div>
 
         <div class="ovl-palette">
           {(meta.widget_types?.length ? meta.widget_types : Object.keys(TYPE_META)).map((type) => (
             <button class="chip ovl-add" type="button" key={type} onClick={() => addWidget(type)}>
-              {TYPE_META[type].icon} {TYPE_META[type].label}
+              {TYPE_META[type].label}
             </button>
           ))}
         </div>
@@ -433,7 +429,7 @@ export default function OverlaySection() {
                   onPointerDown={(e) => startDrag(e, w, "move")}
                 >
                   <div class="ovl-wlabel">
-                    {TYPE_META[w.type].icon} {TYPE_META[w.type].label}
+                    {TYPE_META[w.type].label}
                   </div>
                   {widgetPreview(w)}
                   <span class="ovl-h" onPointerDown={(e) => startDrag(e, w, "resize")} />
@@ -452,7 +448,7 @@ export default function OverlaySection() {
             ) : (
               <div class="stack">
                 <div class="row-inline">
-                  <b>{TYPE_META[widget.type].icon} {TYPE_META[widget.type].label}</b>
+                  <b>{TYPE_META[widget.type].label}</b>
                   <button class="btn mini danger" type="button" onClick={() => removeWidget(widget.id)}>
                     Удалить
                   </button>

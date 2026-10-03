@@ -32,8 +32,7 @@ function PollRow({ p, active, onEnd }) {
       </span>
       {active && (
         <div class="row-actions">
-          <button class="btn mini danger" type="button" onClick={() => onEnd(p)}>
-            ⬛ Завершить
+          <button class="btn mini danger" type="button" onClick={() => onEnd(p)}>Завершить
           </button>
         </div>
       )}
@@ -48,7 +47,7 @@ export default function Polls() {
   async function load() {
     const r = await api("/api/polls");
     if (r.status !== 200) {
-      if (r.data.error) toast("❌ " + r.data.error, false);
+      if (r.data.error) toast(r.data.error, false);
       return;
     }
     setData(r.data);
@@ -64,7 +63,7 @@ export default function Polls() {
     if (!options.length) return toast("Введите варианты ответа", false);
     const r = await api("/api/polls/create", { channel_id: form.channel_id, question: form.question, options });
     if (r.status === 200 && r.data.ok) {
-      toast(`🗳 Опрос #${r.data.poll_id} создан`, true);
+      toast(`Опрос #${r.data.poll_id} создан`, true);
       setForm({ ...form, question: "", options: "" });
       load();
     } else toast(errToast(r), false);
@@ -73,7 +72,7 @@ export default function Polls() {
   async function endPoll(p) {
     if (!confirm(`Завершить опрос #${p.id}? Итоги уйдут в канал.`)) return;
     const r = await api(`/api/polls/${p.id}/end`, {});
-    if (r.status === 200 && r.data.ok) toast(`📊 Опрос #${p.id} завершён`, true);
+    if (r.status === 200 && r.data.ok) toast(`Опрос #${p.id} завершён`, true);
     else toast(errToast(r), false);
     load();
   }
@@ -86,7 +85,7 @@ export default function Polls() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🗳 Новый опрос</h3>
+        <h3 class="sec">Новый опрос</h3>
         <div class="two">
           <div class="stack">
             <Field label="Канал">
@@ -109,7 +108,7 @@ export default function Polls() {
               <textarea class="input" rows="5" placeholder={"Вариант 1\nВариант 2"} value={form.options} onInput={(e) => setForm({ ...form, options: e.target.value })} />
             </Field>
             <div class="row-inline">
-              <button class="btn success" type="button" onClick={create}>🗳 Создать опрос</button>
+              <button class="btn success" type="button" onClick={create}>Создать опрос</button>
               <span class="muted small">Участники голосуют кнопками в Discord.</span>
             </div>
           </div>

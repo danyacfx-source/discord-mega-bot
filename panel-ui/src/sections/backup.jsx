@@ -34,19 +34,19 @@ export default function BackupSection() {
   async function download(url, label) {
     setInfo(label);
     const ok = await downloadAuthed(url);
-    setInfo(ok ? "✅ Скачано." : "Ошибка.");
+    setInfo(ok ? "Скачано." : "Ошибка.");
   }
 
   return (
     <div class="stack">
       <div class="card hl-card">
-        <h3 class="sec">💾 Бэкап и экспорт</h3>
+        <h3 class="sec">Бэкап и экспорт</h3>
         <p class="muted small" style={{ margin: "0 0 6px" }}>
           Скачайте настройки, конфигурацию и данные бота одним файлом JSON либо снапшот всей базы данных (SQLite).
         </p>
         <div class="row-actions" style={{ marginTop: 10 }}>
-          <button class="btn primary" type="button" onClick={() => download("/api/backup", "Готовим бэкап…")}>⬇ Бэкап JSON</button>
-          <button class="btn" type="button" onClick={() => download("/api/backup/db", "Готовим снапшот БД…")}>⬇ Снапшот БД (SQLite)</button>
+          <button class="btn primary" type="button" onClick={() => download("/api/backup", "Готовим бэкап…")}>Бэкап JSON</button>
+          <button class="btn" type="button" onClick={() => download("/api/backup/db", "Готовим снапшот БД…")}>Снапшот БД (SQLite)</button>
         </div>
         <div class="muted small" style={{ marginTop: 10 }}>{info}</div>
       </div>

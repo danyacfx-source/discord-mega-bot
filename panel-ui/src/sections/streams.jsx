@@ -19,7 +19,7 @@ export default function Streams() {
   async function load() {
     const r = await api("/api/streams");
     if (r.status !== 200) {
-      if (r.data.error) toast("❌ " + r.data.error, false);
+      if (r.data.error) toast(r.data.error, false);
       return;
     }
     setData(r.data);
@@ -34,7 +34,7 @@ export default function Streams() {
     setExporting(true);
     try {
       const ok = await downloadAuthed("/api/streams/archive/export", "streams-archive.csv");
-      if (ok) toast("✅ Архив эфиров выгружен", true);
+      if (ok) toast("Архив эфиров выгружен", true);
     } finally {
       setExporting(false);
     }
@@ -56,12 +56,11 @@ export default function Streams() {
     <div class="stack">
       <div class="card">
         <div class="card-head">
-          <h3>📺 Стримы</h3>
+          <h3>Стримы</h3>
           <div class="row-inline">
-            <button class="btn mini" type="button" onClick={exportCsv} disabled={exporting} title="Экспорт архива завершённых эфиров в CSV">
-              ⬇ CSV
+            <button class="btn mini" type="button" onClick={exportCsv} disabled={exporting} title="Экспорт архива завершённых эфиров в CSV">CSV
             </button>
-            <button class="btn mini" type="button" onClick={load}>↻ Обновить</button>
+            <button class="btn mini" type="button" onClick={load}>Обновить</button>
           </div>
         </div>
         <div class="list">
@@ -81,11 +80,11 @@ export default function Streams() {
                     {isLive ? (
                       <>
                         {session.title || "Без названия"}
-                        {session.viewers != null ? ` · 👁 ${session.viewers}` : ""}
-                        {session.peak ? ` · 📈 пик ${session.peak}` : ""}
+                        {session.viewers != null ? ` · ${session.viewers}` : ""}
+                        {session.peak ? ` · пик ${session.peak}` : ""}
                         {s.trend != null ? ` · ${s.trend >= 0 ? "▲ +" : "▼ "}${s.trend} за 10 мин` : ""}
-                        {liveFor(session) ? ` · ⏱ ${liveFor(session)}` : ""}
-                        {session.category && session.category !== "—" ? ` · 🎮 ${session.category}` : ""}
+                        {liveFor(session) ? ` · ${liveFor(session)}` : ""}
+                        {session.category && session.category !== "—" ? ` · ${session.category}` : ""}
                       </>
                     ) : (
                       <>
@@ -105,8 +104,8 @@ export default function Streams() {
 
       <div class="card">
         <div class="card-head">
-          <h3>👀 Зрители Kick</h3>
-          <button class="btn mini" type="button" onClick={loadWatch}>↻ Обновить</button>
+          <h3>Зрители Kick</h3>
+          <button class="btn mini" type="button" onClick={loadWatch}>Обновить</button>
         </div>
         {!watch && <Loading />}
         {watch && !watch.kick_enabled && <Empty>Не задан KICK_CHANNEL_SLUG — сессии зрителей выключены</Empty>}

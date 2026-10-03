@@ -10,7 +10,7 @@ export default function Automod() {
   async function load() {
     const r = await api("/api/automod");
     if (r.status !== 200) {
-      if (r.data.error) toast("❌ " + r.data.error, false);
+      if (r.data.error) toast(r.data.error, false);
       return;
     }
     setData(r.data);
@@ -28,7 +28,7 @@ export default function Automod() {
       words: words.split("\n").map((w) => w.trim()).filter(Boolean),
     });
     if (r.status === 200 && r.data.ok) {
-      toast("💾 Автомод сохранён", true);
+      toast("Автомод сохранён", true);
       load();
     } else toast(errToast(r), false);
   }
@@ -36,7 +36,7 @@ export default function Automod() {
   async function lockdown() {
     if (!confirm("Закрыть отправку сообщений для @everyone на время lockdown?")) return;
     const r = await api("/api/automod/lockdown", { seconds: 300 });
-    if (r.status === 200 && r.data.ok) toast("🔒 Lockdown включён для " + r.data.channels + " каналов", true);
+    if (r.status === 200 && r.data.ok) toast("Lockdown включён для " + r.data.channels + " каналов", true);
     else toast(errToast(r, "Не удалось включить lockdown"), false);
   }
 
@@ -47,7 +47,7 @@ export default function Automod() {
 
   return (
     <div class="card">
-      <h3 class="sec">🧹 Автомод</h3>
+      <h3 class="sec">Автомод</h3>
       <p class="muted small" style={{ margin: "0 0 12px" }}>
         Фильтр спама, стоп-слов, ссылок, капса и растяжек. Сохранённые здесь стоп-слова применяются сразу; пороги,
         игнор-роли и каналы — в <code>.env</code> (снизу, только чтение).
@@ -64,8 +64,8 @@ export default function Automod() {
             <textarea class="input" rows="6" placeholder={"слово1\nслово2"} value={words} onInput={(e) => setWords(e.target.value)} />
           </Field>
           <div class="row-inline">
-            <button class="btn primary" type="button" onClick={save}>💾 Сохранить</button>
-            <button class="btn danger" type="button" onClick={lockdown}>🔒 Lockdown</button>
+            <button class="btn primary" type="button" onClick={save}>Сохранить</button>
+            <button class="btn danger" type="button" onClick={lockdown}>Lockdown</button>
           </div>
           <span class="muted small">Совпадают с настройками в Discord (/setup), включая регистр.</span>
         </div>

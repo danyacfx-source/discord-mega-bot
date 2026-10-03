@@ -37,7 +37,7 @@ export default function Scheduler() {
     if (form.color) embed.color = form.color;
     const r = await api("/api/schedule", { channel_id: form.channel_id, send_at: when.toISOString(), content: form.content, embed });
     if (r.status === 200 && r.data.ok) {
-      toast("🗓 Запланировано на " + new Date(r.data.send_at).toLocaleString("ru-RU"), true);
+      toast("Запланировано на " + new Date(r.data.send_at).toLocaleString("ru-RU"), true);
       setForm({ ...EMPTY_FORM, channel_id: form.channel_id });
       load();
     } else toast(errToast(r), false);
@@ -47,9 +47,9 @@ export default function Scheduler() {
     if (!confirm(`Отменить запланированное #${s.id}?`)) return;
     const r = await api(`/api/schedule/${s.id}`, null, "DELETE");
     if (r.status === 200 && r.data.ok) {
-      toast("🗑 Отменено", true);
+      toast("Отменено", true);
       load();
-    } else toast("❌ Не удалось отменить", false);
+    } else toast("Не удалось отменить", false);
   }
 
   function schLine(s, done) {
@@ -65,7 +65,7 @@ export default function Scheduler() {
         <Chip>{fmtDateTime(s.send_at)}</Chip>
         {!done && (
           <button class="btn mini danger" type="button" title="Отменить" onClick={() => cancel(s)}>
-            ✖
+            ×
           </button>
         )}
       </ListRow>
@@ -78,7 +78,7 @@ export default function Scheduler() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">⏰ Отложенное сообщение</h3>
+        <h3 class="sec">Отложенное сообщение</h3>
         <div class="three">
           <div class="stack">
             <Field label="Канал">
@@ -112,7 +112,7 @@ export default function Scheduler() {
           </div>
         </div>
         <div class="row-inline">
-          <button class="btn primary" type="button" onClick={create}>🗓 Запланировать</button>
+          <button class="btn primary" type="button" onClick={create}>Запланировать</button>
           <span class="muted small">Отправка — от имени бота в выбранный канал.</span>
         </div>
       </div>

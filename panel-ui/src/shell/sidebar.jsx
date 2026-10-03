@@ -1,6 +1,7 @@
 import { navQuery, navOpen, navigate, route, theme, setTheme, accent, setAccent, ACCENT_LIST, toasts } from "../store.js";
 import { NAV } from "../sections/registry.jsx";
 import { doLogout } from "../api.js";
+import { Icon } from "../components/icons.jsx";
 
 export default function Sidebar() {
   const q = navQuery.value.trim().toLowerCase();
@@ -16,7 +17,9 @@ export default function Sidebar() {
         </div>
 
         <div class="nav-search">
-          <span class="nav-search-ic">⌕</span>
+          <span class="nav-search-ic">
+            <Icon name="search" size={15} />
+          </span>
           <input
             id="nav-search"
             type="text"
@@ -42,7 +45,9 @@ export default function Sidebar() {
                     class={"nav-item" + (route.value === s.id ? " active" : "")}
                     onClick={() => (s.href ? window.open(s.href, "_blank") : navigate(s.id))}
                   >
-                    <span>{s.icon}</span>
+                    <span class="nav-ic">
+                      <Icon name={s.icon} size={17} />
+                    </span>
                     <span>{s.title}</span>
                   </button>
                 ))}
@@ -57,11 +62,11 @@ export default function Sidebar() {
         <div class="theme-block">
           <label>Тема</label>
           <div class="seg">
-            <button type="button" class={"seg-btn" + (theme.value === "dark" ? " active" : "")} onClick={() => setTheme("dark")}>
-              🌙
+            <button type="button" class={"seg-btn" + (theme.value === "dark" ? " active" : "")} onClick={() => setTheme("dark")} title="Тёмная тема">
+              <Icon name="moon" size={15} />
             </button>
-            <button type="button" class={"seg-btn" + (theme.value === "light" ? " active" : "")} onClick={() => setTheme("light")}>
-              ☀️
+            <button type="button" class={"seg-btn" + (theme.value === "light" ? " active" : "")} onClick={() => setTheme("light")} title="Светлая тема">
+              <Icon name="sun" size={15} />
             </button>
           </div>
           <label>Акцент</label>

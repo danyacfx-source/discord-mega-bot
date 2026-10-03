@@ -41,7 +41,7 @@ export default function AuditSection() {
   return (
     <div class="card">
       <div class="row-inline" style={{ justifyContent: "space-between" }}>
-        <h3 class="sec" style={{ margin: 0 }}>👁 Логи Discord</h3>
+        <h3 class="sec" style={{ margin: 0 }}>Логи Discord</h3>
         <div class="row-inline" style={{ margin: 0 }}>
           <select class="input mini-select" value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">Все категории</option>
@@ -56,7 +56,7 @@ export default function AuditSection() {
             </span>
             <span>Авто</span>
           </label>
-          <button class="btn mini" type="button" onClick={load}>⟳ Обновить</button>
+          <button class="btn mini" type="button" onClick={load}>Обновить</button>
         </div>
       </div>
 

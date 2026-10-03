@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, toast, errToast, fmtDateTime } from "../lib/exports.js";
+import { Icon } from "../components/icons.jsx";
 import { Chip, Empty, Field, ListRow, Loading } from "../components/ui.jsx";
 
 async function findMember(query) {
@@ -81,7 +82,7 @@ export default function Moderation() {
 
   async function doWarn() {
     if (
-      await act("/api/moderation/warn", { member: member.id, reason: reason.trim() || "Без причины" }, (d) => `⚠ Варн выдан, всего: ${d.count}`)
+      await act("/api/moderation/warn", { member: member.id, reason: reason.trim() || "Без причины" }, (d) => `Варн выдан, всего: ${d.count}`)
     ) {
       setReason("");
       loadWarns();
@@ -92,7 +93,7 @@ export default function Moderation() {
 
   async function doKick() {
     if (!confirm("Кикнуть " + member.display_name + "?")) return;
-    if (await act("/api/moderation/kick", { member: member.id, reason }, () => "👢 Участник кикнут")) {
+    if (await act("/api/moderation/kick", { member: member.id, reason }, () => "Участник кикнут")) {
       setMember(null);
       setTarget("");
     }
@@ -100,7 +101,7 @@ export default function Moderation() {
 
   async function doBan() {
     if (!confirm("Забанить " + member.display_name + "?")) return;
-    if (await act("/api/moderation/ban", { member: member.id, reason, delete_days: 0 }, () => "🔨 Участник забанен")) {
+    if (await act("/api/moderation/ban", { member: member.id, reason, delete_days: 0 }, () => "Участник забанен")) {
       setMember(null);
       setTarget("");
     }
@@ -111,34 +112,34 @@ export default function Moderation() {
     await act(
       "/api/moderation/timeout",
       { member: member.id, duration_seconds: minutes * 60, reason },
-      (d) => "⏳ Тайм-аут до " + new Date(d.until).toLocaleTimeString("ru-RU"),
+      (d) => "Тайм-аут до " + new Date(d.until).toLocaleTimeString("ru-RU"),
     );
   }
 
   async function doClear() {
     if (!confirm("Снять все предупреждения у " + member.display_name + "?")) return;
-    if (await act("/api/moderation/clear", { member: member.id }, (d) => `🧹 Снято варнов: ${d.cleared}`)) loadWarns();
+    if (await act("/api/moderation/clear", { member: member.id }, (d) => `Снято варнов: ${d.cleared}`)) loadWarns();
   }
 
   async function doUnban() {
     const userId = prompt("ID пользователя для разбана:");
     if (!userId) return;
     const r = await api("/api/moderation/unban", { user_id: userId.trim(), reason: "Разбан из панели" });
-    if (r.status === 200 && r.data.ok) toast("♻️ Разбанен: " + r.data.user_name, true);
+    if (r.status === 200 && r.data.ok) toast("Разбанен: " + r.data.user_name, true);
     else toast(errToast(r), false);
   }
 
   async function removeWarn(id) {
     const r = await api("/api/moderation/warns/" + id, null, "DELETE");
     if (r.status === 200 && r.data.ok) {
-      toast(`✅ Предупреждение #${id} снято`, true);
+      toast(`Предупреждение #${id} снято`, true);
       loadWarns();
       if (member) {
         const m = await findMember(target.trim() || member.id);
         if (m) setMember(m);
       }
     } else {
-      toast("❌ Не удалось снять", false);
+      toast("Не удалось снять", false);
     }
   }
 
@@ -148,7 +149,7 @@ export default function Moderation() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🛡 Модерация</h3>
+        <h3 class="sec">Модерация</h3>
         <Field label="Участник (имя, ник или ID)">
           <div class="row-inline">
             <input
@@ -159,8 +160,7 @@ export default function Moderation() {
               onInput={(e) => setTarget(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
             />
-            <button class="btn" type="button" onClick={search}>
-              🔍 Найти
+            <button class="btn" type="button" onClick={search}>Найти
             </button>
           </div>
         </Field>
@@ -190,18 +190,17 @@ export default function Moderation() {
               <input class="input" type="number" min="1" max="40320" value={minutes} onInput={(e) => setMinutes(parseInt(e.target.value, 10) || 10)} />
             </Field>
             <div class="row-actions wrap">
-              <button class="btn" type="button" onClick={doWarn}>⚠ Варн</button>
-              <button class="btn" type="button" onClick={doKick}>👢 Кик</button>
-              <button class="btn danger" type="button" onClick={doBan}>🔨 Бан</button>
-              <button class="btn" type="button" onClick={doTimeout}>⏳ Тайм-аут</button>
-              <button class="btn" type="button" onClick={doClear}>🧹 Снять варны</button>
+              <button class="btn" type="button" onClick={doWarn}>Варн</button>
+              <button class="btn" type="button" onClick={doKick}>Кик</button>
+              <button class="btn danger" type="button" onClick={doBan}>Бан</button>
+              <button class="btn" type="button" onClick={doTimeout}>Тайм-аут</button>
+              <button class="btn" type="button" onClick={doClear}>Снять варны</button>
             </div>
           </div>
         )}
 
         <div class="row-inline" style={{ marginTop: "12px" }}>
-          <button class="btn" type="button" onClick={doUnban}>
-            ♻️ Разбан по ID
+          <button class="btn" type="button" onClick={doUnban}>Разбан по ID
           </button>
         </div>
       </div>
@@ -212,7 +211,7 @@ export default function Moderation() {
         </h3>
         <div class="row-inline" style={{ margin: "0 0 10px" }}>
           <input class="input" type="text" placeholder="Фильтр по участнику…" value={filter} onInput={(e) => setFilter(e.target.value)} />
-          <button class="btn" type="button" onClick={loadWarns}>⟳</button>
+          <button class="btn" type="button" title="Обновить" onClick={loadWarns}><Icon name="refresh" size={15} /></button>
         </div>
         <div class="list">
           {list == null && <Loading />}
@@ -227,7 +226,7 @@ export default function Moderation() {
                 <span class="sub nowrap">{fmtDateTime(w.created_at)}</span>
                 <span class="sub grow ellipsis">{w.reason}</span>
                 <button class="btn mini danger" type="button" title="Снять предупреждение" onClick={() => removeWarn(w.id)}>
-                  ✖
+                  ×
                 </button>
               </ListRow>
             ))}
@@ -235,8 +234,7 @@ export default function Moderation() {
       </div>
 
       <div class="card">
-        <h3 class="sec">
-          📋 История действий {cases && cases.length ? <span class="muted small">· всего: {cases.length}</span> : null}
+        <h3 class="sec">История действий {cases && cases.length ? <span class="muted small">· всего: {cases.length}</span> : null}
         </h3>
         <div class="row-inline" style={{ margin: "0 0 10px" }}>
           <button class={"btn" + (casesScope === "guild" ? " success" : "")} type="button" onClick={() => loadCases("guild")}>

@@ -42,14 +42,14 @@ export default function Tickets() {
   async function saveCategory() {
     if (!categoryId) return toast("Выберите категорию", false);
     const r = await api("/api/tickets/panel", { category_id: categoryId });
-    if (r.status === 200 && r.data.ok) toast("💾 Категория тикетов сохранена", true);
+    if (r.status === 200 && r.data.ok) toast("Категория тикетов сохранена", true);
     else toast(errToast(r), false);
   }
 
   async function sendPanel() {
     if (!channelId) return toast("Выберите канал", false);
     const r = await api("/api/tickets/panel", { channel_id: channelId, category_id: categoryId || "" });
-    if (r.status === 200 && r.data.ok) toast("🎫 Панель отправлена", true);
+    if (r.status === 200 && r.data.ok) toast("Панель отправлена", true);
     else toast(errToast(r), false);
   }
 
@@ -57,14 +57,14 @@ export default function Tickets() {
     const payload = {};
     for (const [local, apiKey] of TEXT_FIELDS) payload[apiKey] = texts[local] !== undefined ? texts[local] : "";
     const r = await api("/api/tickets/panel", payload);
-    if (r.status === 200 && r.data.ok) toast("💾 Тексты тикетов сохранены", true);
+    if (r.status === 200 && r.data.ok) toast("Тексты тикетов сохранены", true);
     else toast(errToast(r), false);
   }
 
   async function closeTicket(t) {
     if (!confirm(`Закрыть тикет #${t.id} (${t.creator_name || t.creator_id})? Канал будет удалён.`)) return;
     const r = await api(`/api/tickets/${t.id}/close`, {});
-    if (r.status === 200 && r.data.ok) toast(`🔒 Тикет #${t.id} закрыт`, true);
+    if (r.status === 200 && r.data.ok) toast(`Тикет #${t.id} закрыт`, true);
     else toast(errToast(r), false);
     load();
   }
@@ -78,19 +78,18 @@ export default function Tickets() {
           <span class="sub">
             · {t.channel_name || "(канал удалён)"} · открыт {fmtDateTime(t.created_at)}
             {!open ? " · закрыт " + fmtDateTime(t.closed_at) : ""}
-            {t.has_transcript ? " · 📄 транскрипт" : ""}
+            {t.has_transcript ? " · транскрипт" : ""}
           </span>
         </span>
         <Chip tone={open ? "ok" : undefined}>{open ? "открыт" : "закрыт"}</Chip>
         <div class="row-actions">
           {t.has_transcript && (
             <button class="btn mini" type="button" title="Скачать транскрипт" onClick={() => downloadAuthed(`/api/tickets/${t.id}/transcript`, `ticket-${t.id}.txt`)}>
-              📄
+              Скачать
             </button>
           )}
           {open && (
-            <button class="btn mini danger" type="button" onClick={() => closeTicket(t)}>
-              🔒 Закрыть
+            <button class="btn mini danger" type="button" onClick={() => closeTicket(t)}>Закрыть
             </button>
           )}
         </div>
@@ -106,7 +105,7 @@ export default function Tickets() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🎟️ Панель тикетов</h3>
+        <h3 class="sec"> Панель тикетов</h3>
         <div class="two">
           <Field label="Категория для новых тикетов">
             <select class="input" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -129,14 +128,14 @@ export default function Tickets() {
           </Field>
         </div>
         <div class="row-inline" style={{ marginTop: "14px" }}>
-          <button class="btn primary" type="button" onClick={saveCategory}>💾 Сохранить категорию</button>
-          <button class="btn success" type="button" onClick={sendPanel}>🎫 Отправить панель</button>
+          <button class="btn primary" type="button" onClick={saveCategory}>Сохранить категорию</button>
+          <button class="btn success" type="button" onClick={sendPanel}>Отправить панель</button>
           <span class="muted small">Панель отправится сообщением с кнопкой.</span>
         </div>
       </div>
 
       <div class="card">
-        <h3 class="sec">✏️ Внешний вид и тексты</h3>
+        <h3 class="sec"> Внешний вид и тексты</h3>
         <p class="muted small" style={{ margin: "0 0 12px" }}>
           Тексты панели, кнопок и сообщения внутри тикета. Применяется к новым панелям и тикетам.
         </p>
@@ -159,7 +158,7 @@ export default function Tickets() {
               ))}
             </div>
             <div class="row-inline" style={{ marginTop: "14px" }}>
-              <button class="btn success" type="button" onClick={saveTexts}>💾 Сохранить тексты</button>
+              <button class="btn success" type="button" onClick={saveTexts}>Сохранить тексты</button>
               <span class="muted small">Изменения применятся к новым панелям и тикетам.</span>
             </div>
           </>
@@ -168,7 +167,7 @@ export default function Tickets() {
 
       <div class="card">
         <div class="card-head">
-          <h3>🎫 Тикеты</h3>
+          <h3>Тикеты</h3>
           <span class="muted small">Открытые и закрытые обращения сервера.</span>
         </div>
         <div class="list">

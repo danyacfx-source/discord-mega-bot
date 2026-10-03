@@ -3,6 +3,7 @@ import { api } from "../api.js";
 import { navigate } from "../store.js";
 import { subscribeEvents } from "../lib/events.js";
 import { Sparkline, Stat } from "../components/widgets.jsx";
+import { Icon } from "../components/icons.jsx";
 
 const EMPTY = {
   bot_online: false,
@@ -22,11 +23,11 @@ function feedLine(ev) {
     const label = d.platform === "kick" ? "Kick" : "Twitch";
     return {
       key: ev.seq,
-      icon: "📺",
+      icon: "monitor",
       tag: `${label}${live ? " ● LIVE" : " ○ офлайн"}`,
       tone: live ? "tone-ok" : "tone-bad",
       msg: live
-        ? `${d.title || "Без названия"}${d.viewers ? ` · 👁 ${d.viewers}` : ""}`
+        ? `${d.title || "Без названия"}${d.viewers ? ` · ${d.viewers}` : ""}`
         : d.url || "",
       t,
     };
@@ -34,7 +35,7 @@ function feedLine(ev) {
   if (ev.type === "donation") {
     return {
       key: ev.seq,
-      icon: "💰",
+      icon: "banknote",
       tag: "Донат",
       tone: "tone-ok",
       msg: `${d.username} — ${d.amount} ${d.currency}${d.message ? ` · ${String(d.message).slice(0, 120)}` : ""}`,
@@ -42,12 +43,12 @@ function feedLine(ev) {
     };
   }
   if (ev.type === "error") {
-    return { key: ev.seq, icon: "⛔", tag: "Ошибка", tone: "tone-bad", msg: d.msg || "", t };
+    return { key: ev.seq, icon: "circle-x", tag: "Ошибка", tone: "tone-bad", msg: d.msg || "", t };
   }
   const audit = Boolean(d.cat && d.cat !== "sys");
   return {
     key: ev.seq,
-    icon: audit ? "🛰️" : "⚠️",
+    icon: audit ? "bell" : "alert",
     tag: audit ? `Аудит · ${d.cat}` : d.level || "WARNING",
     tone: audit ? "" : "warn",
     msg: d.msg || "",
@@ -105,18 +106,18 @@ export default function Overview() {
           </div>
         </div>
         <div class="hero-actions">
-          <button class="btn" onClick={() => navigate("settings")}>⚙️ Настройки</button>
-          <button class="btn" onClick={() => navigate("backup")}>💾 Бэкап</button>
-          <button class="btn" onClick={() => navigate("logs")}>📄 Логи</button>
-          <button class="btn" onClick={() => navigate("audit")}>👁 Аудит</button>
+          <button class="btn" onClick={() => navigate("settings")}> Настройки</button>
+          <button class="btn" onClick={() => navigate("backup")}>Бэкап</button>
+          <button class="btn" onClick={() => navigate("logs")}>Логи</button>
+          <button class="btn" onClick={() => navigate("audit")}>Аудит</button>
         </div>
       </div>
 
       <div class="grid stats-grid">
-        <Stat icon="⚡" label="Задержка" value={loaded ? `${ov.latency_ms} мс` : "…"} sub="gateway ping" tone={ov.latency_ms > 300 ? "warn" : undefined} />
-        <Stat icon="🧠" label="Память" value={loaded ? `${ov.mem_mb} МБ` : "…"} sub={`пик ${ov.mem_peak_mb} МБ`} />
-        <Stat icon="👥" label="Участники" value={loaded && g.members != null ? g.members : "…"} sub={g.online != null ? `${g.online} онлайн` : "—"} />
-        <Stat icon="💬" label="Каналы" value={loaded && g.channels != null ? g.channels : "…"} sub={g.roles != null ? `${g.roles} ролей` : "—"} />
+        <Stat icon="activity" label="Задержка" value={loaded ? `${ov.latency_ms} мс` : "…"} sub="gateway ping" tone={ov.latency_ms > 300 ? "warn" : undefined} />
+        <Stat icon="cpu" label="Память" value={loaded ? `${ov.mem_mb} МБ` : "…"} sub={`пик ${ov.mem_peak_mb} МБ`} />
+        <Stat icon="users" label="Участники" value={loaded && g.members != null ? g.members : "…"} sub={g.online != null ? `${g.online} онлайн` : "—"} />
+        <Stat icon="message" label="Каналы" value={loaded && g.channels != null ? g.channels : "…"} sub={g.roles != null ? `${g.roles} ролей` : "—"} />
       </div>
 
       <div class="grid charts-grid">
@@ -144,7 +145,7 @@ export default function Overview() {
       </div>
       <div class="card">
         <div class="card-head">
-          <h3>📡 Лента</h3>
+          <h3>Лента</h3>
           <span class="muted small">живые события · стримы, донаты, ошибки, аудит</span>
         </div>
         <div class="list">
@@ -154,7 +155,7 @@ export default function Overview() {
           {feed.map((f) => (
             <div class="listline" key={f.key}>
               <span class={"chip " + (f.tone || "")}>
-                {f.icon} {f.tag}
+                <Icon name={f.icon} size={13} /> {f.tag}
               </span>
               <span class="grow">
                 <div class="sub">{f.msg}</div>
@@ -167,7 +168,7 @@ export default function Overview() {
       {streams.length > 0 && (
         <div class="card">
           <div class="card-head">
-            <h3>📺 Стримы</h3>
+            <h3>Стримы</h3>
             <span class="muted small">по данным последнего поллинга</span>
           </div>
           <div class="list">
@@ -180,7 +181,7 @@ export default function Overview() {
                   <b>{s.label}</b>
                   <div class="sub">
                     {s.live && s.session
-                      ? `${s.session.title || "Без названия"}${s.session.viewers != null ? ` · 👁 ${s.session.viewers}` : ""}${s.session.peak ? ` · пик ${s.session.peak}` : ""}${s.trend != null ? ` · ${s.trend >= 0 ? "▲ +" : "▼ "}${s.trend} за 10 мин` : ""}`
+                      ? `${s.session.title || "Без названия"}${s.session.viewers != null ? ` · ${s.session.viewers}` : ""}${s.session.peak ? ` · пик ${s.session.peak}` : ""}${s.trend != null ? ` · ${s.trend >= 0 ? "▲ +" : "▼ "}${s.trend} за 10 мин` : ""}`
                       : `поллинг каждые ${s.poll_seconds} с`}
                   </div>
                 </span>

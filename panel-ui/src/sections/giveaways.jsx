@@ -33,7 +33,7 @@ export default function Giveaways() {
       min_days: form.min_days,
     });
     if (r.status === 200 && r.data.ok) {
-      toast(`🎯 Розыгрыш запущен (#${r.data.id})`, true);
+      toast(`Розыгрыш запущен (#${r.data.id})`, true);
       setForm((f) => ({ ...f, prize: "" }));
       load();
     } else toast(errToast(r), false);
@@ -42,7 +42,7 @@ export default function Giveaways() {
   async function endGv(g) {
     if (!confirm(`Завершить розыгрыш «${g.prize}»?`)) return;
     const r = await api("/api/giveaways/end", { message_id: g.message_id });
-    if (r.status === 200 && r.data.ok) toast("🎉 Завершён. Победители: " + r.data.winners, true);
+    if (r.status === 200 && r.data.ok) toast("Завершён. Победители: " + r.data.winners, true);
     else toast(errToast(r), false);
     load();
   }
@@ -50,7 +50,7 @@ export default function Giveaways() {
   async function reroll(g) {
     if (!confirm(`Переразыграть приз «${g.prize}»?`)) return;
     const r = await api("/api/giveaways/reroll", { message_id: g.message_id });
-    if (r.status === 200 && r.data.ok) toast("🔁 Новые победители: " + r.data.winners, true);
+    if (r.status === 200 && r.data.ok) toast("Новые победители: " + r.data.winners, true);
     else toast(errToast(r), false);
     load();
   }
@@ -65,23 +65,21 @@ export default function Giveaways() {
         <span class="grow">
           <b>{g.prize}</b> <span class="sub">· {g.channel_name} · автор: {g.author_name}</span>
         </span>
-        <Chip>
-          👥 {g.entries}
-          {g.min_days ? ` · 🕛 ${g.min_days} дн` : ""}
+        <Chip>{g.entries}
+          {g.min_days ? ` · ${g.min_days} дн` : ""}
         </Chip>
-        <Chip>🏆 {g.winners}</Chip>
+        <Chip>{g.winners}</Chip>
         <Chip>{isFinished ? "завершён" : "до " + relTime(g.ends_at)}</Chip>
         <div class="row-actions">
           <button class="btn mini" type="button" title={`Скопировать ID сообщения: ${g.message_id || "—"}`} onClick={() => navigator.clipboard && navigator.clipboard.writeText(g.message_id || "")}>
-            🔗
+            ID
           </button>
           {isFinished ? (
-            <button class="btn mini" type="button" onClick={() => reroll(g)}>
-              🔁 Переразыграть
+            <button class="btn mini" type="button" onClick={() => reroll(g)}>Переразыграть
             </button>
           ) : (
             <button class="btn mini" type="button" onClick={() => endGv(g)}>
-              ⏹ Завершить
+              Завершить
             </button>
           )}
         </div>
@@ -92,7 +90,7 @@ export default function Giveaways() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">🎁 Новый розыгрыш</h3>
+        <h3 class="sec">Новый розыгрыш</h3>
         <div class="two">
           <div class="stack">
             <Field label="Канал">
@@ -123,8 +121,7 @@ export default function Giveaways() {
               </Field>
             </div>
             <div class="row-inline" style={{ marginTop: "8px" }}>
-              <button class="btn success" type="button" onClick={create}>
-                🎯 Запустить
+              <button class="btn success" type="button" onClick={create}>Запустить
               </button>
               <span class="muted small">Максимум — 30 дней, победителей до 20.</span>
             </div>

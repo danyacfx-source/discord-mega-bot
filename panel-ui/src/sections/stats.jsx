@@ -132,7 +132,7 @@ export default function StatsSection() {
 
   return (
     <div class="card">
-      <h3 class="sec">📊 Статистика активности</h3>
+      <h3 class="sec">Статистика активности</h3>
       <p class="muted small" style={{ margin: "0 0 12px" }}>
         Реальные сообщения сервера: по часам (первые 7 дней) и по дням (первый 45 при полном деплое). Внизу — тренд латентности.
       </p>

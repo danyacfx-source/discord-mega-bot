@@ -2,9 +2,9 @@ import { useEffect, useState } from "preact/hooks";
 import { api, toast, errToast } from "../lib/exports.js";
 
 const SETTINGS_GROUPS = [
-  { title: "👋 Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
+  { title: "Приветствия", cols: [["welcome_channel_id", "Канал приветствий"], ["farewell_channel_id", "Канал прощаний"]] },
   {
-    title: "🧾 Логи аудита",
+    title: "Логи аудита",
     cols: [
       ["log_channel_id", "Общий лог"],
       ["member_log_channel_id", "Лог участников"],
@@ -14,8 +14,8 @@ const SETTINGS_GROUPS = [
       ["bot_log_channel_id", "Лог бота"],
     ],
   },
-  { title: "🎟️ Тикеты", cols: [["ticket_category_id", "Категория тикетов"]] },
-  { title: "💸 Донаты", cols: [["donation_channel_id", "Канал донатов"]] },
+  { title: "Тикеты", cols: [["ticket_category_id", "Категория тикетов"]] },
+  { title: "Донаты", cols: [["donation_channel_id", "Канал донатов"]] },
 ];
 
 const MODULE_LABELS = {
@@ -60,7 +60,7 @@ export default function SettingsSection() {
 
   async function load() {
     const r = await api("/api/settings");
-    if (r.status !== 200 || !r.data.ok) return toast("❌ Не удалось загрузить настройки", false);
+    if (r.status !== 200 || !r.data.ok) return toast("Не удалось загрузить настройки", false);
     setData(r.data);
     setForm({ ...(r.data.settings || {}) });
     setAutomod(!!r.data.automod_enabled);
@@ -75,7 +75,7 @@ export default function SettingsSection() {
   async function save() {
     const payload = { ...form, automod_enabled: automod, blocked_words: words };
     const r = await api("/api/settings", payload);
-    if (r.status === 200 && r.data.ok) toast("✅ Настройки сохранены", true);
+    if (r.status === 200 && r.data.ok) toast("Настройки сохранены", true);
     else toast(errToast(r, "Ошибка сохранения"), false);
   }
 
@@ -89,8 +89,8 @@ export default function SettingsSection() {
         <div class="row-inline" style={{ justifyContent: "space-between" }}>
           <h3 class="sec" style={{ margin: 0 }}>Каналы сервера</h3>
           <div class="row-inline" style={{ margin: 0 }}>
-            <button class="btn mini" type="button" onClick={load}>⟳ Обновить список</button>
-            <span class="muted small">Данные бота; сохраняются по кнопке «💾 Сохранить» ниже.</span>
+            <button class="btn mini" type="button" onClick={load}>Обновить список</button>
+            <span class="muted small">Данные бота; сохраняются по кнопке «Сохранить» ниже.</span>
           </div>
         </div>
 
@@ -137,7 +137,7 @@ export default function SettingsSection() {
       </div>
 
       <div class="card">
-        <h3 class="sec">🛡 Автомод</h3>
+        <h3 class="sec">Автомод</h3>
         <label class="toggle-holder">
           <span class="switch">
             <input type="checkbox" checked={automod} onChange={(e) => setAutomod(e.target.checked)} />
@@ -149,7 +149,7 @@ export default function SettingsSection() {
           <span class="field-label">Запрещённые слова (по одному на строку)</span>
           <textarea class="input" rows="5" placeholder={"слово1\nслово2"} value={words} onInput={(e) => setWords(e.target.value)} />
         </label>
-        <button class="btn success" type="button" onClick={save}>💾 Сохранить</button>
+        <button class="btn success" type="button" onClick={save}>Сохранить</button>
       </div>
 
       <div class="card">

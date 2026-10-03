@@ -17,10 +17,10 @@ export default function Login() {
     if (ok) {
       loginVisible.value = false;
       setPw("");
-      toast("✅ Добро пожаловать", true);
+      toast("Добро пожаловать", true);
       setTimeout(() => location.reload(), 300);
     } else {
-      toast("❌ Неверный пароль", false);
+      toast("Неверный пароль", false);
     }
   }
 

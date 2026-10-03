@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, toast, errToast, uploadFile } from "../lib/exports.js";
+import { Icon } from "../components/icons.jsx";
 
 const COLORS = {
   blurple: 0x5865f2,
@@ -187,7 +188,7 @@ function EmbedEditor({ embed, index, total, onChange, onDup, onDelete }) {
             ⧉ Дублировать
           </button>
           <button class="btn mini danger" type="button" title="Удалить эмбед" onClick={onDelete}>
-            ✖
+            ×
           </button>
         </div>
       </div>
@@ -232,8 +233,7 @@ function EmbedEditor({ embed, index, total, onChange, onDup, onDelete }) {
       <label class="field"><span class="field-label">Изображение</span>
         <div class="row-inline">
           <input class="input" type="url" value={embed.image} onInput={(e) => set("image", e.target.value)} />
-          <label class="btn mini upload-btn">
-            ⬆ Загрузить
+          <label class="btn mini upload-btn">Загрузить
             <input
               type="file"
               accept="image/*"
@@ -250,8 +250,7 @@ function EmbedEditor({ embed, index, total, onChange, onDup, onDelete }) {
       <label class="field"><span class="field-label">Миниатюра</span>
         <div class="row-inline">
           <input class="input" type="url" value={embed.thumb} onInput={(e) => set("thumb", e.target.value)} />
-          <label class="btn mini upload-btn">
-            ⬆ Загрузить
+          <label class="btn mini upload-btn">Загрузить
             <input
               type="file"
               accept="image/*"
@@ -293,7 +292,7 @@ function EmbedEditor({ embed, index, total, onChange, onDup, onDelete }) {
                 title="Удалить поле"
                 onClick={() => set("fields", embed.fields.filter((_, i) => i !== fi))}
               >
-                ✖
+                ×
               </button>
             </div>
           </div>
@@ -354,7 +353,7 @@ export default function EmbedBuilder() {
     if (payload.embeds.length === 0 && !payload.content) return toast("Пустое сообщение", false);
     const r = await api("/api/" + (mode === "bot" ? "bot/send" : "webhook/send"), payload);
     if (r.status === 200 && r.data.ok) {
-      toast("✅ Отправлено", true);
+      toast("Отправлено", true);
       if (mode === "bot") loadMsg();
     } else toast(errToast(r), false);
   }
@@ -367,7 +366,7 @@ export default function EmbedBuilder() {
     if (!target) return toast(mode === "bot" ? "Укажите канал" : "Укажите Webhook URL", false);
     payload.message_id = mid;
     const r = await api("/api/" + (mode === "bot" ? "bot/edit" : "webhook/edit"), payload);
-    if (r.status === 200 && r.data.ok) toast("✅ Сообщение изменено", true);
+    if (r.status === 200 && r.data.ok) toast("Сообщение изменено", true);
     else toast(errToast(r), false);
   }
 
@@ -383,7 +382,7 @@ export default function EmbedBuilder() {
       payload.webhook_url = whUrl;
     }
     const r = await api("/api/" + (mode === "bot" ? "bot/fetch" : "webhook/fetch"), payload);
-    if (r.status !== 200 || !r.data.ok || !r.data.data) return toast("❌ Сообщение не найдено", false);
+    if (r.status !== 200 || !r.data.ok || !r.data.data) return toast("Сообщение не найдено", false);
     const msg = r.data.data;
     const src = msg.embeds && msg.embeds.length ? msg.embeds : [null];
     setEmbeds(
@@ -408,14 +407,14 @@ export default function EmbedBuilder() {
     );
     setContent(msg.content || "");
     setBtnRows(msg.components && msg.components.length ? msg.components : [[]]);
-    toast("✅ Загружено в конструктор", true);
+    toast("Загружено в конструктор", true);
   }
 
   function clearBuilder() {
     setEmbeds([newEmbed()]);
     setBtnRows([[]]);
     setContent("");
-    toast("🧹 Поля очищены", true);
+    toast("Поля очищены", true);
   }
 
   function addEmbed() {
@@ -517,7 +516,7 @@ export default function EmbedBuilder() {
                       <option value="5">Link</option>
                     </select>
                     <button class="btn mini danger" type="button" title="Удалить кнопку" onClick={() => delButton(ri, bi)}>
-                      ✖
+                      ×
                     </button>
                   </div>
                 ))}
@@ -555,7 +554,7 @@ export default function EmbedBuilder() {
                     </option>
                   ))}
                 </select>
-                <button class="btn" type="button" onClick={loadChannels} title="Обновить каналы">⟳</button>
+                <button class="btn" type="button" onClick={loadChannels} title="Обновить каналы"><Icon name="refresh" size={15} /></button>
               </div>
             </label>
           )}
@@ -563,10 +562,10 @@ export default function EmbedBuilder() {
             <input class="input" type="text" placeholder="1234567890123456789" value={msgId} onInput={(e) => setMsgId(e.target.value)} />
           </label>
           <div class="row-inline">
-            <button class="btn primary" type="button" onClick={sendMsg}>➤ Отправить</button>
-            <button class="btn" type="button" onClick={editMsg}>✎ Изменить</button>
-            <button class="btn" type="button" onClick={loadMsg}>⇣ Загрузить</button>
-            <button class="btn" type="button" onClick={clearBuilder}>🧹 Очистить</button>
+            <button class="btn primary" type="button" onClick={sendMsg}>Отправить</button>
+            <button class="btn" type="button" onClick={editMsg}>Изменить</button>
+            <button class="btn" type="button" onClick={loadMsg}>Загрузить</button>
+            <button class="btn" type="button" onClick={clearBuilder}>Очистить</button>
           </div>
         </div>
       </div>

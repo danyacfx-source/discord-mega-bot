@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, toast } from "../lib/exports.js";
+import { Icon } from "../components/icons.jsx";
 import { Chip, Empty, Field, ListRow, Loading } from "../components/ui.jsx";
 
 export default function Server() {
@@ -46,11 +47,11 @@ export default function Server() {
     if (!roleId) return toast("Укажите роль", false);
     const r = await api("/api/server/members/roles", { member, role_id: roleId, action: act });
     if (r.status === 200 && r.data.ok) {
-      setResult((act === "add" ? "✅ Роль выдана" : "✅ Роль снята") + ": " + r.data.member_name + " → " + r.data.role_name);
+      setResult((act === "add" ? "Роль выдана" : "Роль снята") + ": " + r.data.member_name + " → " + r.data.role_name);
       loadMembers();
-      toast(r.data.applied ? "✅ Готово" : "ℹ️ Уже в таком состоянии", r.data.applied);
+      toast(r.data.applied ? "Готово" : "Уже в таком состоянии", r.data.applied);
     } else {
-      toast(r.data.error ? "❌ " + r.data.error : "❌ Ошибка", false);
+      toast(r.data.error ? r.data.error : "Ошибка", false);
     }
   }
 
@@ -103,14 +104,14 @@ export default function Server() {
                         title="Клик — копировать ID"
                         onClick={() => navigator.clipboard && navigator.clipboard.writeText(String(ch.id))}
                       >
-                        <span class="ic">{isV ? "🔊" : "#"}</span>
+                        <span class="ic">{isV ? <Icon name="speaker" size={14} /> : "#"}</span>
                         <span class="grow">{ch.name}</span>
                         {ch.nsfw ? <Chip>NSFW</Chip> : null}
                         {ch.slowmode ? <Chip>{ch.slowmode} с</Chip> : null}
-                        {isV ? <Chip>{ch.voice_online || 0} 🎤</Chip> : null}
+                        {isV ? <Chip>{ch.voice_online || 0}</Chip> : null}
                       </div>
                       {isV && ch.voice_users && ch.voice_users.length ? (
-                        <div class="vc-users muted small">🎤 {ch.voice_users.map((u) => u.display_name).join(", ")}</div>
+                        <div class="vc-users muted small">{ch.voice_users.map((u) => u.display_name).join(", ")}</div>
                       ) : null}
                     </div>
                   );
@@ -154,7 +155,7 @@ export default function Server() {
                 ))}
               </datalist>
               <button class="btn" type="button" onClick={loadMembers} title="Обновить список">
-                ⟳
+                <Icon name="refresh" size={15} />
               </button>
             </div>
           </Field>

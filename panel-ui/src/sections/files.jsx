@@ -17,16 +17,16 @@ export default function FilesSection() {
     if (!confirm("Удалить файл " + name + "?")) return;
     const r = await api("/api/uploads/" + encodeURIComponent(name), null, "DELETE");
     if (r.status === 200 && r.data.ok) {
-      toast("🗑 Файл удалён", true);
+      toast("Файл удалён", true);
       load();
-    } else toast("❌ Ошибка удаления", false);
+    } else toast("Ошибка удаления", false);
   }
 
   return (
     <div class="card">
-      <h3 class="sec">🖼 Загруженные изображения</h3>
+      <h3 class="sec">Загруженные изображения</h3>
       <div class="muted small" style={{ marginBottom: 10 }}>
-        Изображения, загруженные для эмбедов. Кнопка «📋 URL» копирует прямую ссылку.
+        Изображения, загруженные для эмбедов. Кнопка «URL» копирует прямую ссылку.
       </div>
       {!files && <div class="muted small">Загрузка…</div>}
       {files && !files.length && <div class="muted">Загруженных файлов пока нет.</div>}
@@ -38,8 +38,8 @@ export default function FilesSection() {
               <div class="file-name">{f.name}</div>
               <div class="file-size muted">{f.size || ""}</div>
               <div class="file-actions">
-                <button class="btn mini" type="button" onClick={() => copyText(f.url)}>📋 URL</button>
-                <button class="btn mini danger" type="button" title="Удалить" onClick={() => remove(f.name)}>✖</button>
+                <button class="btn mini" type="button" onClick={() => copyText(f.url)}>URL</button>
+                <button class="btn mini danger" type="button" title="Удалить" onClick={() => remove(f.name)}>×</button>
               </div>
             </div>
           ))}
