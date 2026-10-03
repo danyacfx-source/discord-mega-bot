@@ -415,7 +415,11 @@ class Config:
             rules_role_id=_single_int(os.getenv("RULES_ROLE_ID")),
             temp_voice_trigger_ids=_ints(os.getenv("TEMP_VOICE_TRIGGER_IDS")),
             temp_voice_category_id=_single_int(os.getenv("TEMP_VOICE_CATEGORY_ID")),
-            panel_host=os.getenv("PANEL_HOST", "127.0.0.1"),
+            # Публичный URL подразумевает запуск наружу (контейнер/платформа):
+            # без явного PANEL_HOST слушаем 0.0.0.0, иначе панель сядет на
+            # loopback и хостинг вернёт 502, не дойдя до процесса.
+            panel_host=os.getenv("PANEL_HOST")
+            or ("0.0.0.0" if os.getenv("PANEL_PUBLIC_URL", "").strip() else "127.0.0.1"),
             panel_port=_single_int(os.getenv("PANEL_PORT")),
             panel_password=os.getenv("PANEL_PASSWORD"),
             panel_admin_password=os.getenv("PANEL_ADMIN_PASSWORD"),
@@ -434,7 +438,8 @@ class Config:
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
             birthday_ping_role_id=_single_int(os.getenv("BIRTHDAY_PING_ROLE_ID")),
-            overlay_host=os.getenv("OVERLAY_HOST", "127.0.0.1"),
+            overlay_host=os.getenv("OVERLAY_HOST")
+            or ("0.0.0.0" if os.getenv("OVERLAY_PUBLIC_URL", "").strip() else "127.0.0.1"),
             overlay_port=_single_int(os.getenv("OVERLAY_PORT")),
             overlay_token=os.getenv("OVERLAY_TOKEN"),
             overlay_public_url=os.getenv("OVERLAY_PUBLIC_URL"),

@@ -3,7 +3,11 @@ services:
     build: .
     restart: unless-stopped
     init: true
-    env_file: .env
+    # .env появляется не во всех способах деплоя (заливка архива генерит его,
+    # чистый чекаут из GitHub — нет) — не валяем сборку без него.
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Контейнер должен слушать интерфейс Docker-сети, иначе Traefik
       # не сможет достучаться до веб-панели.
