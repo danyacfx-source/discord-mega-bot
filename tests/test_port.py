@@ -15,14 +15,14 @@ from aiohttp.test_utils import TestClient, TestServer
 from app.config import Config
 from app.core.bot import MegaBot
 from app.core.overlay import Overlay
-from app.core.webpanel.webpanel import (
+from app.core.webpanel.payload import (
     _LOGIN_LIMIT,
-    WebPanel,
     _components_from_raw,
     _embed_from_dict,
     _trim_components,
     _trim_embeds,
 )
+from app.core.webpanel.webpanel import WebPanel
 from app.db.birthdays_repository import BirthdaysRepository
 from app.db.database import Database
 from app.db.donations_repository import DonationsRepository
