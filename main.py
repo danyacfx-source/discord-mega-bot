@@ -18,13 +18,21 @@ if os.getenv("RAM_REPORT_TRACEMALLOC", "1").strip().lower() not in ("0", "false"
 from app.config import Config  # noqa: E402
 from app.core.bot import MegaBot  # noqa: E402
 from app.core.logger import setup_logging  # noqa: E402
+from app.core.secrets import fix_env_permissions, load_file_secrets  # noqa: E402
 
 logger = logging.getLogger("bot")
 
 
 def main() -> None:
+    # Docker/Kubernetes secrets: BOT_TOKEN_FILE=/run/secrets/bot_token → BOT_TOKEN.
+    # До Config.from_env, иначе токен из файла не подхватится.
+    secret_warnings = load_file_secrets()
     config = Config.from_env()
     setup_logging(config.log_level)
+    for warning in secret_warnings:
+        logger.error("Secrets: %s", warning)
+    for warning in fix_env_permissions():
+        logger.warning("Secrets: %s", warning)
 
     bot = MegaBot(config)
     try:

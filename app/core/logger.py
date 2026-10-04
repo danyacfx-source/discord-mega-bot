@@ -6,6 +6,8 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from app.core.secrets import RedactingFormatter, attach_redaction
+
 _FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
 _DEFAULT_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 _NOISY_LOGGERS = ("discord.gateway", "discord.client", "yt_dlp", "httpcore")
@@ -19,7 +21,8 @@ def setup_logging(level: str = "INFO", log_dir: str | Path | None = None, *, to_
 
     if not getattr(root, "_mega_bot_configured", False):
         console = logging.StreamHandler(sys.stdout)
-        console.setFormatter(logging.Formatter(_FORMAT))
+        console.setFormatter(RedactingFormatter(_FORMAT))
+        attach_redaction(console)
         root.addHandler(console)
 
         if to_file:
@@ -28,7 +31,8 @@ def setup_logging(level: str = "INFO", log_dir: str | Path | None = None, *, to_
             file_handler = RotatingFileHandler(
                 directory / "bot.log", maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8"
             )
-            file_handler.setFormatter(logging.Formatter(_FORMAT))
+            file_handler.setFormatter(RedactingFormatter(_FORMAT))
+            attach_redaction(file_handler)
             root.addHandler(file_handler)
 
         setattr(root, "_mega_bot_configured", True)
