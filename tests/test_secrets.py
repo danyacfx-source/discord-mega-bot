@@ -48,7 +48,7 @@ def test_redacts_discord_token() -> None:
 
 
 def test_redacts_webhook_url_keeping_path() -> None:
-    line = "POST https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKlMnOpQrStUvWxYz"
+    line = "POST https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKlMnOpQrStUvWxYz"  # secrets-allow
     cleaned = redact(line)
     assert "/api/webhooks/123456789012345678/" in cleaned
     assert "AbCdEfGhIjKlMnOpQrStUvWxYz" not in cleaned
@@ -266,7 +266,7 @@ def test_scanner_catches_real_shaped_token() -> None:
 
 def test_scanner_catches_literal_assignment() -> None:
     scanner = _load_scanner()
-    hits = scanner._hits("DONATIONS_TOKEN=9f2b7c1d4e6a8b0c3d5e7f9a1b3c5d7e")
+    hits = scanner._hits("DONATIONS_TOKEN=9f2b7c1d4e6a8b0c3d5e7f9a1b3c5d7e")  # secrets-allow
     assert hits
 
 
@@ -308,3 +308,13 @@ def test_scanner_finds_nothing_in_tracked_tree() -> None:
             continue
         findings.extend(scanner.scan_file(path))
     assert findings == [], findings
+
+
+def test_scanner_skips_lines_with_allow_marker(tmp_path: Path) -> None:
+    scanner = _load_scanner()
+    webhook = "https://discord.com/api/webhooks/" + "123456789012345678/" + "AbCdEfGhIjKlMnOpQrStUvWxYz"
+    line = f'WEBHOOK = "{webhook}"'
+    assert scanner._hits(line)  # без метки строка была бы находкой
+    path = tmp_path / "fixture.py"
+    path.write_text(line + "  # secrets-allow\n", encoding="utf-8")
+    assert scanner.scan_file(path) == []

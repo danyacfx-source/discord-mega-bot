@@ -5,7 +5,8 @@
 Discord, JWT, вебхук и литеральные присваивания вида ``BOT_TOKEN=...``.
 Выражения (``os.getenv(...)``), аннотации (``token: str``) и заглушки
 (``overlay-secret-token-32chars``) отфильтровываются — на выходе только то,
-что действительно похоже на утёкший ключ.
+что действительно похоже на утёкший ключ. Строки с меткой ``# secrets-allow``
+пропускаются: так тесты держат фикстуры реальной формы.
 
 Запуск из корня проекта::
 
@@ -48,6 +49,9 @@ _SKIP_NAMES = {".env", "bot_out.log", "bot_err.log", "panel_out.log", "panel_err
 _ALLOWED_VALUES = {"32cbd69e4b950bf97679"}
 _MAX_BYTES = 2 * 1024 * 1024
 _MIN_SECRET_LEN = 16
+
+#: Строка с этой меткой пропускается: фикстуры тестов намеренно похожи на секреты.
+_ALLOW_MARKER = "# secrets-allow"
 
 # Точные паттерны: секрет узнаётся по форме, а не по имени переменной.
 _DISCORD_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{23,28}\.[A-Za-z0-9_-]{6,7}\.[A-Za-z0-9_-]{25,110}(?![A-Za-z0-9_-])")
@@ -118,6 +122,11 @@ def _hits(line: str) -> list[str]:
     return found
 
 
+def _marked(line: str) -> bool:
+    """Фикстура с разрешением: строка по форме секрет, но это не утечка."""
+    return _ALLOW_MARKER in line
+
+
 def _tracked_files() -> list[Path]:
     """Список файлов из git; без git — обычный обход с теми же исключениями."""
     try:
@@ -163,7 +172,7 @@ def scan_file(path: Path) -> list[dict[str, object]]:
     findings: list[dict[str, object]] = []
     for number, line in enumerate(text.splitlines(), 1):
         secrets = [value for value in _hits(line) if value not in _ALLOWED_VALUES]
-        if not secrets:
+        if not secrets or _marked(line):
             continue
         snippet = line.strip()
         for value in secrets:
