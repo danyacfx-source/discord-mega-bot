@@ -6,6 +6,7 @@
 
 - **Модерация**: kick, ban, unban, timeout, purge, warn-система, moderation cases, роли, slowmode, точечное снятие варнов.
 - **Авто-мод**: стоп-слова, приглашения, флуд упоминаниями, CAPS-детектор.
+- **Guard**: глобальный rate-limit инвоков команд (per-user и per-guild, скользящее окно), kill-switch `/guard pause`, точечное отключение команд `/guard block`, мут сервера `/guard mute`. Состояние переживает рестарт, владелец и админы мимо лимитов, `/guard status` показывает счётчики.
 - **Музыка**: поиск/воспроизведение (yt-dlp + FFmpeg), очередь, skip/skipvote/seek/history/stop/pause/resume/shuffle/remove/volume/loop, импорт YouTube/Spotify Playlist и SQLite-плейлисты.
 - **Администрирование**: тикеты с транскриптами, настройка приветствий/прощаний, логирование событий.
 - **Напоминания**: `/remindme`, список, отмена, чистка (фоновая доставка).
@@ -75,7 +76,7 @@ docker compose up -d --build
 docker compose logs -f --tail=100
 ```
 
-- Без `--build` изменения `app/`, `requirements.txt` и `Dockerfile` игнорируются.
+- Без `--build` изменения `app/`, `requirements.txt`, `requirements.lock` и `Dockerfile` игнорируются.
 - Откат: `git checkout <commit> && docker compose up -d --build`.
 - Токены и `.env` живут вне образа (volume), при пересборке не теряются.
 - Healthcheck: `docker compose ps` показывает `healthy/unhealthy` — скрипт
@@ -102,6 +103,61 @@ sudo systemctl start discord-mega-bot
 
 Сервис автоматически перезапускается при падении (`Restart=always`), логи — через `journalctl -u discord-mega-bot -f`. БД хранится в `/opt/discord-mega-bot/data/bot.db`.
 
+## Проверки безопасности
+
+### Секреты
+
+```
+.venv\Scripts\python scripts\check_secrets.py             # найти утёкшие секреты (код 1 при находках)
+.venv\Scripts\python scripts\check_secrets.py --fix-env   # плюс выставить 600 на .env
+```
+
+Маскирование работает и в рантайме: `app/core/secrets.py` режет токены/вебхуки в логах,
+traceback'ах и ответах панели, а `BOT_TOKEN_FILE` и прочие `*_FILE` подхватывают
+Docker/Kubernetes secrets. Логи хранятся вне репозитория (`logs/`, `data/` в `.gitignore`).
+
+### Цепочка поставок
+
+- `requirements.txt` — живое описание зависимостей с диапазонами, его правит человек.
+- `requirements.lock` — производный артефакт: точные версии **и sha256 каждого вина**.
+  Docker ставит зависимости через `pip install --require-hashes -r requirements.lock`,
+  поэтому пакет, чей хэш не совпал с локом (подменённый wheel, скомпрометированный
+  зеркальный индекс), просто не встанет.
+
+```
+.venv\Scripts\python scripts\lock_requirements.py            # пересобрать lock (нужна сеть)
+.venv\Scripts\python scripts\lock_requirements.py --verify   # проверить, что lock не устарел
+```
+
+После **каждого** изменения `requirements.txt` лок пересобирается — иначе сборка образа
+поставит то, что было в локе, а не то, что вы дописали.
+
+```
+.venv\Scripts\python scripts\audit_deps.py            # аудит лока по базе OSV
+.venv\Scripts\python scripts\audit_deps.py --json     # тот же отчёт в JSON (для CI)
+```
+
+Коды выхода: `0` — уязвимостей нет, `1` — найдены (выводится список CVE/GHSA со ссылками),
+`2` — база недоступна. Проверка сетевая, в `check_windows.ps1` не входит намеренно.
+
+## Отказоустойчивость
+
+Бот переживает недоступность хранилища, а не падает вместе с ним:
+
+- **Счётчик сбоев.** `execute`/`fetchone`/`fetchall` считают ошибки диска и
+  блокировки. Три сбоя подряд подряд → `Database.available = False`, первый
+  успешный запрос сбрасывает счётчик. Ошибки запроса (`no such table`,
+  конфликты уникальности) в счётчик не идут — иначе баг в SQL выдавался бы
+  за лежащую БД.
+- **Деградация чтения.** `SettingsService` при сбое отдаёт последнее известное
+  значение сервера (плюс повторная проверка через 10 с, а не полные 120 с
+  TTL). Без этого упала бы каждая команда, а не только запись настроек.
+  Если кеша для сервера нет — ошибка идёт наружу: глушить её нечем.
+- **Health.** `GET /api/health` дополнительно несёт
+  `database.available`, `consecutive_failures`, `last_error` и отдаёт `503`,
+  как только хранилище помечено недоступным — docker healthcheck и оркестратор
+  видят degraded до того, как начнут падать хендлеры.
+
 ## Структура
 
 ```
@@ -115,7 +171,7 @@ app/
   cogs/                 # коги: сервисы приходят конструктором (собирает loader по COG_PROVIDERS)
   utils/                # helpers: time, format, pagination
 systemd/                # юнит для автозапуска на Linux
-scripts/                # install_ubuntu.sh — установка на Ubuntu/Debian
+scripts/                # install_ubuntu.sh, healthcheck.py, check_secrets.py, lock_requirements.py, audit_deps.py
 tests/                  # unit-тесты утилит
 ```
 
