@@ -17,9 +17,42 @@ services:
       # панель проксирует /overlay с 3000 на этот порт (один порт на домен).
       OVERLAY_PORT: 8765
       OVERLAY_PUBLIC_URL: https://dendich.ru
+      # Корень ФС переведён в read_only, а /tmp поднят tmpfs — весь служебный
+      # кеш (yt-dlp и ко) уводим туда, иначе запись в $HOME=/app упрётся.
+      XDG_CACHE_HOME: /tmp/xdg-cache
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    # --- hardening ---
+    # Корень ФС только для чтения: бот пишет исключительно в data/ и logs/
+    # (bind-mount) и во временный /tmp. Запись в системные каталоги контейнера
+    # либо вредоносный код, либо неожиданный сброс кеша — оба варианта
+    # запрещены на уровне ФС.
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Ставим ровно то, что нужно entrypoint, и больше ничего:
+    #   CHOWN    — чинит владельца смонтированных ./data и ./logs от root;
+    #   SETUID/SETGID — gosu переводит процесс на непривилегированного bot;
+    #   DAC_OVERRIDE — root успевает войти в каталоги, созданные с другими
+    #                  правами, пока ownership ещё не исправлен.
+    # Всё остальное (NET_RAW, MKNOD, SYS_PTRACE и пр.) контейнеру не нужно.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    # Защита от fork-бомбы и захвата процессов.
+    pids_limit: 512
+    # Потолок памяти: подушка на Python + ffmpeg при голосовом стриме.
+    # OOM-kill перезапустит контейнер, а не уронит хост.
+    mem_limit: 2g
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
     stop_grace_period: 30s
     healthcheck:
       test: ["CMD", "python", "scripts/healthcheck.py"]
