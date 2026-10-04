@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
@@ -13,6 +14,13 @@ if TYPE_CHECKING:
     from app.core.bot import MegaBot
     from app.db.settings_repository import SettingsRepository
 
+logger = logging.getLogger("bot.services.settings")
+
+#: Через сколько секунд перепроверять БД после отдачи устаревшего кеша.
+#: Мало — чтобы восстановление не ждало полный TTL; достаточно, чтобы не
+#: долбить лежащее хранилище на каждый инвок.
+_RETRY_AFTER_STALE = 10.0
+
 
 class SettingsService:
     def __init__(self, repo: SettingsRepository) -> None:
@@ -20,6 +28,7 @@ class SettingsService:
         self._cache: dict[int, tuple[float, dict[str, Any]]] = {}
         self._locks: defaultdict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._ttl = 120.0
+        self._degraded = False
 
     async def ensure_all_guilds(self, bot: MegaBot) -> None:
         for guild in bot.guilds:
@@ -35,7 +44,26 @@ class SettingsService:
             cached = self._cache.get(guild_id)
             if cached is not None and cached[0] > now:
                 return dict(cached[1])
-            settings = await self._repo.get(guild_id)
+            try:
+                settings = await self._repo.get(guild_id)
+            except Exception:
+                # Хранилище лежит: читаем последнее известное значение.
+                # Без этого упадёт каждая команда, а не только запись
+                # настроек, — весь бот останется, но на старых данных.
+                if cached is None:
+                    raise
+                if not self._degraded:
+                    self._degraded = True
+                    logger.error(
+                        "Настройки guild %s не читаются, отдаю последнее известное значение",
+                        guild_id,
+                        exc_info=True,
+                    )
+                self._cache[guild_id] = (now + _RETRY_AFTER_STALE, dict(cached[1]))
+                return dict(cached[1])
+            if self._degraded:
+                self._degraded = False
+                logger.warning("Настройки снова читаются из хранилища")
             for column in _INT_COLUMNS:
                 raw = settings.get(column)
                 settings[column] = int(raw) if raw else None

@@ -1,6 +1,7 @@
 """Тесты миграций, integrity check и консистентного backup SQLite."""
 
 import asyncio
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -159,3 +160,28 @@ async def test_transaction_blocks_concurrent_writes_until_commit(tmp_path: Path)
 
     assert await database.fetchone("SELECT value FROM kv WHERE key = ?", ("waiting",)) is not None
     await database.close()
+
+
+async def test_cancelled_backup_leaves_connection_healthy(tmp_path: Path) -> None:
+    """Отмена backup посреди записи не оставляет два потока на одном sqlite3.
+
+    sqlite3 backup уже передан в рабочий поток source-соединения, когда отмена
+    снимает только await — закрытие backup_conn параллельно с этим роняло
+    процесс с access violation на Windows.
+    """
+    database = Database(str(tmp_path / "source.db"))
+    await database.connect()
+    await database.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("marker", "alive"))
+
+    for index in range(20):
+        task = asyncio.create_task(database.backup(tmp_path / f"out-{index}.db"))
+        await asyncio.sleep(0.001)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
+
+    # Drain дошёл до backup-коллбека: очередь source-соединения жива.
+    row = await database.fetchone("SELECT value FROM kv WHERE key = ?", ("marker",))
+    assert row is not None and row["value"] == "alive"
+    await database.close()
+    assert not list(tmp_path.glob(".*.tmp")), "остались осиротевшие temp-файлы backup"
