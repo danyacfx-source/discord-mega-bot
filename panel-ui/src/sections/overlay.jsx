@@ -99,7 +99,7 @@ function widgetPreview(w) {
   if (w.type === "chat_top") {
     return (
       <div class="ovl-ph">
-        <b>{p.title || "Топ чата"}</b>
+        {p.title ? <b>{p.title}</b> : null}
         <div class="muted">1. Алиса · 120</div>
         <div class="muted">2. Боб · 90</div>
       </div>
@@ -108,7 +108,7 @@ function widgetPreview(w) {
   if (w.type === "chat") {
     return (
       <div class="ovl-ph">
-        <b>{p.title || "Лента чата"}</b>
+        {p.title ? <b>{p.title}</b> : null}
         <div class="muted">
           <b style={{ color: "#53fc18" }}>Алиса:</b> привет всем
         </div>
@@ -132,6 +132,8 @@ export default function OverlaySection() {
   const [selected, setSelected] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [chatLimit, setChatLimit] = useState(15);
+  const [chatSize, setChatSize] = useState(17);
   const canvasRef = useRef(null);
 
   async function loadMeta() {
@@ -291,7 +293,8 @@ export default function OverlaySection() {
       : "";
   const chatUrl =
     meta.enabled && meta.token
-      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}`
+      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}` +
+        `&limit=${clamp(chatLimit, 1, 80)}&size=${clamp(chatSize, 11, 44)}`
       : "";
 
   async function copyUrl() {
@@ -395,8 +398,29 @@ export default function OverlaySection() {
             </button>
           ) : null}
           {meta.enabled && meta.token ? (
-            <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS
-            </button>
+            <>
+              <span class="muted small">чат:</span>
+              <input
+                class="input ovl-size"
+                type="number"
+                min="1"
+                max="80"
+                title="Сообщений в ленте (1–80)"
+                value={chatLimit}
+                onInput={(e) => setChatLimit(clamp(Number(e.target.value) || 1, 1, 80))}
+              />
+              <input
+                class="input ovl-size"
+                type="number"
+                min="11"
+                max="44"
+                title="Кегль сообщений (11–44)"
+                value={chatSize}
+                onInput={(e) => setChatSize(clamp(Number(e.target.value) || 11, 11, 44))}
+              />
+              <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS
+              </button>
+            </>
           ) : null}
           <button class="btn danger" type="button" onClick={deleteLayout}>
             Удалить
@@ -461,6 +485,9 @@ export default function OverlaySection() {
                     value={widget.props.title ?? ""}
                     onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, title: e.target.value } }))}
                   />
+                  {widget.type === "chat" || widget.type === "chat_top" ? (
+                    <span class="muted small">Пусто — шапка не рисуется, на сцене остаются только сообщения</span>
+                  ) : null}
                 </label>
                 {widget.type === "text" && (
                   <>

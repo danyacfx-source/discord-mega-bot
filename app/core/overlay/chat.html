@@ -1,19 +1,79 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><title>Chat overlay</title>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat overlay</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;overflow:hidden}
-#feed{display:flex;flex-direction:column;justify-content:flex-end;gap:3px}
-.m{font-size:16px;line-height:1.45;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45);word-break:break-word}
-.m b{font-weight:800;color:#9146ff}
-.m b.p-kick{color:#53fc18}
-.m b.p-discord{color:#5865f2}
-.m b.mod{color:#ff5a36}
+html,body{height:100%}
+body{background:var(--bg,transparent);font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:12px}
+#feed{display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
+.m{display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.4;word-break:break-word;animation:m-in .22s ease-out both}
+@keyframes m-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes m-out{to{opacity:0;transform:translateY(-6px)}}
+.m.out{animation:m-out .18s ease-in both}
+.badge{flex:none;font-size:.63em;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.16em .4em;border-radius:.3em;background:#9146ff;color:#fff;align-self:center;opacity:.92}
+.badge.kick{background:#53fc18;color:#08170a}
+.badge.discord{background:#5865f2}
+.name{font-weight:800;color:#a78bfa;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.7),0 0 16px rgba(0,0,0,.4)}
+.name::after{content:": "}
+.name.kick{color:#6dff8a}
+.name.twitch{color:#b794ff}
+.name.discord{color:#93a5ff}
+.name.mod{color:#ff8a6a}
+.text{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45)}
+@media (prefers-reduced-motion:reduce){.m{animation:none}}
 </style></head><body><div id="feed"></div>
 <script>
 const TOKEN="__TOKEN__";
-const LIMIT=Math.max(1,Math.min(80,Number(new URLSearchParams(location.search).get("limit"))||20));
-function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+const Q=new URLSearchParams(location.search);
+const num=(key,lo,hi,dflt)=>{const v=Number(Q.get(key));return Number.isFinite(v)&&v?Math.min(hi,Math.max(lo,v)):dflt};
+const LIMIT=Math.round(num("limit",1,80,20));
+const BADGE=Q.get("badge")!=="0";
+document.documentElement.style.setProperty("--fs",num("size",11,44,16)+"px");
+const bg=Q.get("bg");
+if(bg&&window.CSS&&CSS.supports("color",bg))document.documentElement.style.setProperty("--bg",bg);
+
+const feed=document.getElementById("feed");
+const live=new Map();
+const key=m=>[m.ts,m.platform,m.name,m.text].join("|");
+const cls=s=>" "+String(s||"").toLowerCase().replace(/[^a-z0-9_-]/g,"");
+
+function build(m){
+  const row=document.createElement("div");
+  row.className="m";
+  if(BADGE&&m.platform){
+    const badge=document.createElement("span");
+    badge.className="badge"+cls(m.platform);
+    badge.textContent=m.platform;
+    row.appendChild(badge);
+  }
+  const name=document.createElement("b");
+  name.className="name"+cls(m.platform)+(m.mod?" mod":"");
+  name.textContent=m.name||"?";
+  row.appendChild(name);
+  const text=document.createElement("span");
+  text.className="text";
+  text.textContent=m.text||"";
+  row.appendChild(text);
+  return row;
+}
+
+function render(rows){
+  const want=new Set(rows.map(key));
+  for(const [k,el] of Array.from(live)){
+    if(want.has(k))continue;
+    live.delete(k);
+    el.classList.add("out");
+    setTimeout(()=>el.remove(),180);
+  }
+  for(const m of rows){
+    const k=key(m);
+    if(live.has(k))continue;
+    const el=build(m);
+    live.set(k,el);
+    feed.appendChild(el);
+  }
+  while(feed.children.length>LIMIT)feed.removeChild(feed.firstElementChild);
+}
+
 let sig="";
 async function load(){
   try{
@@ -24,9 +84,7 @@ async function load(){
     const next=JSON.stringify(rows);
     if(next===sig)return;
     sig=next;
-    document.getElementById("feed").innerHTML=rows.map(function(m){
-      return '<div class="m"><b class="p-'+esc(m.platform)+(m.mod?" mod":"")+'">'+esc(m.name)+"</b>: "+esc(m.text)+"</div>";
-    }).join("");
+    render(rows);
   }catch(e){}
 }
 load();setInterval(load,3000);

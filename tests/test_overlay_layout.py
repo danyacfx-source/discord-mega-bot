@@ -1,6 +1,8 @@
 """Конструктор оверлея: схема раскладок, KV-хранилище, страница рендера, API панели."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -19,6 +21,8 @@ from app.core.overlay.layout import (
 )
 from app.core.overlay.overlay import Overlay
 from app.core.webpanel.webpanel import WebPanel, overlay_url_base
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 class _KV:
@@ -86,8 +90,24 @@ def test_sanitize_chat_widget_props() -> None:
     )
     props = layout["widgets"][0]["props"]
     assert props["limit"] == 25, "лимит сообщений зажат верхней границей виджета"
-    assert props["title"] == "Лента чата"
+    assert props["title"] == "", "пустой заголовок выключает шапку виджета"
     assert props["bg"] == ""
+
+
+def test_chat_titles_default_when_key_missing() -> None:
+    layout = sanitize_layout(
+        {"widgets": [{"type": "chat", "props": {}}, {"type": "chat_top", "props": {}}, {"type": "chat", "props": {"title": "Своя"}}]},
+        layout_id="t",
+    )
+    titles = [w["props"]["title"] for w in layout["widgets"]]
+    assert titles == ["Лента чата", "Топ чата", "Своя"], "без ключа — дефолт, с пустым значением — без шапки"
+
+
+def test_layout_page_renders_headers_only_when_title_set() -> None:
+    html = (ROOT / "app" / "core" / "overlay" / "layout.html").read_text(encoding="utf-8")
+    assert 'function h3(t){return t?"<h3>"+esc(t)+"</h3>":""}' in html
+    assert 'h3(p.title||"Лента чата")' not in html
+    assert 'h3(p.title||"Топ чата")' not in html
 
 
 def test_default_layout_has_widgets() -> None:
@@ -218,6 +238,11 @@ async def test_chat_overlay_page(tmp_path) -> None:
                 html = await page.text()
                 assert 'id="feed"' in html
                 assert "overlay-secret-token-32chars" in html
+                assert "__TOKEN__" not in html
+                # прозрачный фон по умолчанию, обе платформы стилизованы, авторизация остаётся в fetch
+                assert "--bg,transparent" in html
+                assert ".name.kick" in html and ".name.twitch" in html
+                assert '"X-Overlay-Token"' in html
                 # общая выдача /overlay/api теперь несёт ленту чата
                 data = await (await client.get("/overlay/api", headers=headers)).json()
                 assert data["chat"][0]["name"] == "Алиса"

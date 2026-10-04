@@ -34,7 +34,7 @@ const TOKEN = "__TOKEN__";
 const LID = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
 function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
 function num(n){try{return Number(n).toLocaleString("ru-RU")}catch(e){return String(n)}}
-function h3(t){return "<h3>"+esc(t)+"</h3>"}
+function h3(t){return t?"<h3>"+esc(t)+"</h3>":""}
 function content(w,d){
   const p=w.props||{};
   if(w.type==="stream"){
@@ -82,17 +82,18 @@ function content(w,d){
   }
   if(w.type==="chat_top"){
     const rows=d.chat_top||[];
-    let out=h3(p.title||"Топ чата");
-    if(!rows.length)return out+'<div class="empty">Пока нет сообщений</div>';
+    let head=h3(p.title);
+    if(!rows.length)return head+(head?'<div class="empty">Пока нет сообщений</div>':"");
     rows.slice(0,p.limit||3).forEach(function(row,i){
-      out+='<div class="topline"><span>'+(i+1)+". "+esc(row.name)+'</span><span>'+num(row.messages)+"</span></div>";
+      head+='<div class="topline"><span>'+(i+1)+". "+esc(row.name)+'</span><span>'+num(row.messages)+"</span></div>";
     });
-    return out;
+    return head;
   }
   if(w.type==="chat"){
     const rows=d.chat||[],lim=p.limit||10;
-    let out='<div class="chatw">'+h3(p.title||"Лента чата");
-    if(!rows.length)return out+'<div class="empty">Сообщений пока нет</div></div>';
+    const head=h3(p.title);
+    let out='<div class="chatw">'+head;
+    if(!rows.length)return out+(head?'<div class="empty">Сообщений пока нет</div>':"")+'</div>';
     rows.slice(-lim).forEach(function(m){
       out+='<div class="crow"><b class="p-'+esc(m.platform)+(m.mod?" mod":"")+'">'+esc(m.name)+"</b><span>"+esc(m.text)+"</span></div>";
     });

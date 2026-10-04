@@ -48,6 +48,13 @@ def _text(value: object, default: str, limit: int) -> str:
     return default
 
 
+def _title(value: object, default: str, limit: int) -> str:
+    """Заголовок виджета: пустая строка выключает шапку, ключа нет — дефолт."""
+    if isinstance(value, str):
+        return value.strip()[:limit]
+    return default
+
+
 def _num(value: object, lo: int, hi: int, default: int) -> int:
     try:
         return max(lo, min(hi, int(value)))  # type: ignore[arg-type]
@@ -82,9 +89,9 @@ def _props(widget_type: str, raw: object) -> dict[str, Any]:
             "color": _hex(data.get("color"), "#ff5a36"),
         }
     if widget_type == "chat_top":
-        return {**base, "title": _text(data.get("title"), _DEFAULT_TITLES["chat_top"], 80), "limit": _num(data.get("limit"), 1, 10, 3)}
+        return {**base, "title": _title(data.get("title"), _DEFAULT_TITLES["chat_top"], 80), "limit": _num(data.get("limit"), 1, 10, 3)}
     if widget_type == "chat":
-        return {**base, "title": _text(data.get("title"), "Лента чата", 80), "limit": _num(data.get("limit"), 1, 25, 10)}
+        return {**base, "title": _title(data.get("title"), "Лента чата", 80), "limit": _num(data.get("limit"), 1, 25, 10)}
     if widget_type == "stream":
         return {**base, "title": _text(data.get("title"), "", 80)}
     if widget_type in _DEFAULT_TITLES:
