@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from app.config import Config
 from app.core import embeds
+from app.core.secrets import redact
 from app.core.stream_state import stream_activity
 
 if TYPE_CHECKING:
@@ -79,6 +80,7 @@ class MegaBot(commands.Bot):
         root = assemble(config=self.config, db=self.db, bot=self)
         self.root = root
         self.services = root.services
+        await self._install_guards()
         loaded = await load_cogs(self)
         await register_persistent_views(self)
         if self.config.panel_port is not None:
@@ -98,6 +100,118 @@ class MegaBot(commands.Bot):
         if self.db_backups is not None:
             self.db_backups.start()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
+
+    # --- guard: глобальный rate-limit и kill-switch команд ---
+
+    async def _install_guards(self) -> None:
+        """Вешает guard на дерево slash-команд и на глобальные префикс-чеки."""
+        guard = self._guard_service()
+        if guard is None:
+            logger.warning("Guard не установлен: сервис не собран")
+            return
+        await guard.load()
+        self.tree.interaction_check = self._guard_interaction_check
+        self.add_check(self._guard_prefix_check)
+        logger.info(
+            "Guard активен: %s/%.0fс на пользователя, %s/%.0fс на сервер",
+            self.config.guard_user_max,
+            self.config.guard_user_window,
+            self.config.guard_guild_max,
+            self.config.guard_guild_window,
+        )
+
+    def _guard_service(self) -> Any:
+        services = getattr(self, "services", None)
+        if services is None:
+            return None
+        return getattr(services, "guard", None)
+
+    async def _guard_interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Глобальный чек дерева: отсекает спам-инвоки и выключенные команды.
+
+        discord.py при False просто помечает интеракцию необработанной, поэтому
+        отказ проговаривается здесь — иначе пользователь получит «Application
+        did not respond» вместо причины.
+        """
+        guard = self._guard_service()
+        if guard is None:
+            return True
+        if interaction.type in (discord.InteractionType.autocomplete, discord.InteractionType.ping):
+            return True
+        command = interaction.command
+        name = command.qualified_name if command is not None else ""
+        verdict = guard.check(
+            interaction.user.id,
+            interaction.guild_id,
+            name,
+            bypass=self._guard_bypass_member(interaction.user),
+        )
+        if verdict.allowed:
+            return True
+        await self._guard_reject(interaction, verdict)
+        return False
+
+    async def _guard_prefix_check(self, ctx: commands.Context) -> bool:
+        """Тот же guard для префикс-команд; отказ уходит в on_command_error."""
+        guard = self._guard_service()
+        if guard is None:
+            return True
+        command = ctx.command.qualified_name if ctx.command is not None else (ctx.invoked_with or "")
+        verdict = guard.check(
+            ctx.author.id,
+            ctx.guild.id if ctx.guild is not None else None,
+            command,
+            bypass=self._guard_bypass_member(ctx.author),
+        )
+        if verdict.allowed:
+            return True
+        raise commands.CheckFailure(self._guard_message(verdict))
+
+    def _guard_bypass_member(self, user: Any) -> bool:
+        """Владелец, доверенные роли и (по конфигу) администраторы мимо лимитов."""
+        config = self.config
+        owner_id = getattr(config, "owner_id", None)
+        if owner_id and getattr(user, "id", None) == owner_id:
+            return True
+        if not isinstance(user, discord.Member):
+            return False
+        bypass_roles = getattr(config, "guard_bypass_roles", ())
+        if bypass_roles and any(role.id in bypass_roles for role in user.roles):
+            return True
+        return bool(getattr(config, "guard_bypass_admin", False) and user.guild_permissions.administrator)
+
+    @staticmethod
+    def _guard_message(verdict: Any) -> str:
+        text = verdict.reason
+        if verdict.retry_after:
+            text += f" Повторите через {verdict.retry_after:.1f} сек."
+        return text
+
+    async def _guard_reject(self, interaction: discord.Interaction, verdict: Any) -> None:
+        logger.warning(
+            "Guard: %s пользователь %s, команда %s",
+            self._guard_message(verdict),
+            getattr(interaction.user, "id", "?"),
+            getattr(interaction.command, "qualified_name", "?"),
+        )
+        services = getattr(self, "services", None)
+        events = getattr(services, "events", None) if services is not None else None
+        if events is not None:
+            events.publish(
+                "guard",
+                {
+                    "msg": f"Заблокирована команда {getattr(interaction.command, 'qualified_name', '?')}: "
+                    f"{self._guard_message(verdict)}"
+                },
+            )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(self._guard_message(verdict), ephemeral=True)
+            else:
+                await interaction.response.send_message(self._guard_message(verdict), ephemeral=True)
+        except discord.HTTPException:
+            logger.debug("Guard: не удалось ответить на заблокированную интеракцию", exc_info=True)
+
 
     async def _sync_commands(self) -> None:
         if self.user is None or self.application_id is None:
@@ -215,6 +329,9 @@ class MegaBot(commands.Bot):
     @staticmethod
     async def _reply_error(interaction: discord.Interaction, embed: discord.Embed) -> None:
         try:
+            # Текст исключения уходит в Discord: там не должно быть токенов.
+            if embed.description:
+                embed.description = redact(str(embed.description))
             if interaction.response.is_done():
                 await interaction.followup.send(embed=embed, ephemeral=True)
             else:
@@ -264,6 +381,9 @@ class MegaBot(commands.Bot):
         services = getattr(self, "services", None)
         if services is None:
             return
+        # Эмбед уходит за пределы процесса: токен из текста исключения
+        # продублировался бы в Discord и в веб-ленте.
+        text = redact(text)
         if getattr(services, "events", None) is not None:
             services.events.publish("error", {"msg": text[:500]})
         if services.logging is None:
@@ -294,7 +414,7 @@ class MegaBot(commands.Bot):
         ):
             logger.warning("Префикс-команда %s: %s", command, error)
             try:
-                await ctx.reply(embed=embeds.error("Ошибка команды", str(error)), mention_author=False)
+                await ctx.reply(embed=embeds.error("Ошибка команды", redact(str(error))), mention_author=False)
             except (discord.HTTPException, discord.Forbidden):
                 pass
             return

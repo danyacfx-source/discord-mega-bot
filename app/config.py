@@ -313,6 +313,15 @@ class Config:
     automod_exempt_regex: str = ""
     automod_lockdown_seconds: int = 300
 
+    # Guard: глобальный rate-limit инвоков команд и kill-switch
+    guard_enabled: bool = True
+    guard_user_max: int = 6
+    guard_user_window: float = 10.0
+    guard_guild_max: int = 40
+    guard_guild_window: float = 10.0
+    guard_bypass_admin: bool = True
+    guard_bypass_roles: tuple[int, ...] = ()
+
     @classmethod
     def from_env(cls, env_file: str | os.PathLike[str] | None = None) -> Config:
         load_dotenv(env_file, override=False)
@@ -519,6 +528,13 @@ class Config:
             season_enabled=_bool(os.getenv("SEASON_ENABLED")),
             season_reward_roles=_strs(os.getenv("SEASON_REWARD_ROLES")),
             season_announce_channel_id=_single_int(os.getenv("SEASON_ANNOUNCE_CHANNEL_ID")),
+            guard_enabled=_bool(os.getenv("GUARD_ENABLED"), True),
+            guard_user_max=max(1, min(100, int(os.getenv("GUARD_USER_MAX", "6") or "6"))),
+            guard_user_window=max(1.0, min(600.0, float(os.getenv("GUARD_USER_WINDOW", "10") or "10"))),
+            guard_guild_max=max(1, min(1000, int(os.getenv("GUARD_GUILD_MAX", "40") or "40"))),
+            guard_guild_window=max(1.0, min(600.0, float(os.getenv("GUARD_GUILD_WINDOW", "10") or "10"))),
+            guard_bypass_admin=_bool(os.getenv("GUARD_BYPASS_ADMIN"), True),
+            guard_bypass_roles=_ints(os.getenv("GUARD_BYPASS_ROLES")),
         )
 
 

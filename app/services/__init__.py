@@ -14,6 +14,7 @@ from app.services.birthday_service import BirthdayService
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService
 from app.services.chat_feed import ChatFeed
+from app.services.command_guard_service import CommandGuardService
 from app.services.donation_service import DonationService
 from app.services.event_bus import EventBus
 from app.services.giveaway_service import GiveawayService
@@ -59,4 +60,5 @@ class Services:
     chat_coins: ChatCoinsService
     chat_commands: ChatCommandsService
     chat_feed: ChatFeed
+    guard: CommandGuardService
     events: EventBus

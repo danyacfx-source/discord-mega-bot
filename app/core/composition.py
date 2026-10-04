@@ -53,6 +53,7 @@ def assemble(
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService
     from app.services.chat_feed import ChatFeed
+    from app.services.command_guard_service import CommandGuardService
     from app.services.donation_service import DonationService
     from app.services.event_bus import EventBus
     from app.services.giveaway_service import GiveawayService
@@ -110,6 +111,7 @@ def assemble(
     chat_coins = override_or(overrides, "chat_coins", ChatCoinsService, ChatCoinsRepository(db))
     chat_feed = override_or(overrides, "chat_feed", ChatFeed)
     chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv, chat_feed)
+    guard = override_or(overrides, "guard", CommandGuardService, config, kv)
     events = override_or(overrides, "events", EventBus)
 
     services = Services(
@@ -135,6 +137,7 @@ def assemble(
         chat_coins=chat_coins,
         chat_commands=chat_commands,
         chat_feed=chat_feed,
+        guard=guard,
         events=events,
     )
 
