@@ -24,8 +24,11 @@ WORKDIR /app
 RUN addgroup --system bot \
     && adduser --system --ingroup bot --home /app --no-create-home bot
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.lock — пины + sha256: pip отклонит любой пакет, чей хэш не
+# совпал с локом. Пересборка лока после правки requirements.txt:
+#   python scripts/lock_requirements.py
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
 

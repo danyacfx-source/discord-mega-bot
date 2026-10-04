@@ -26,7 +26,7 @@ if [ ! -f "$APP_DIR/main.py" ]; then
     cp -r "$REPO_DIR/systemd" "$APP_DIR/"
     cp -r "$REPO_DIR/scripts" "$APP_DIR/"
     cp -r "$REPO_DIR/tests" "$APP_DIR/"
-    cp "$REPO_DIR/main.py" "$REPO_DIR/requirements.txt" "$REPO_DIR/requirements-dev.txt" "$REPO_DIR/pyproject.toml" "$REPO_DIR/.env.example" "$APP_DIR/"
+    cp "$REPO_DIR/main.py" "$REPO_DIR/requirements.txt" "$REPO_DIR/requirements.lock" "$REPO_DIR/requirements-dev.txt" "$REPO_DIR/pyproject.toml" "$REPO_DIR/.env.example" "$APP_DIR/"
     chown -R discord:discord "$APP_DIR"
 else
     echo "    проект уже на месте, пропускаю копирование"
@@ -38,7 +38,13 @@ if [ ! -d ".venv/bin" ]; then
     su -s /bin/bash discord -c "python3 -m venv $APP_DIR/.venv"
 fi
 su -s /bin/bash discord -c "$APP_DIR/.venv/bin/pip install --upgrade pip --quiet"
-su -s /bin/bash discord -c "$APP_DIR/.venv/bin/pip install -r $APP_DIR/requirements.txt --quiet"
+# Установка только по локу с проверкой sha256: без requirements.lock ставить
+# «что попало» в /opt нечем — пусть скрипт упадёт явно, а не молча ослабит защиту.
+if [ ! -f "$APP_DIR/requirements.lock" ]; then
+    echo "!! requirements.lock не найден — пересоберите: python scripts/lock_requirements.py" >&2
+    exit 1
+fi
+su -s /bin/bash discord -c "$APP_DIR/.venv/bin/pip install --require-hashes --quiet -r $APP_DIR/requirements.lock"
 
 echo "==> .env"
 if [ ! -f "$APP_DIR/.env" ]; then
