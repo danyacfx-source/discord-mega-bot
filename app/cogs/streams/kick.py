@@ -493,9 +493,11 @@ class KickCog(MegaCog, name="Kick"):
         )
 
     async def _dispatch_command(self, sender: dict[str, Any], username: str, data: dict[str, Any]) -> None:
-        """Передаёт сообщение чата в диспетчер команд (не роняет автомод)."""
-        if not self.bot.config.chat_commands_enabled:
-            return
+        """Передаёт сообщение чата в диспетчер команд (не роняет автомод).
+
+        Гейта по ``chat_commands_enabled`` тут нет: диспетчер сам молчит при
+        выключенных командах, но лента оверлея кормится — как у Twitch IRC.
+        """
         identity = sender.get("identity") or {}
         try:
             await self.chat_commands.handle(

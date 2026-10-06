@@ -15,6 +15,7 @@ from app.db.chat_coins_repository import ChatCoinsRepository
 from app.db.database import Database
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
+from app.services.chat_feed import ChatFeed
 from app.services.viewer_sessions import ViewerSessionStore
 
 
@@ -426,3 +427,63 @@ async def test_on_message_touches_viewer_session_and_caches_stream_key() -> None
 
     top = await twitch.viewer_store().top_talkers()
     assert top and top[0]["name"] == "Dend" and top[0]["count"] == 2
+
+
+# ------------------------------------------------- лента оверлея: все платформы
+@pytest.mark.asyncio
+async def test_kick_feed_works_with_commands_disabled(db, tmp_path, monkeypatch) -> None:
+    """Kick пишет в оверлей-чат даже при CHAT_COMMANDS_ENABLED=0 — как Twitch."""
+    from app.cogs.streams.kick import KickCog
+
+    config = _config(tmp_path, monkeypatch, CHAT_COMMANDS_ENABLED="0")
+    feed = ChatFeed()
+    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)), _kv(), feed)
+    cog = KickCog(SimpleNamespace(config=config), SimpleNamespace(), service)  # type: ignore[arg-type]
+
+    await cog._dispatch_command(
+        {"username": "Vasya", "identity": {}}, "vasya", {"content": "привет"}
+    )
+
+    rows = feed.recent()
+    assert len(rows) == 1, "сообщение в ленту попадает до гейта команд"
+    assert rows[0]["platform"] == "kick" and rows[0]["text"] == "привет"
+    assert service.platforms == (), "команды не регистрировались — и не нужны"
+
+
+@pytest.mark.asyncio
+async def test_discord_messages_enter_overlay_feed_and_respect_ignores() -> None:
+    from app.cogs.general.discord_chat_feed import DiscordChatFeedCog
+
+    feed = ChatFeed()
+    bot = SimpleNamespace(
+        config=SimpleNamespace(logs_ignore_channel_ids=(99,)),
+        services=SimpleNamespace(chat_feed=feed),
+    )
+    cog = DiscordChatFeedCog(bot)  # type: ignore[arg-type]
+
+    member = SimpleNamespace(
+        bot=False,
+        display_name="Оля",
+        name="olya",
+        guild_permissions=SimpleNamespace(manage_messages=True),
+    )
+    normal = SimpleNamespace(author=member, content="привет", guild=object(), channel=SimpleNamespace(id=1))
+    bot_msg = SimpleNamespace(
+        author=SimpleNamespace(bot=True, display_name="Бот", name="b", guild_permissions=None),
+        content="пинг",
+        guild=object(),
+        channel=SimpleNamespace(id=1),
+    )
+    ignored = SimpleNamespace(author=member, content="спам", guild=object(), channel=SimpleNamespace(id=99))
+    empty = SimpleNamespace(author=member, content="", guild=object(), channel=SimpleNamespace(id=1))
+
+    await cog.on_message(normal)  # type: ignore[arg-type]
+    await cog.on_message(bot_msg)  # type: ignore[arg-type]
+    await cog.on_message(ignored)  # type: ignore[arg-type]
+    await cog.on_message(empty)  # type: ignore[arg-type]
+
+    rows = feed.recent()
+    assert len(rows) == 1, "бот, игнор-канал и пустой текст не попадают в ленту"
+    assert rows[0]["platform"] == "discord"
+    assert rows[0]["name"] == "Оля"
+    assert rows[0]["mod"] is True, "модераторские права отмечаются в ленте"

@@ -24,6 +24,8 @@ const Q=new URLSearchParams(location.search);
 const num=(key,lo,hi,dflt)=>{const v=Number(Q.get(key));return Number.isFinite(v)&&v?Math.min(hi,Math.max(lo,v)):dflt};
 const LIMIT=Math.round(num("limit",1,80,20));
 const IDLE=(()=>{const raw=Q.get("idle");if(raw===null)return 10;const v=Number(raw);return Number.isFinite(v)?Math.max(0,v):10})();
+const PLAT=(Q.get("platform")||"").toLowerCase().split(",").map(s=>s.trim()).filter(Boolean);
+const okPlat=m=>!PLAT.length||PLAT.includes(String(m.platform||"").toLowerCase());
 document.documentElement.style.setProperty("--fs",num("size",11,44,16)+"px");
 const bg=Q.get("bg");
 if(bg&&window.CSS&&CSS.supports("color",bg))document.documentElement.style.setProperty("--bg",bg);
@@ -92,7 +94,7 @@ async function load(){
     const r=await fetch("/overlay/api",{headers:{"X-Overlay-Token":TOKEN}});
     if(!r.ok)return;
     const d=await r.json();
-    const rows=(d.chat||[]).slice(-LIMIT);
+    const rows=(d.chat||[]).filter(okPlat).slice(-LIMIT);
     const next=JSON.stringify(rows);
     if(next===sig)return;
     sig=next;
