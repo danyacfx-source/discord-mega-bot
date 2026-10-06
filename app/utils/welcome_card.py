@@ -93,10 +93,9 @@ def _fmt(template: str, *, name: str, guild: str, count: int) -> str:
 
 
 def _font(size: int, *, bold: bool = False) -> ImageFont.ImageFont:
-    suffix = "Bold" if bold else ""
     candidates = [
         f"C:/Windows/Fonts/arial{'bd' if bold else ''}.ttf",
-        f"/usr/share/fonts/truetype/dejavu/DejaVuSans{suffix}.ttf",
+        f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf",
         f"/usr/share/fonts/truetype/liberation/LiberationSans{'-Bold' if bold else '-Regular'}.ttf",
     ]
     for path in candidates:
@@ -125,22 +124,15 @@ def _gradient(top: str, bottom: str) -> Image.Image:
 
 
 def make_placeholder_avatar(name: str, *, bg: str = "#37407a") -> bytes:
-    """256×256 PNG-круг с первой буквой имени — для превью без реального аватара."""
+    """256×256 PNG-заглушка с силуэтом — без битой картинки и зависимости от шрифта."""
     if not _HEX.match(bg):
         bg = "#37407a"
     image = Image.new("RGB", (256, 256), _hex_rgb(bg))
     draw = ImageDraw.Draw(image)
-    letter = (name.strip() or "?")[0].upper()
-    font = _font(120, bold=True)
-    box = draw.textbbox((0, 0), letter, font=font)
-    width = box[2] - box[0]
-    height = box[3] - box[1]
-    draw.text(
-        ((256 - width) / 2 - box[0], (256 - height) / 2 - box[1]),
-        letter,
-        font=font,
-        fill=(255, 255, 255),
-    )
+    draw.ellipse((82, 42, 174, 134), fill=(255, 255, 255))
+    draw.rounded_rectangle((42, 122, 214, 236), radius=58, fill=(255, 255, 255))
+    draw.ellipse((18, 18, 38, 38), fill=(255, 255, 255))
+    draw.ellipse((208, 58, 232, 82), fill=(255, 255, 255))
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()

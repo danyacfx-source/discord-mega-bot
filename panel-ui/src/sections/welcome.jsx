@@ -122,59 +122,47 @@ export default function WelcomeSection() {
             В .env выключен <b>WELCOME_CARD</b> — карточка в Discord не отправляется, но пресет здесь сохранится.
           </div>
         )}
-        <div class="two">
+        <div class="welcome-layout">
           <div class="stack">
-            <Field label="Заголовок над именем">
-              <input class="input" type="text" value={preset.title} onInput={(e) => set("title", e.target.value)} />
-            </Field>
-            <Field label="Подпись под именем" hint='Плейсхолдеры: {name} · {guild} · {count}'>
-              <input class="input" type="text" value={preset.subtitle} onInput={(e) => set("subtitle", e.target.value)} />
-            </Field>
-            {COLOR_ROWS.map((row, i) => (
-              <div class="two" key={i}>
-                {row.map(([key, label]) => (
-                  <Field key={key} label={label}>
-                    <span class="color-row">
-                      <input
-                        type="color"
-                        value={preset[key]}
-                        onInput={(e) => set(key, e.target.value)}
-                        aria-label={label}
-                      />
-                      <code class="muted small">{preset[key]}</code>
-                    </span>
-                  </Field>
-                ))}
-              </div>
-            ))}
-            <Field label={`Размер аватара — ${preset.avatar_size} px`}>
-              <input
-                class="range"
-                type="range"
-                min="120"
-                max="240"
-                step="2"
-                value={preset.avatar_size}
-                onInput={(e) => set("avatar_size", +e.target.value)}
-              />
-            </Field>
-            <Field label={`Масштаб шрифта — ${preset.font_scale}`}>
-              <input
-                class="range"
-                type="range"
-                min="0.7"
-                max="1.5"
-                step="0.05"
-                value={preset.font_scale}
-                onInput={(e) => set("font_scale", +e.target.value)}
-              />
-            </Field>
+            <div class="welcome-group">
+              <h4>Текст карточки</h4>
+              <Field label="Заголовок над именем">
+                <input class="input" type="text" value={preset.title} onInput={(e) => set("title", e.target.value)} />
+              </Field>
+              <Field label="Подпись под именем" hint='Плейсхолдеры: {name} · {guild} · {count}'>
+                <input class="input" type="text" value={preset.subtitle} onInput={(e) => set("subtitle", e.target.value)} />
+              </Field>
+            </div>
+            <div class="welcome-group">
+              <h4>Цветовая палитра</h4>
+              {COLOR_ROWS.map((row, i) => (
+                <div class="two" key={i}>
+                  {row.map(([key, label]) => (
+                    <Field key={key} label={label}>
+                      <span class="color-row">
+                        <input type="color" value={preset[key]} onInput={(e) => set(key, e.target.value)} aria-label={label} />
+                        <code class="muted small">{preset[key]}</code>
+                      </span>
+                    </Field>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div class="welcome-group">
+              <h4>Размеры и композиция</h4>
+              <Field label={`Размер аватара — ${preset.avatar_size} px`}>
+                <input class="range" type="range" min="120" max="240" step="2" value={preset.avatar_size} onInput={(e) => set("avatar_size", +e.target.value)} />
+              </Field>
+              <Field label={`Масштаб шрифта — ${preset.font_scale}`}>
+                <input class="range" type="range" min="0.7" max="1.5" step="0.05" value={preset.font_scale} onInput={(e) => set("font_scale", +e.target.value)} />
+              </Field>
+            </div>
           </div>
 
-          <div class="stack">
+          <div class="stack welcome-preview-col">
             <Field label="Превью · 800×300">
               {previewUrl ? (
-                <img class="welcome-preview" src={previewUrl} alt="Превью приветственной карточки" />
+                <div class="welcome-preview-frame"><img class="welcome-preview" src={previewUrl} alt="Превью приветственной карточки" /></div>
               ) : (
                 <Loading />
               )}

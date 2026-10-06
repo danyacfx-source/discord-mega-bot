@@ -57,3 +57,15 @@ body::after { bottom: 14%; left: 7%; box-shadow: 62px -70px 0 -6px rgba(255, 177
 .hero-name { letter-spacing: -.04em; }
 .section.active { animation: anime-rise .3s ease; }
 @keyframes anime-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.welcome-layout { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(420px, 1.1fr); gap: 22px; align-items: start; }
+.welcome-controls { min-width: 0; }
+.welcome-group { padding: 14px 15px; border: 1px solid var(--border); border-radius: 14px; background: rgba(13, 12, 31, .34); }
+.welcome-group h4 { margin: 0 0 9px; font-size: 13px; color: var(--text); letter-spacing: .02em; }
+.welcome-preview-col { position: sticky; top: 18px; }
+.welcome-preview-frame { overflow: hidden; border-radius: 14px; border: 1px solid var(--border-strong); background: #17152d; box-shadow: 0 14px 36px rgba(5, 4, 20, .32); }
+.welcome-preview { display: block; width: 100%; height: auto; aspect-ratio: 8 / 3; object-fit: contain; }
+input[type="range"].range { appearance: none; height: 7px; border-radius: 99px; background: linear-gradient(90deg, #a98bff, #ff8fc8); outline: none; }
+input[type="range"].range::-webkit-slider-thumb { appearance: none; width: 19px; height: 19px; border-radius: 50%; border: 3px solid #fff; background: #a98bff; box-shadow: 0 0 0 4px rgba(169, 139, 255, .2), 0 3px 10px rgba(0, 0, 0, .35); cursor: grab; }
+input[type="range"].range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; border: 3px solid #fff; background: #a98bff; box-shadow: 0 0 0 4px rgba(169, 139, 255, .2), 0 3px 10px rgba(0, 0, 0, .35); cursor: grab; }
+@media (max-width: 1050px) { .welcome-layout { grid-template-columns: 1fr; } .welcome-preview-col { position: static; } }
