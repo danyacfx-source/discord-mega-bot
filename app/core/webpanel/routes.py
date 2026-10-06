@@ -34,6 +34,10 @@ async def _serve_icon(request: web.Request) -> web.Response:
     return await _serve_pwa_file(request, "icon.svg")
 
 
+async def _serve_anime_background(request: web.Request) -> web.Response:
+    return await _serve_pwa_file(request, "anime-bg.png", {"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 def register_routes(panel: Any, app: web.Application) -> None:
     """Подключает публичные и защищённые маршруты панели к ``aiohttp`` app."""
     router = app.router
@@ -47,6 +51,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/manifest.webmanifest", _serve_manifest)
     router.add_get("/sw.js", _serve_sw)
     router.add_get("/icon.svg", _serve_icon)
+    router.add_get("/anime-bg.png", _serve_anime_background)
     router.add_get("/logs", panel._serve_logs_page)
     router.add_get("/audit", panel._serve_audit_page)
     router.add_get("/wardogs/join", panel._wardogs_join_page)
