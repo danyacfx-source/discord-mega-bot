@@ -23,10 +23,13 @@ body[data-theme="dark"] {
 
 body {
   background:
-    radial-gradient(circle at 90% -10%, rgba(169, 139, 255, .28), transparent 34%),
-    radial-gradient(circle at 0% 100%, rgba(255, 143, 200, .18), transparent 32%),
+    linear-gradient(90deg, rgba(8, 7, 22, .9) 0%, rgba(10, 9, 28, .7) 48%, rgba(8, 7, 22, .42) 100%),
+    linear-gradient(180deg, rgba(8, 7, 22, .2), rgba(8, 7, 22, .72)),
+    url("/anime-bg.png") center / cover fixed no-repeat,
     var(--bg);
 }
+
+.app { background: rgba(8, 7, 22, .12); }
 
 body::before, body::after {
   content: "";
@@ -54,4 +57,3 @@ body::after { bottom: 14%; left: 7%; box-shadow: 62px -70px 0 -6px rgba(255, 177
 .hero-name { letter-spacing: -.04em; }
 .section.active { animation: anime-rise .3s ease; }
 @keyframes anime-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
