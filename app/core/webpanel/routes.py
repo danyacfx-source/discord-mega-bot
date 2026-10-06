@@ -72,6 +72,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/ws/analytics", panel._ws_analytics)
     router.add_get("/ws/events", panel._ws_events)
     router.add_get("/api/server", viewer(panel._api_server))
+    router.add_post("/api/server/permissions", viewer(panel._api_server_permissions, "admin"))
+    router.add_post("/api/server/wardogs", viewer(panel._api_wardogs_permissions, "admin"))
     router.add_get("/api/server/members", viewer(panel._api_server_members))
     router.add_post("/api/server/members/roles", viewer(panel._api_server_members_roles))
     router.add_get("/api/moderation/warns", viewer(panel._api_warns))

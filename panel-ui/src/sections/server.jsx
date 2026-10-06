@@ -3,6 +3,18 @@ import { api, toast } from "../lib/exports.js";
 import { Icon } from "../components/icons.jsx";
 import { Chip, Empty, Field, ListRow, Loading } from "../components/ui.jsx";
 
+const PERMISSION_LABELS = {
+  view_channel: "Просмотр каналов",
+  send_messages: "Отправка сообщений",
+  read_message_history: "История сообщений",
+  connect: "Подключение к голосу",
+  speak: "Говорить",
+  attach_files: "Прикреплять файлы",
+  embed_links: "Встраивать ссылки",
+  add_reactions: "Добавлять реакции",
+  send_messages_in_threads: "Сообщения в ветках",
+};
+
 export default function Server() {
   const [data, setData] = useState(null);
   const [members, setMembers] = useState([]);
@@ -10,6 +22,9 @@ export default function Server() {
   const [roleId, setRoleId] = useState("");
   const [result, setResult] = useState("");
   const [failed, setFailed] = useState(false);
+  const [permRole, setPermRole] = useState("");
+  const [permCategory, setPermCategory] = useState("");
+  const [permissions, setPermissions] = useState({});
 
   async function loadMembers() {
     const r = await api("/api/server/members?q=");
@@ -27,6 +42,10 @@ export default function Server() {
       }
       setData(r.data);
       if (r.data.roles && r.data.roles.length) setRoleId(String(r.data.roles[0].id));
+      const preferredRole = r.data.wardogs && r.data.wardogs.role_id;
+      const preferredCategory = r.data.wardogs && r.data.wardogs.category_id;
+      setPermRole(preferredRole || String((r.data.editable_roles || [])[0]?.id || ""));
+      setPermCategory(preferredCategory || String((r.data.categories || [])[0]?.id || ""));
     })();
     loadMembers();
     return () => {
@@ -40,6 +59,30 @@ export default function Server() {
   const g = data.guild || {};
   const cats = data.categories || [];
   const roles = data.roles || [];
+  const editableRoles = data.editable_roles || [];
+  const permissionNames = data.permission_names || Object.keys(PERMISSION_LABELS);
+  const selectedCategory = cats.find((cat) => String(cat.id) === String(permCategory));
+
+  function syncPermissions(roleIdValue = permRole, categoryIdValue = permCategory) {
+    const category = cats.find((cat) => String(cat.id) === String(categoryIdValue));
+    const saved = category && category.permission_overwrites && category.permission_overwrites[String(roleIdValue)];
+    const next = {};
+    permissionNames.forEach((name) => { next[name] = saved && saved[name] === true; });
+    setPermissions(next);
+  }
+
+  async function savePermissions() {
+    if (!permRole || !permCategory) return toast("Выберите роль и категорию", false);
+    const r = await api("/api/server/permissions", { role_id: permRole, category_id: permCategory, permissions });
+    if (r.status === 200 && r.data.ok) { toast("Доступы сохранены", true); window.location.reload(); }
+    else toast((r.data && r.data.error) || "Ошибка сохранения доступов", false);
+  }
+
+  async function applyWardogs() {
+    const r = await api("/api/server/wardogs", {});
+    if (r.status === 200 && r.data.ok) { toast("Доступ Wardogs применён", true); window.location.reload(); }
+    else toast((r.data && r.data.error) || "Не удалось применить Wardogs", false);
+  }
 
   async function roleAction(act) {
     setResult("");
@@ -85,6 +128,39 @@ export default function Server() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>Доступы ролей к категориям</h3>
+          <Chip>только роли ниже бота</Chip>
+        </div>
+        <div class="two">
+          <Field label="Роль">
+            <select class="input" value={permRole} onChange={(e) => { setPermRole(e.target.value); syncPermissions(e.target.value, permCategory); }}>
+              {editableRoles.map((role) => <option key={role.id} value={String(role.id)}>{role.name} · позиция {role.position}</option>)}
+            </select>
+          </Field>
+          <Field label="Категория">
+            <select class="input" value={permCategory} onChange={(e) => { setPermCategory(e.target.value); syncPermissions(permRole, e.target.value); }}>
+              {cats.filter((cat) => cat.id).map((cat) => <option key={cat.id} value={String(cat.id)}>{cat.name}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "8px", marginTop: "4px" }}>
+          {permissionNames.map((name) => (
+            <label class="toggle-holder" style={{ padding: "9px 11px", border: "1px solid var(--border)", borderRadius: "9px", background: "var(--card2)" }} key={name}>
+              <input type="checkbox" checked={permissions[name] === true} onChange={(e) => setPermissions({ ...permissions, [name]: e.target.checked })} />
+              <span>{PERMISSION_LABELS[name] || name}</span>
+            </label>
+          ))}
+        </div>
+        <div class="row-actions" style={{ marginTop: "12px" }}>
+          <button class="btn primary" type="button" onClick={savePermissions}>Сохранить доступы</button>
+          <button class="btn success" type="button" onClick={applyWardogs}>⚡ Применить Wardogs</button>
+          {data.wardogs && <span class="muted small">Категория Wardogs: {data.wardogs.category_name || data.wardogs.category_id}</span>}
+        </div>
+        {selectedCategory ? <div class="muted small" style={{ marginTop: "8px" }}>Каналов в категории: {selectedCategory.channels?.length || 0}</div> : null}
       </div>
 
       <div class="two">

@@ -8,6 +8,20 @@ from typing import Any
 import discord
 from aiohttp import web
 
+_WARDOGS_CATEGORY_ID = 1534711415883956284
+_WARDOGS_ROLE_NAME = "Wardogs"
+_EDITABLE_PERMISSION_NAMES = (
+    "view_channel",
+    "send_messages",
+    "read_message_history",
+    "connect",
+    "speak",
+    "attach_files",
+    "embed_links",
+    "add_reactions",
+    "send_messages_in_threads",
+)
+
 
 class _GuildApiMixin:
     """Сервер, участники, роли, варны и действия модерации."""
@@ -155,6 +169,19 @@ class _GuildApiMixin:
                     "bot_managed": role.is_bot_managed(),
                 }
             )
+        editable_roles = [
+            role for role in guild.roles
+            if not role.is_default() and not role.managed and me is not None and role.position < me.top_role.position
+        ]
+        for category in categories:
+            category_channel = guild.get_channel(int(category["id"])) if category["id"] else None
+            if isinstance(category_channel, discord.CategoryChannel):
+                category["permission_overwrites"] = {
+                    str(role.id): self._permission_state(category_channel.overwrites_for(role))
+                    for role in editable_roles
+                }
+        wardogs_role = discord.utils.get(guild.roles, name=_WARDOGS_ROLE_NAME)
+        wardogs_category = guild.get_channel(_WARDOGS_CATEGORY_ID)
         online = sum(1 for m in guild.members if m.status is not discord.Status.offline)
         return self._json(
             {
@@ -177,8 +204,95 @@ class _GuildApiMixin:
                 },
                 "categories": categories,
                 "roles": roles,
+                "editable_roles": [
+                    {"id": str(role.id), "name": role.name, "position": role.position}
+                    for role in sorted(editable_roles, key=lambda item: (-item.position, item.name.casefold()))
+                ],
+                "wardogs": {
+                    "role_id": str(wardogs_role.id) if wardogs_role else None,
+                    "role_name": _WARDOGS_ROLE_NAME,
+                    "category_id": str(_WARDOGS_CATEGORY_ID),
+                    "category_name": wardogs_category.name if isinstance(wardogs_category, discord.CategoryChannel) else None,
+                    "available": bool(wardogs_role and isinstance(wardogs_category, discord.CategoryChannel)),
+                },
+                "permission_names": list(_EDITABLE_PERMISSION_NAMES),
             }
         )
+
+    @staticmethod
+    def _permission_state(overwrite: discord.PermissionOverwrite) -> dict[str, bool | None]:
+        return {name: getattr(overwrite, name) for name in _EDITABLE_PERMISSION_NAMES}
+
+    def _editable_role(self, guild: discord.Guild, value: Any) -> discord.Role | None:
+        try:
+            role = guild.get_role(int(value))
+        except (TypeError, ValueError):
+            return None
+        me = guild.me
+        if role is None or role.is_default() or role.managed or me is None or role.position >= me.top_role.position:
+            return None
+        return role
+
+    @staticmethod
+    def _category(guild: discord.Guild, value: Any) -> discord.CategoryChannel | None:
+        try:
+            channel = guild.get_channel(int(value))
+        except (TypeError, ValueError):
+            return None
+        return channel if isinstance(channel, discord.CategoryChannel) else None
+
+    async def _apply_category_permissions(
+        self, category: discord.CategoryChannel, role: discord.Role, raw: Any
+    ) -> None:
+        if not isinstance(raw, dict):
+            raise ValueError("permissions должен быть объектом")
+        overwrite = discord.PermissionOverwrite()
+        for name in _EDITABLE_PERMISSION_NAMES:
+            value = raw.get(name)
+            if value is not None and not isinstance(value, bool):
+                raise ValueError(f"Некорректное значение права: {name}")
+            setattr(overwrite, name, value)
+        await category.set_permissions(role, overwrite=overwrite, reason="Настройка прав через веб-админку")
+
+    async def _api_server_permissions(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        payload = await request.json()
+        role = self._editable_role(guild, payload.get("role_id"))
+        category = self._category(guild, payload.get("category_id"))
+        if role is None:
+            return self._json({"ok": False, "error": "Роль не найдена или находится выше роли бота"}, status=400)
+        if category is None:
+            return self._json({"ok": False, "error": "Категория не найдена"}, status=400)
+        me = guild.me
+        if me is None or not category.permissions_for(me).manage_channels:
+            return self._json({"ok": False, "error": "Боту нужно право Manage Channels"}, status=403)
+        try:
+            await self._apply_category_permissions(category, role, payload.get("permissions"))
+        except (ValueError, discord.Forbidden, discord.HTTPException) as exc:
+            return self._json({"ok": False, "error": str(exc)}, status=400)
+        return self._json({"ok": True})
+
+    async def _api_wardogs_permissions(self, request: web.Request) -> web.Response:
+        guild = self._primary_guild()
+        if guild is None:
+            return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
+        role = discord.utils.get(guild.roles, name=_WARDOGS_ROLE_NAME)
+        category = self._category(guild, _WARDOGS_CATEGORY_ID)
+        if role is None or category is None:
+            return self._json({"ok": False, "error": "Роль Wardogs или целевая категория не найдена"}, status=404)
+        if self._editable_role(guild, role.id) is None:
+            return self._json({"ok": False, "error": "Роль Wardogs находится выше роли бота"}, status=403)
+        me = guild.me
+        if me is None or not category.permissions_for(me).manage_channels:
+            return self._json({"ok": False, "error": "Боту нужно право Manage Channels"}, status=403)
+        permissions = {name: True for name in _EDITABLE_PERMISSION_NAMES}
+        try:
+            await self._apply_category_permissions(category, role, permissions)
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            return self._json({"ok": False, "error": str(exc)}, status=400)
+        return self._json({"ok": True, "category_id": str(_WARDOGS_CATEGORY_ID), "role": _WARDOGS_ROLE_NAME})
 
     def _bot_permission_summary(self, guild: discord.Guild) -> list[str]:
         if guild.me is None:
