@@ -6,44 +6,62 @@
 <title>Админка</title>
 <style>
   :root {
-    --bg: #1e1f22; --bg2: #2b2d31; --card: #313338; --border: #3f4147;
-    --text: #dbdee1; --muted: #949ba4; --accent: #5865f2; --ok: #23a55a;
-    --err: #f23f43; --bar: #5865f2;
+    --bg: #0f1020; --bg2: rgba(25, 25, 49, .82); --card: rgba(36, 36, 69, .9);
+    --border: rgba(255, 255, 255, .1); --text: #f7f4ff; --muted: #aaa8c4;
+    --accent: #a98bff; --accent-2: #ff8fc8; --ok: #72e6b1; --err: #ff789a;
+    --bar: #a98bff; --shadow: 0 22px 60px rgba(4, 4, 17, .35);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-    font: 14px/1.5 "Segoe UI", Roboto, Arial, sans-serif; }
-  header { padding: 14px 20px; background: var(--bg2); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; }
-  .badge { font-size: 12px; padding: 3px 10px; border-radius: 12px; }
-  .badge.ok { background: rgba(35,165,90,.15); color: var(--ok); }
-  .badge.off { background: rgba(242,63,67,.15); color: var(--err); }
-  .app { display: flex; min-height: calc(100vh - 57px); }
-  .nav { width: 220px; flex: 0 0 220px; background: var(--bg2); border-right: 1px solid var(--border);
-    padding: 12px; display: flex; flex-direction: column; gap: 4px; }
-  .nav button { text-align: left; background: transparent; border: 0; color: var(--muted);
-    padding: 10px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 600; }
-  .nav button:hover { background: var(--card); color: var(--text); }
-  .nav button.active { background: var(--accent); color: #fff; }
-  .main { flex: 1; min-width: 0; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 14px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    overflow-x: hidden; }
+  body::before, body::after { content: ""; position: fixed; z-index: -1; width: 42vw; height: 42vw;
+    border-radius: 50%; filter: blur(5px); opacity: .34; pointer-events: none; }
+  body::before { top: -18vw; right: -10vw; background: radial-gradient(circle, #775cf1, transparent 68%); }
+  body::after { bottom: -24vw; left: -12vw; background: radial-gradient(circle, #f26cae, transparent 65%); }
+  header { min-height: 78px; padding: 14px 28px; background: rgba(15, 16, 32, .72);
+    border-bottom: 1px solid var(--border); backdrop-filter: blur(18px); display: flex;
+    align-items: center; gap: 14px; flex-wrap: wrap; position: relative; z-index: 2; }
+  header h1 { font-size: 19px; letter-spacing: -.02em; margin: 0; }
+  header h1::first-letter { filter: drop-shadow(0 0 8px rgba(255, 143, 200, .7)); }
+  .brand-mark { display: inline-grid; place-items: center; width: 42px; height: 42px; margin-right: 2px;
+    border: 1px solid rgba(255,255,255,.18); border-radius: 14px; background: linear-gradient(135deg, #b99cff, #ff8fc8);
+    box-shadow: 0 8px 24px rgba(169,139,255,.35); font-size: 22px; transform: rotate(-5deg); }
+  .badge { font-size: 11px; padding: 5px 11px; border-radius: 999px; font-weight: 800; letter-spacing: .04em; }
+  .badge.ok { background: rgba(114,230,177,.14); color: var(--ok); border: 1px solid rgba(114,230,177,.25); }
+  .badge.off { background: rgba(255,120,154,.13); color: var(--err); border: 1px solid rgba(255,120,154,.25); }
+  .app { display: flex; min-height: calc(100vh - 78px); position: relative; z-index: 1; }
+  .nav { width: 246px; flex: 0 0 246px; padding: 24px 16px; display: flex; flex-direction: column; gap: 8px;
+    background: rgba(19, 19, 39, .65); border-right: 1px solid var(--border); backdrop-filter: blur(18px); }
+  .nav::after { content: "✦  мечтай смелее"; margin-top: auto; padding: 18px 10px 2px; color: #8d89ac;
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .nav button { text-align: left; background: transparent; border: 1px solid transparent; color: var(--muted);
+    padding: 12px 14px; border-radius: 14px; cursor: pointer; font: inherit; font-weight: 700; transition: .2s ease; }
+  .nav button:hover { background: rgba(255,255,255,.06); color: var(--text); transform: translateX(3px); }
+  .nav button.active { color: #fff; border-color: rgba(255,255,255,.16); background: linear-gradient(100deg, rgba(169,139,255,.38), rgba(255,143,200,.22));
+    box-shadow: 0 10px 25px rgba(90, 71, 163, .2); }
+  .main { flex: 1; min-width: 0; background: radial-gradient(circle at 60% 0%, rgba(169,139,255,.07), transparent 38%); }
   .page-section { display: none; }
   .page-section.active { display: block; }
-  .pad { padding: 16px 20px; }
-  .sec-title { margin: 0 0 12px; font-size: 16px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-  .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
-  .stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-  .stat-value { font-size: 18px; font-weight: 700; margin-top: 4px; word-break: break-word; }
+  .pad { padding: 34px clamp(20px, 4vw, 52px); }
+  .sec-title { margin: 0 0 20px; font-size: 26px; letter-spacing: -.04em; }
+  .sec-title::after { content: ""; display: block; width: 46px; height: 4px; margin-top: 8px; border-radius: 99px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(205px, 1fr)); gap: 14px; }
+  .stat { position: relative; overflow: hidden; background: var(--bg2); border: 1px solid var(--border); border-radius: 20px; padding: 19px 20px; box-shadow: var(--shadow); transition: transform .2s ease, border-color .2s ease; }
+  .stat:hover { transform: translateY(-4px); border-color: rgba(169,139,255,.45); }
+  .stat::after { content: "✦"; position: absolute; right: 16px; top: 13px; color: rgba(255,143,200,.55); font-size: 17px; }
+  .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+  .stat-value { font-size: 21px; font-weight: 800; margin-top: 8px; word-break: break-word; }
   .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0 16px; }
-  .wrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(340px, 460px); gap: 16px; padding: 16px 20px; }
-  .col, .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
-  .panel h2 { font-size: 15px; margin: 0 0 12px; }
-  label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .wrap { display: grid; grid-template-columns: minmax(0,1fr) minmax(340px, 460px); gap: 20px; padding: 34px clamp(20px, 4vw, 52px); }
+  .col, .panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 22px; padding: 22px; box-shadow: var(--shadow); }
+  .panel h2 { font-size: 17px; margin: 0 0 16px; letter-spacing: -.02em; }
+  label { display: block; margin: 13px 0 6px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .09em; font-weight: 700; }
   input[type=text], input[type=url], input[type=password], textarea, select {
-    width: 100%; background: var(--card); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 8px 10px; font: inherit; }
-  textarea { resize: vertical; min-height: 64px; }
+    width: 100%; background: rgba(14, 15, 31, .55); color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 12px; font: inherit; outline: none; transition: .2s ease; }
+  input[type=text]:focus, input[type=url]:focus, input[type=password]:focus, textarea:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(169,139,255,.14); }
+  textarea { resize: vertical; min-height: 72px; }
   .row { display: flex; gap: 10px; }
   .row > div { flex: 1; min-width: 0; }
   .inp-group { display: flex; gap: 6px; }
@@ -51,24 +69,25 @@
   .inp-group .btn { flex: 0 0 auto; padding: 9px 12px; }
   .checks { display: flex; gap: 18px; align-items: center; margin-top: 10px; }
   .checks label { display: inline-flex; align-items: center; gap: 6px; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 13px; }
-  .btn { border: 0; border-radius: 6px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; color: #fff; }
-  .btn.primary { background: var(--accent); }
-  .btn.success { background: var(--ok); }
-  .btn.danger { background: var(--err); }
+  .btn { border: 1px solid transparent; border-radius: 12px; padding: 10px 15px; font: inherit; font-weight: 800; cursor: pointer; color: #fff; transition: .2s ease; }
+  .btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.08); }
+  .btn.primary { background: linear-gradient(135deg, #8f72ef, #b18fff); box-shadow: 0 8px 18px rgba(143,114,239,.25); }
+  .btn.success { background: linear-gradient(135deg, #3cae83, #72e6b1); color: #0f2c27; }
+  .btn.danger { background: linear-gradient(135deg, #db547b, #ff789a); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .mode-switch { display: flex; gap: 8px; margin-top: 12px; }
-  .mode-switch .btn { background: var(--card); border: 1px solid var(--border); color: var(--muted); }
-  .mode-switch .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .field-item { border: 1px solid var(--border); border-radius: 6px; padding: 8px; margin-top: 8px; background: var(--card); }
+  .mode-switch { display: flex; gap: 8px; margin-top: 0; padding: 5px; border-radius: 15px; background: rgba(10,10,24,.35); }
+  .mode-switch .btn { flex: 1; background: transparent; border: 1px solid transparent; color: var(--muted); }
+  .mode-switch .btn.active { background: rgba(169,139,255,.25); color: #fff; border-color: rgba(169,139,255,.35); }
+  .field-item { border: 1px solid var(--border); border-radius: 14px; padding: 10px; margin-top: 8px; background: rgba(16,16,34,.45); }
   .field-item .row { align-items: center; }
   .field-item .inlinebox { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   .field-item .inlinebox input { width: auto; }
   .mini { font-size: 11px; color: var(--muted); }
-  .actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; }
   .actions .btn { flex: 1; min-width: 120px; }
   .color-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border); vertical-align: middle; margin-right: 6px; }
-  .empty { border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); padding: 40px 20px; text-align: center; }
-  .embed-card { background: var(--card); border-radius: 8px; padding: 12px 16px; border-left: 4px solid var(--bar); margin-top: 12px; }
+  .empty { border: 1px dashed rgba(169,139,255,.38); border-radius: 16px; color: var(--muted); padding: 52px 20px; text-align: center; background: rgba(169,139,255,.04); }
+  .embed-card { background: rgba(16,16,34,.6); border-radius: 16px; padding: 15px 18px; border-left: 4px solid var(--bar); margin-top: 12px; box-shadow: 0 10px 25px rgba(4,4,17,.2); }
   .embed-title { font-weight: 700; margin-bottom: 4px; }
   .embed-desc { white-space: pre-wrap; }
   .embed-thumb { float: right; margin: 4px 0 4px 12px; border-radius: 6px; width: 72px; height: 72px; object-fit: cover; }
@@ -81,32 +100,54 @@
   .embed-footer img { width: 18px; height: 18px; border-radius: 50%; }
   .embed-ts { margin-top: 8px; color: var(--muted); font-size: 12px; }
   .content-preview { white-space: pre-wrap; }
-  #toast { position: fixed; right: 20px; bottom: 20px; max-width: 420px; padding: 10px 14px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); display: none; white-space: pre-wrap; z-index: 20; }
+  .server-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); gap: 20px; }
+  .server-list { display: grid; gap: 8px; max-height: 380px; overflow: auto; margin-top: 14px; }
+  .server-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px;
+    border: 1px solid var(--border); border-radius: 14px; background: rgba(16,16,34,.42); }
+  .server-item strong { display: block; font-size: 13px; }
+  .server-item small { color: var(--muted); font-size: 11px; }
+  .role-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 7px; box-shadow: 0 0 10px currentColor; }
+  .server-item code { color: #c9bcff; font-size: 10px; }
+  .permission-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
+  .permission-grid label { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px; border: 1px solid var(--border);
+    border-radius: 11px; background: rgba(16,16,34,.38); text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--text); }
+  .permission-grid input { accent-color: var(--accent); }
+  .wardogs-card { margin-top: 16px; padding: 16px; border: 1px solid rgba(255,143,200,.3); border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255,143,200,.11), rgba(169,139,255,.1)); }
+  .wardogs-card h3 { margin: 0 0 5px; font-size: 15px; }
+  .wardogs-card p { margin: 0; color: var(--muted); font-size: 12px; }
+  #toast { position: fixed; right: 20px; bottom: 20px; max-width: 420px; padding: 12px 16px; border-radius: 14px; background: #252544; border: 1px solid var(--border); display: none; white-space: pre-wrap; z-index: 20; box-shadow: var(--shadow); }
   #toast.ok { border-color: var(--ok); }
   #toast.err { border-color: var(--err); }
-  #login { position: fixed; inset: 0; background: var(--bg); display: none; align-items: center; justify-content: center; z-index: 10; }
-  #login > div { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; min-width: 300px; }
-  #login h2 { margin: 0 0 4px; }
+  #login { position: fixed; inset: 0; background: rgba(11, 11, 26, .82); backdrop-filter: blur(16px); display: none; align-items: center; justify-content: center; z-index: 10; }
+  #login > div { background: linear-gradient(145deg, rgba(45,42,82,.96), rgba(28,27,56,.96)); border: 1px solid rgba(255,255,255,.15); border-radius: 24px; padding: 30px; min-width: 320px; box-shadow: var(--shadow); }
+  #login h2 { margin: 0 0 4px; font-size: 22px; }
+  @keyframes float { 0%, 100% { transform: translateY(0) rotate(-5deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+  .brand-mark { animation: float 4s ease-in-out infinite; }
   @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  @media (max-width: 900px) { .server-grid { grid-template-columns: 1fr; } }
   @media (max-width: 700px) {
-    .app { flex-direction: column; }
-    .nav { width: auto; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; }
-    .nav button { flex: 1 1 auto; text-align: center; }
+    header { padding: 12px 16px; } .app { flex-direction: column; }
+    .nav { width: auto; flex: 0 0 auto; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+    .nav button { flex: 1 1 auto; text-align: center; padding: 10px 8px; } .nav::after { display: none; }
+    .pad, .wrap { padding: 24px 16px; } .sec-title { font-size: 23px; }
   }
 </style>
 </head>
 <body>
 <header>
-  <h1>🛠 Админка — <span id="panel-name">…</span></h1>
+  <span class="brand-mark">🌸</span>
+  <h1>Админка — <span id="panel-name">…</span></h1>
   <span id="status" class="badge off">бот: …</span>
   <span id="guildname" class="mini"></span>
 </header>
 
 <div class="app">
   <aside class="nav">
-    <button class="active" data-sec="overview" onclick="switchSection('overview')">📊 Обзор</button>
-    <button data-sec="settings" onclick="switchSection('settings')">⚙️ Настройки</button>
-    <button data-sec="embed" onclick="switchSection('embed')">🎨 Эмбеды</button>
+    <button class="active" data-sec="overview" onclick="switchSection('overview')">✦ &nbsp; Обзор</button>
+    <button data-sec="settings" onclick="switchSection('settings')">⚙ &nbsp; Настройки</button>
+    <button data-sec="server" onclick="switchSection('server')">♢ &nbsp; Сервер</button>
+    <button data-sec="embed" onclick="switchSection('embed')">✧ &nbsp; Эмбеды</button>
   </aside>
 
   <main class="main">
@@ -140,6 +181,37 @@
           <div class="actions">
             <button class="btn success" id="btn_save_settings" onclick="saveSettings()">💾 Сохранить</button>
             <button class="btn" onclick="loadSettings()">↻ Обновить</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sec-server" class="page-section">
+      <div class="pad">
+        <h2 class="sec-title">Сервер</h2>
+        <div class="server-grid">
+          <div class="panel">
+            <h2>Роли и каналы Discord</h2>
+            <p class="mini">Показаны роли ниже роли бота — их можно безопасно использовать для настройки доступов.</p>
+            <div class="server-list" id="roles_list"><div class="empty">Загрузка ролей…</div></div>
+            <h2 style="margin-top:24px">Категории и каналы</h2>
+            <div class="server-list" id="categories_list"><div class="empty">Загрузка каналов…</div></div>
+          </div>
+          <div class="panel">
+            <h2>Доступ роли к категории</h2>
+            <label for="perm_role">Роль</label>
+            <select id="perm_role"></select>
+            <label for="perm_category">Категория</label>
+            <select id="perm_category"></select>
+            <div class="permission-grid" id="permission_grid"></div>
+            <div class="actions">
+              <button class="btn primary" id="btn_save_permissions" onclick="savePermissions()">💾 Сохранить доступы</button>
+            </div>
+            <div class="wardogs-card">
+              <h3>🌸 Wardogs</h3>
+              <p id="wardogs_status">Категория 1534711415883956284 · проверка…</p>
+              <button class="btn success" style="margin-top:12px;width:100%" onclick="applyWardogs()">⚡ Применить доступ Wardogs</button>
+            </div>
           </div>
         </div>
       </div>
@@ -283,6 +355,20 @@ const SETTINGS_FIELDS = [
 let mode = "webhook";
 let fields = [];
 let settingsLoaded = false;
+let serverLoaded = false;
+let serverData = null;
+
+const PERMISSION_LABELS = {
+  view_channel: "Просмотр каналов",
+  send_messages: "Отправка сообщений",
+  read_message_history: "История сообщений",
+  connect: "Подключение к голосу",
+  speak: "Говорить",
+  attach_files: "Прикреплять файлы",
+  embed_links: "Встраивать ссылки",
+  add_reactions: "Добавлять реакции",
+  send_messages_in_threads: "Сообщения в ветках",
+};
 
 const $ = (id) => document.getElementById(id);
 const hex6 = /^#?([0-9a-fA-F]{6})$/;
@@ -367,6 +453,7 @@ function switchSection(name) {
   document.querySelectorAll(".nav button").forEach((b) => b.classList.toggle("active", b.dataset.sec === name));
   if (name === "overview") loadOverview();
   if (name === "settings" && !settingsLoaded) loadSettings();
+  if (name === "server" && !serverLoaded) loadServer();
 }
 
 /* --- обзор --- */
@@ -448,6 +535,102 @@ async function saveSettings() {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* --- сервер: роли, каналы и права категорий --- */
+
+function roleById(id) {
+  return (serverData && serverData.roles || []).find((role) => role.id === id);
+}
+
+function categoryById(id) {
+  return (serverData && serverData.categories || []).find((category) => category.id === id);
+}
+
+function fillServerSelect(id, items, placeholder, labelFn) {
+  const sel = $(id);
+  sel.innerHTML = "";
+  if (!items.length) {
+    const empty = document.createElement("option"); empty.value = ""; empty.textContent = "— нет доступных вариантов —";
+    sel.appendChild(empty); return;
+  }
+  for (const item of items) {
+    const option = document.createElement("option"); option.value = item.id; option.textContent = labelFn(item); sel.appendChild(option);
+  }
+  if (placeholder) sel.value = placeholder;
+}
+
+function renderServerLists() {
+  const roles = $("roles_list"); roles.innerHTML = "";
+  for (const role of serverData.roles || []) {
+    const item = tag("div", "server-item");
+    const title = tag("div", "");
+    title.innerHTML = '<strong><span class="role-dot" style="color:' + escapeHtml(role.color) + ';background:' + escapeHtml(role.color) + '"></span>' + escapeHtml(role.name) + '</strong><small>позиция ' + role.position + ' · <code>' + role.id + '</code></small>';
+    item.appendChild(title); roles.appendChild(item);
+  }
+  if (!roles.children.length) roles.innerHTML = '<div class="empty">Нет ролей, которыми бот может управлять.</div>';
+
+  const categories = $("categories_list"); categories.innerHTML = "";
+  for (const category of serverData.categories || []) {
+    const item = tag("div", "server-item");
+    const channels = (category.channels || []).map((channel) => (channel.type === "voice" ? "🔊 " : "# ") + channel.name).join(" · ") || "пусто";
+    item.innerHTML = '<div><strong>▰ ' + escapeHtml(category.name) + '</strong><small>' + escapeHtml(channels) + '</small></div><code>' + category.id + '</code>';
+    categories.appendChild(item);
+  }
+  if (!categories.children.length) categories.innerHTML = '<div class="empty">Категории не найдены.</div>';
+}
+
+function renderPermissionGrid() {
+  const box = $("permission_grid"); box.innerHTML = "";
+  const category = categoryById($("perm_category").value);
+  const role = roleById($("perm_role").value);
+  const saved = category && role && category.permission_overwrites && category.permission_overwrites[role.id] || {};
+  const names = serverData.permission_names || Object.keys(PERMISSION_LABELS);
+  for (const name of names) {
+    const label = document.createElement("label");
+    const input = document.createElement("input"); input.type = "checkbox"; input.dataset.permission = name; input.checked = saved[name] === true;
+    label.appendChild(input); label.appendChild(document.createTextNode(PERMISSION_LABELS[name] || name)); box.appendChild(label);
+  }
+}
+
+async function loadServer() {
+  const r = await api("/api/server");
+  if (!r.data || !r.data.ok) { toast("❌ " + ((r.data && r.data.error) || "Не удалось загрузить данные сервера"), false); return; }
+  serverData = r.data;
+  renderServerLists();
+  fillServerSelect("perm_role", serverData.roles || [], serverData.wardogs && serverData.wardogs.role_id, (role) => role.name + " · позиция " + role.position);
+  fillServerSelect("perm_category", serverData.categories || [], serverData.wardogs && serverData.wardogs.category_id, (category) => category.name);
+  $("perm_role").onchange = renderPermissionGrid;
+  $("perm_category").onchange = renderPermissionGrid;
+  renderPermissionGrid();
+  const wd = serverData.wardogs || {};
+  $("wardogs_status").textContent = wd.available
+    ? "✓ Роль найдена · категория: " + (wd.category_name || wd.category_id)
+    : "Нужны роль Wardogs и категория " + wd.category_id;
+  serverLoaded = true;
+}
+
+function collectPermissions() {
+  const permissions = {};
+  document.querySelectorAll("#permission_grid input[data-permission]").forEach((input) => { permissions[input.dataset.permission] = input.checked; });
+  return permissions;
+}
+
+async function savePermissions() {
+  const roleId = $("perm_role").value; const categoryId = $("perm_category").value;
+  if (!roleId || !categoryId) return toast("Выберите роль и категорию", false);
+  const btn = $("btn_save_permissions"); btn.disabled = true;
+  try {
+    const r = await api("/api/server/permissions", { role_id: roleId, category_id: categoryId, permissions: collectPermissions() });
+    if (r.data && r.data.ok) { toast("✅ Доступы сохранены", true); await loadServer(); }
+    else toast("❌ " + ((r.data && r.data.error) || r.status), false);
+  } finally { btn.disabled = false; }
+}
+
+async function applyWardogs() {
+  const r = await api("/api/server/wardogs", {});
+  if (r.data && r.data.ok) { toast("✅ Доступ Wardogs применён", true); await loadServer(); }
+  else toast("❌ " + ((r.data && r.data.error) || r.status), false);
 }
 
 /* --- каналы --- */
