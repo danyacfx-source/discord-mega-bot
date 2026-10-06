@@ -52,6 +52,7 @@ class _ProfilesApiMixin:
                 "session": None,
                 "live": False,
                 "trend": None,
+                "rsvp_count": 0,
             }
 
         if config.twitch_channels:
@@ -64,6 +65,7 @@ class _ProfilesApiMixin:
                     config.twitch_poll_seconds,
                 )
                 entry["session"] = await self.services.twitch.session_store(login).load()
+                entry["rsvp_count"] = len(await self.services.twitch.rsvp_store(login).granted_ids())
                 streams.append(entry)
         if config.kick_channel_slug:
             slug = config.kick_channel_slug
@@ -75,6 +77,7 @@ class _ProfilesApiMixin:
                 config.kick_poll_seconds,
             )
             entry["session"] = await self.services.kick.session_store(slug).load()
+            entry["rsvp_count"] = len(await self.services.kick.rsvp_store().granted_ids())
             streams.append(entry)
         if config.vk_channel_slug:
             slug = config.vk_channel_slug
@@ -86,6 +89,7 @@ class _ProfilesApiMixin:
                 config.vk_poll_seconds,
             )
             entry["session"] = await self.services.vk_video.session_store(slug).load()
+            entry["rsvp_count"] = len(await self.services.vk_video.rsvp_store().granted_ids())
             streams.append(entry)
 
         for entry in streams:
@@ -130,6 +134,20 @@ class _ProfilesApiMixin:
             )
         rows.sort(key=lambda row: row["last_seen"], reverse=True)
         return {"enabled": enabled, "active": rows, "top": top}
+
+    async def _api_streams_chat(self, request: web.Request) -> web.Response:
+        """Последние сообщения чата всех платформ — буфер ChatFeed (память).
+
+        Лента для «Живого пульта» на обзоре: Twitch/Kick IRC, Discord — всё,
+        что уже попало в общий feed; payload лёгкий, поллинг частый.
+        """
+        raw = request.query.get("n", "100")
+        try:
+            limit = int(raw)
+        except ValueError:
+            limit = 100
+        limit = min(max(limit, 1), 300)
+        return self._json({"ok": True, "messages": self.services.chat_feed.recent(limit)})
 
     async def _api_streams_watchers(self, request: web.Request) -> web.Response:
         """Кто сейчас в чате и топ говорящих за эфир — по каждой платформе.

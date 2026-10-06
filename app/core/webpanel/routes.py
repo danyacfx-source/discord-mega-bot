@@ -100,6 +100,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/polls/{poll_id}/end", viewer(panel._api_polls_end))
     router.add_get("/api/streams", viewer(panel._api_streams_get))
     router.add_get("/api/streams/archive/export", viewer(panel._api_streams_archive_csv))
+    router.add_get("/api/streams/chat", viewer(panel._api_streams_chat))
     router.add_get("/api/streams/watchers", viewer(panel._api_streams_watchers))
     router.add_get("/api/birthdays", viewer(panel._api_birthdays_get))
     router.add_post("/api/birthdays", viewer(panel._api_birthdays_post))

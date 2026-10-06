@@ -1054,6 +1054,7 @@ async def test_webpanel_api_streams(tmp_path):
                 assert "Twitch · alice" in labels
                 assert "Kick · bob" in labels
                 assert all(s["session"] is None for s in data["streams"]), "сессия пуста без стрима"
+                assert all(s["rsvp_count"] == 0 for s in data["streams"]), "без откликов счётчик пуст"
                 assert data["quiet_hours"] == "23-8"
                 assert data["role_id"] == "10"
                 assert data["role_user_ids"] == ["42"]
@@ -1108,6 +1109,37 @@ async def test_webpanel_api_streams_watchers(tmp_path):
                 assert [t["name"] for t in twitch_block["top"]] == ["carol"], "чат Twitch отдельно от Kick"
                 assert {r["name"] for r in twitch_block["active"]} == {"carol"}
                 assert data["platforms"]["vk_video"]["enabled"] is False, "у VK чата нет"
+    finally:
+        await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_webpanel_api_streams_chat(tmp_path):
+    bot = _panel_bot(tmp_path, twitch_channels=("alice",))
+    await bot.setup_hook()
+    panel = WebPanel(bot)
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                assert (await client.get("/api/streams/chat")).status == 401
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                resp = await client.get("/api/streams/chat?n=50", headers=headers)
+                assert resp.status == 200
+                data = await resp.json()
+                assert data["ok"] is True
+                assert data["messages"] == [], "feed пуст — пустой список"
+
+                bot.services.chat_feed.push("twitch", "alice", "привет")
+                bot.services.chat_feed.push("kick", "bob", "го", is_mod=True)
+                resp = await client.get("/api/streams/chat?n=1", headers=headers)
+                data = await resp.json()
+                assert len(data["messages"]) == 1, "n=1 режет ленту"
+                assert data["messages"][-1]["name"] == "bob"
+                assert data["messages"][-1]["mod"] is True
+
+                resp = await client.get("/api/streams/chat?n=мусор", headers=headers)
+                data = await resp.json()
+                assert len(data["messages"]) == 2, "битый n — дефолтный лимит"
     finally:
         await bot.close()
 
