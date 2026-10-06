@@ -3,50 +3,53 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:var(--bg,transparent);font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:12px}
-#feed{display:flex;flex-direction:column;justify-content:flex-end;gap:6px}
-.m{display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.4;word-break:break-word;animation:m-in .22s ease-out both}
+body{background:var(--bg,transparent);font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden;display:flex;flex-direction:column;padding:12px}
+#feed{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;opacity:1;transition:opacity .35s ease;scrollbar-width:none;-ms-overflow-style:none}
+#feed::before{content:"";margin-top:auto}
+#feed::-webkit-scrollbar{width:0;height:0}
+body.idle #feed{opacity:0}
+.m{flex:none;display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.4;word-break:break-word;animation:m-in .22s ease-out both}
 @keyframes m-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes m-out{to{opacity:0;transform:translateY(-6px)}}
 .m.out{animation:m-out .18s ease-in both}
-.badge{flex:none;font-size:.63em;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.16em .4em;border-radius:.3em;background:#9146ff;color:#fff;align-self:center;opacity:.92}
-.badge.kick{background:#53fc18;color:#08170a}
-.badge.discord{background:#5865f2}
-.name{font-weight:800;color:#a78bfa;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.7),0 0 16px rgba(0,0,0,.4)}
+.name{font-weight:700;color:var(--c,#c084fc);text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.7),0 0 16px rgba(0,0,0,.4)}
 .name::after{content:": "}
-.name.kick{color:#6dff8a}
-.name.twitch{color:#b794ff}
-.name.discord{color:#93a5ff}
-.name.mod{color:#ff8a6a}
+.name.mod{font-weight:800}
 .text{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45)}
 @media (prefers-reduced-motion:reduce){.m{animation:none}}
-</style></head><body><div id="feed"></div>
+</style></head><body class="idle"><div id="feed"></div>
 <script>
 const TOKEN="__TOKEN__";
 const Q=new URLSearchParams(location.search);
 const num=(key,lo,hi,dflt)=>{const v=Number(Q.get(key));return Number.isFinite(v)&&v?Math.min(hi,Math.max(lo,v)):dflt};
 const LIMIT=Math.round(num("limit",1,80,20));
-const BADGE=Q.get("badge")!=="0";
+const IDLE=(()=>{const raw=Q.get("idle");if(raw===null)return 10;const v=Number(raw);return Number.isFinite(v)?Math.max(0,v):10})();
 document.documentElement.style.setProperty("--fs",num("size",11,44,16)+"px");
 const bg=Q.get("bg");
 if(bg&&window.CSS&&CSS.supports("color",bg))document.documentElement.style.setProperty("--bg",bg);
 
+const PCOLOR={twitch:"#9146ff",youtube:"#ff0000",kick:"#53fc18",discord:"#5865f2",vk_video:"#0077ff",vk:"#0077ff"};
+function nickColor(platform){
+  return PCOLOR[String(platform||"").toLowerCase()]||"#cbd5e1";
+}
+
 const feed=document.getElementById("feed");
 const live=new Map();
 const key=m=>[m.ts,m.platform,m.name,m.text].join("|");
-const cls=s=>" "+String(s||"").toLowerCase().replace(/[^a-z0-9_-]/g,"");
+
+let idleTimer=null;
+function wake(){
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  if(IDLE>0)idleTimer=setTimeout(()=>document.body.classList.add("idle"),IDLE*1000);
+}
 
 function build(m){
   const row=document.createElement("div");
   row.className="m";
-  if(BADGE&&m.platform){
-    const badge=document.createElement("span");
-    badge.className="badge"+cls(m.platform);
-    badge.textContent=m.platform;
-    row.appendChild(badge);
-  }
   const name=document.createElement("b");
-  name.className="name"+cls(m.platform)+(m.mod?" mod":"");
+  name.className="name"+(m.mod?" mod":"");
+  name.style.setProperty("--c",nickColor(m.platform));
   name.textContent=m.name||"?";
   row.appendChild(name);
   const text=document.createElement("span");
@@ -64,14 +67,23 @@ function render(rows){
     el.classList.add("out");
     setTimeout(()=>el.remove(),180);
   }
+  let added=0;
   for(const m of rows){
     const k=key(m);
     if(live.has(k))continue;
     const el=build(m);
     live.set(k,el);
     feed.appendChild(el);
+    added++;
   }
-  while(feed.children.length>LIMIT)feed.removeChild(feed.firstElementChild);
+  while(live.size>LIMIT){
+    const oldest=live.keys().next().value;
+    live.get(oldest).remove();
+    live.delete(oldest);
+  }
+  feed.scrollTop=feed.scrollHeight;
+  if(added)wake();
+  return added;
 }
 
 let sig="";

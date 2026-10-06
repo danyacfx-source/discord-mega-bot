@@ -239,9 +239,12 @@ async def test_chat_overlay_page(tmp_path) -> None:
                 assert 'id="feed"' in html
                 assert "overlay-secret-token-32chars" in html
                 assert "__TOKEN__" not in html
-                # прозрачный фон по умолчанию, обе платформы стилизованы, авторизация остаётся в fetch
+                # прозрачный фон: цвет ника по платформе (твич/ютуб/кик), без бейджей платформ
                 assert "--bg,transparent" in html
-                assert ".name.kick" in html and ".name.twitch" in html
+                assert "#9146ff" in html and "#ff0000" in html and "#53fc18" in html
+                assert "nickColor(m.platform)" in html
+                assert ".badge" not in html
+                assert 'body class="idle"' in html
                 assert '"X-Overlay-Token"' in html
                 # общая выдача /overlay/api теперь несёт ленту чата
                 data = await (await client.get("/overlay/api", headers=headers)).json()

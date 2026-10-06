@@ -134,6 +134,7 @@ export default function OverlaySection() {
   const [saving, setSaving] = useState(false);
   const [chatLimit, setChatLimit] = useState(15);
   const [chatSize, setChatSize] = useState(17);
+  const [chatIdle, setChatIdle] = useState(10);
   const canvasRef = useRef(null);
 
   async function loadMeta() {
@@ -294,7 +295,7 @@ export default function OverlaySection() {
   const chatUrl =
     meta.enabled && meta.token
       ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}` +
-        `&limit=${clamp(chatLimit, 1, 80)}&size=${clamp(chatSize, 11, 44)}`
+        `&limit=${clamp(chatLimit, 1, 80)}&size=${clamp(chatSize, 11, 44)}&idle=${clamp(chatIdle, 0, 600)}`
       : "";
 
   async function copyUrl() {
@@ -417,6 +418,15 @@ export default function OverlaySection() {
                 title="Кегль сообщений (11–44)"
                 value={chatSize}
                 onInput={(e) => setChatSize(clamp(Number(e.target.value) || 11, 11, 44))}
+              />
+              <input
+                class="input ovl-size"
+                type="number"
+                min="0"
+                max="600"
+                title="Прятать ленту после N секунд тишины (0 — всегда показывать)"
+                value={chatIdle}
+                onInput={(e) => setChatIdle(clamp(Number(e.target.value) || 0, 0, 600))}
               />
               <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS
               </button>
