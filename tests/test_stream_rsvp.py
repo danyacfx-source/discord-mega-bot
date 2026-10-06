@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from app.cogs.streams.stream_announce import RSVP_EMOJI, post_rsvp, rsvp_users
+from app.cogs.streams.rsvp import StreamRsvp
+from app.cogs.streams.stream_announce import RSVP_EMOJI, post_rsvp, rsvp_stream_end, rsvp_users
 from app.services.stream_rsvp import StreamRsvpStore
 
 
@@ -158,3 +159,203 @@ async def test_pin_helpers_track_and_survive_errors():
 
     await pin_sticky(BrokenMessage())   # без прав — не падаем
     await unpin_sticky(BrokenMessage())
+
+
+# ---------------------------------------------------------------- роль «На стриме»
+class FakeRole:
+    def __init__(self, role_id: int, name: str = "") -> None:
+        self.id = role_id
+        self.name = name
+
+
+class FakeMember:
+    def __init__(self) -> None:
+        self.added: list[FakeRole] = []
+        self.removed: list[FakeRole] = []
+        self.fail: Exception | None = None
+
+    async def add_roles(self, role: FakeRole, reason: str = "") -> None:
+        if self.fail:
+            raise self.fail
+        self.added.append(role)
+
+    async def remove_roles(self, role: FakeRole, reason: str = "") -> None:
+        if self.fail:
+            raise self.fail
+        self.removed.append(role)
+
+
+class FakeGuild:
+    def __init__(self, roles: list[FakeRole], member: FakeMember | None) -> None:
+        self.id = 1
+        self.roles = roles
+        self._member = member
+
+    def get_role(self, role_id: int) -> FakeRole | None:
+        return next((r for r in self.roles if r.id == role_id), None)
+
+    def get_member(self, user_id: int) -> FakeMember | None:
+        return self._member
+
+    async def fetch_member(self, user_id: int) -> FakeMember:
+        raise discord.HTTPException(SimpleNamespace(status=404, reason="Not Found"), "gone")
+
+
+class FakeTwitch:
+    def __init__(self, store: StreamRsvpStore) -> None:
+        self._store = store
+
+    def rsvp_store(self, login: str) -> StreamRsvpStore:
+        return self._store
+
+
+def _rsvp_cog(*, guild: FakeGuild, role_id: int | None = None) -> tuple:
+    """(cog, store, member): twitch-анонс id=77 в канале 555 гильдии 1."""
+    store = StreamRsvpStore(FakeKv(), "stream:rsvp:test")
+    channel = SimpleNamespace(guild=SimpleNamespace(id=1))
+    config = SimpleNamespace(
+        twitch_channels=("alice",),
+        twitch_notify_channel_id=555,
+        kick_channel_slug="",
+        kick_notify_channel_id=None,
+        vk_channel_slug="",
+        vk_notify_channel_id=None,
+        stream_rsvp_role_id=role_id,
+    )
+    bot = SimpleNamespace(
+        config=config,
+        guilds=[guild],
+        user=SimpleNamespace(id=999),
+        get_guild=lambda gid: guild if gid == 1 else None,
+        get_channel=lambda cid: channel if cid == 555 else None,
+    )
+    cog = StreamRsvp(bot, FakeTwitch(store), kick=None, vk_video=None)  # type: ignore[arg-type]
+    return cog, store, guild._member
+
+
+def _payload(**over) -> SimpleNamespace:
+    base = dict(guild_id=1, message_id=77, user_id=5, emoji=RSVP_EMOJI)
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_added_on_bell_and_removed_on_unreact():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member))
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=False)
+    assert member.added == [role]
+    assert await store.granted_ids() == [5], "выдача роли запоминается для снятия в конце"
+
+    await cog._rsvp_role(_payload(), remove=True)
+    assert member.removed == [role]
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_env_id_overrides_name_lookup():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member), role_id=10)
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=False)
+    assert member.added == [role]
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_ignores_foreign_message_wrong_emoji_and_bot():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member))
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(message_id=78), remove=False)
+    await cog._rsvp_role(_payload(emoji="\U0001f44d"), remove=False)
+    await cog._rsvp_role(_payload(user_id=999), remove=False)
+    assert member.added == []
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_missing_role_warns_once_and_continues(caplog):
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([], member))
+    await store.save(77)
+
+    with caplog.at_level("WARNING"):
+        await cog._rsvp_role(_payload(), remove=False)
+        await cog._rsvp_role(_payload(user_id=6), remove=False)
+
+    warns = [r for r in caplog.records if "роль" in r.message]
+    assert len(warns) == 1, "варн о пропавшей роли — один раз на guild"
+    assert member.added == []
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_forbidden_is_logged_not_raised():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    member.fail = discord.Forbidden(SimpleNamespace(status=403, reason="Forbidden"), "нет прав")
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member))
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=False)  # не должно поднять исключение
+
+
+# ------------------------------------------------ финал эфира: снятие роли и благодарность
+class FakeAnnounceChannel:
+    def __init__(self, guild: FakeGuild) -> None:
+        self.guild = guild
+        self.sent: list[str] = []
+
+    async def send(self, text: str) -> None:
+        self.sent.append(text)
+
+
+def _end_bot() -> SimpleNamespace:
+    return SimpleNamespace(config=SimpleNamespace(stream_rsvp_role_id=None))
+
+
+@pytest.mark.asyncio
+async def test_granted_store_tracks_dedupes_and_clears():
+    store = StreamRsvpStore(FakeKv(), "stream:rsvp:test")
+    await store.add_granted(5)
+    await store.add_granted(5)
+    await store.add_granted(7)
+    assert await store.granted_ids() == [5, 7]
+
+    await store.clear()
+    assert await store.granted_ids() == []
+
+
+@pytest.mark.asyncio
+async def test_rsvp_stream_end_removes_role_and_thanks_once():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    store = StreamRsvpStore(FakeKv(), "stream:rsvp:test")
+    await store.add_granted(5)
+    await store.add_granted(6)
+    channel = FakeAnnounceChannel(FakeGuild([role], member))
+
+    await rsvp_stream_end(_end_bot(), store=store, channel=channel)
+    assert member.removed == [role, role]
+    assert channel.sent == ["Спасибо, что пришли на стрим!"]
+    assert await store.granted_ids() == []
+
+    await rsvp_stream_end(_end_bot(), store=store, channel=channel)  # повтор — no-op
+    assert member.removed == [role, role]
+    assert channel.sent == ["Спасибо, что пришли на стрим!"]
+
+
+@pytest.mark.asyncio
+async def test_rsvp_stream_end_silent_without_granted_and_without_role():
+    store = StreamRsvpStore(FakeKv(), "stream:rsvp:test")
+    channel = FakeAnnounceChannel(FakeGuild([], FakeMember()))
+    await rsvp_stream_end(_end_bot(), store=store, channel=channel)
+    assert channel.sent == [], "без откликнувшихся благодарность не шлётся"
+
+    await store.add_granted(5)
+    await rsvp_stream_end(_end_bot(), store=store, channel=channel)
+    assert channel.sent == ["Спасибо, что пришли на стрим!"], "роль не нашлась — благодарность всё равно"

@@ -1057,6 +1057,8 @@ async def test_webpanel_api_streams(tmp_path):
                 assert data["quiet_hours"] == "23-8"
                 assert data["role_id"] == "10"
                 assert data["role_user_ids"] == ["42"]
+                assert data["rsvp_role_id"] == "", "гильдия не в кэше — роль RSVP не резолвится"
+                assert data["rsvp_role_name"] == ""
     finally:
         await bot.close()
 

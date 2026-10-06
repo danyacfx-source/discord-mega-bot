@@ -13,7 +13,7 @@ from app.cogs.streams.abort_alert import abort_alert
 from app.cogs.streams.archive import needs_seal, seal_archive
 from app.cogs.streams.poll_guard import PollGuard
 from app.cogs.streams.quiet import is_quiet
-from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, unpin_sticky
+from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, rsvp_stream_end, unpin_sticky
 from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
@@ -135,6 +135,8 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
         session = await store.load()
         url = f"https://www.twitch.tv/{channel_name}"
         channel = self._notify_channel()
+        if channel is not None:
+            await rsvp_stream_end(self.bot, store=self.twitch.rsvp_store(channel_name), channel=channel)
         message_id = await self.twitch.sticky_message_id(channel_name)
         will_edit = channel is not None and message_id is not None
         archive = self.twitch.archive_store(channel_name)

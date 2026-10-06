@@ -14,6 +14,7 @@ from app.core.webpanel.payload import (
     _WELCOME_PRESET_KEY,
     _clean_cards_preset,
 )
+from app.services.stream_rsvp import resolve_rsvp_role
 from app.utils.stream_history import trend
 from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
@@ -100,12 +101,16 @@ class _ProfilesApiMixin:
                 entry["trend"] = trend((entry["session"] or {}).get("history"))
 
         quiet = config.stream_quiet_hours
+        guild = self._primary_guild()
+        rsvp_role = resolve_rsvp_role(guild, config.stream_rsvp_role_id) if guild is not None else None
         return self._json(
             {
                 "ok": True,
                 "streams": streams,
                 "role_id": str(config.stream_role_id or ""),
                 "role_user_ids": [str(uid) for uid in config.stream_role_user_ids],
+                "rsvp_role_id": str(rsvp_role.id) if rsvp_role else "",
+                "rsvp_role_name": rsvp_role.name if rsvp_role else "",
                 "quiet_hours": f"{quiet[0]}-{quiet[1]}" if quiet else "",
                 "sticky_poll_seconds": config.stream_sticky_poll_seconds,
             }

@@ -99,6 +99,7 @@ class Config:
     # Стримы (общее для Twitch/Kick/VK)
     stream_role_id: int | None = None
     stream_role_user_ids: tuple[int, ...] = ()
+    stream_rsvp_role_id: int | None = None
     stream_sticky_poll_seconds: float = 60.0
     stream_quiet_hours: tuple[int, int] | None = None
     stream_quiet_tz: str = "Europe/Moscow"
@@ -363,6 +364,7 @@ class Config:
             donation_poll_seconds=float(os.getenv("DONATION_POLL_SECONDS", "15")),
             stream_role_id=_single_int(os.getenv("STREAM_ROLE_ID")),
             stream_role_user_ids=_ints(os.getenv("STREAM_ROLE_USER_IDS")),
+            stream_rsvp_role_id=_single_int(os.getenv("STREAM_RSVP_ROLE_ID")),
             stream_sticky_poll_seconds=max(30.0, float(os.getenv("STREAM_STICKY_POLL_SECONDS", "60"))),
             stream_quiet_hours=_hour_range(os.getenv("STREAM_QUIET_HOURS")),
             stream_quiet_tz=os.getenv("STREAM_QUIET_TZ") or "Europe/Moscow",

@@ -172,6 +172,19 @@ export default function Streams() {
             </div>
           </Field>
         </div>
+        <Field label="Роль «На стриме» (🔔 RSVP)">
+          <div class="env-box muted small">
+            {data && data.rsvp_role_id ? (
+              <span>
+                Роль <b>{data.rsvp_role_id}</b> · {data.rsvp_role_name}
+              </span>
+            ) : data ? (
+              <span>не найдена — создайте роль «На стриме» или задайте STREAM_RSVP_ROLE_ID</span>
+            ) : (
+              <span>…</span>
+            )}
+          </div>
+        </Field>
         <Field label="Табло во время эфира">
           <div class="env-box muted small">
             {data ? (
