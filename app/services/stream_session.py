@@ -11,6 +11,30 @@ from app.db.kv_repository import KvRepository
 _HISTORY_LIMIT = 60
 
 
+def session_is_live(
+    session: dict[str, Any] | None,
+    *,
+    poll_seconds: float,
+    sticky_seconds: float,
+) -> bool:
+    """Эфир считается идущим, пока сессия свежая (поллинг её дописывает).
+
+    Сессия переживает офлайн (это «последний эфир»), поэтому простого наличия
+    недостаточно — смотрим на ``captured_at``. Окно — три интервала поллинга
+    (как в панели), но не меньше трёх sticky-интервалов.
+    """
+    if not session or not session.get("captured_at"):
+        return False
+    try:
+        captured = datetime.fromisoformat(str(session["captured_at"]).replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if captured.tzinfo is None:
+        captured = captured.replace(tzinfo=UTC)
+    window = max(poll_seconds, sticky_seconds) * 3
+    return (datetime.now(UTC) - captured).total_seconds() <= window
+
+
 class StreamSessionStore:
     """Хранит данные текущего (или последнего) стрима.
 

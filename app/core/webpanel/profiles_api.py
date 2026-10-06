@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import discord
@@ -15,6 +15,7 @@ from app.core.webpanel.payload import (
     _clean_cards_preset,
 )
 from app.services.stream_rsvp import resolve_rsvp_role
+from app.services.stream_session import session_is_live
 from app.services.viewer_sessions import ViewerSessionStore
 from app.utils.stream_history import trend
 from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
@@ -25,21 +26,12 @@ class _ProfilesApiMixin:
     """Стримы, дни рождения, temp-voice, AI, карточки и приветствия."""
 
     def _stream_is_live(self, session: dict[str, Any] | None, poll_seconds: float) -> bool:
-        """Эфир считается идущим, пока сессия свежая (поллинг её дописывает).
-
-        Сессия переживает офлайн (это «последний эфир»), поэтому простого
-        наличия недостаточно — смотрим на ``captured_at``.
-        """
-        if not session or not session.get("captured_at"):
-            return False
-        try:
-            captured = datetime.fromisoformat(str(session["captured_at"]).replace("Z", "+00:00"))
-        except ValueError:
-            return False
-        if captured.tzinfo is None:
-            captured = captured.replace(tzinfo=UTC)
-        window = max(poll_seconds, self.bot.config.stream_sticky_poll_seconds) * 3
-        return (datetime.now(UTC) - captured).total_seconds() <= window
+        """Эфир идёт, пока session-store дописывается поллингом (свежий captured_at)."""
+        return session_is_live(
+            session,
+            poll_seconds=poll_seconds,
+            sticky_seconds=self.bot.config.stream_sticky_poll_seconds,
+        )
 
     async def _api_streams_get(self, request: web.Request) -> web.Response:
         """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.

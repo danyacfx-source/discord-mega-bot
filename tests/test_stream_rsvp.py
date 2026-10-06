@@ -1,6 +1,7 @@
 """Старт-анонс стрима: пост с 🔔 и список откликнувшихся."""
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import discord
@@ -201,26 +202,58 @@ class FakeGuild:
         raise discord.HTTPException(SimpleNamespace(status=404, reason="Not Found"), "gone")
 
 
+class FakeSessionStore:
+    def __init__(self, captured_at: str | None) -> None:
+        self._captured = captured_at
+
+    async def load(self) -> dict | None:
+        if self._captured is None:
+            return None
+        return {"captured_at": self._captured}
+
+
 class FakeTwitch:
-    def __init__(self, store: StreamRsvpStore) -> None:
+    def __init__(
+        self,
+        store: StreamRsvpStore,
+        *,
+        captured_at: str | None = None,
+        has_session: bool = True,
+    ) -> None:
         self._store = store
+        self._captured = captured_at or datetime.now(UTC).isoformat()
+        self._has_session = has_session
 
     def rsvp_store(self, login: str) -> StreamRsvpStore:
         return self._store
 
+    def session_store(self, login: str) -> FakeSessionStore:
+        return FakeSessionStore(self._captured if self._has_session else None)
 
-def _rsvp_cog(*, guild: FakeGuild, role_id: int | None = None) -> tuple:
+
+def _rsvp_cog(
+    *,
+    guild: FakeGuild,
+    role_id: int | None = None,
+    live: bool = True,
+    has_session: bool = True,
+) -> tuple:
     """(cog, store, member): twitch-анонс id=77 в канале 555 гильдии 1."""
     store = StreamRsvpStore(FakeKv(), "stream:rsvp:test")
     channel = SimpleNamespace(guild=SimpleNamespace(id=1))
+    captured = datetime.now(UTC).isoformat()
+    if not live:
+        captured = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
     config = SimpleNamespace(
         twitch_channels=("alice",),
         twitch_notify_channel_id=555,
+        twitch_poll_seconds=300,
         kick_channel_slug="",
         kick_notify_channel_id=None,
         vk_channel_slug="",
         vk_notify_channel_id=None,
         stream_rsvp_role_id=role_id,
+        stream_sticky_poll_seconds=60,
     )
     bot = SimpleNamespace(
         config=config,
@@ -229,7 +262,8 @@ def _rsvp_cog(*, guild: FakeGuild, role_id: int | None = None) -> tuple:
         get_guild=lambda gid: guild if gid == 1 else None,
         get_channel=lambda cid: channel if cid == 555 else None,
     )
-    cog = StreamRsvp(bot, FakeTwitch(store), kick=None, vk_video=None)  # type: ignore[arg-type]
+    twitch = FakeTwitch(store, captured_at=captured, has_session=has_session)
+    cog = StreamRsvp(bot, twitch, kick=None, vk_video=None)  # type: ignore[arg-type]
     return cog, store, guild._member
 
 
@@ -302,6 +336,41 @@ async def test_rsvp_role_forbidden_is_logged_not_raised():
     await store.save(77)
 
     await cog._rsvp_role(_payload(), remove=False)  # не должно поднять исключение
+
+
+# ------------------------------------------- гейт: вне эфира роль за 🔔 не выдаётся
+@pytest.mark.asyncio
+async def test_rsvp_role_not_granted_when_stream_offline():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member), live=False)
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=False)
+    assert member.added == [], "анонс-сообщение есть, но стрим не идёт — роль не выдаётся"
+    assert await store.granted_ids() == []
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_not_granted_without_session():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member), has_session=False)
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=False)
+    assert member.added == [], "сессии стрима не было вовсе — роль не выдаётся"
+
+
+@pytest.mark.asyncio
+async def test_rsvp_role_remove_works_even_when_stream_offline():
+    role = FakeRole(10, "На стриме")
+    member = FakeMember()
+    cog, store, member = _rsvp_cog(guild=FakeGuild([role], member), live=False)
+    await store.save(77)
+
+    await cog._rsvp_role(_payload(), remove=True)
+    assert member.removed == [role], "снятие роли реакцией работает и после эфира"
 
 
 # ------------------------------------------------ финал эфира: снятие роли и благодарность
