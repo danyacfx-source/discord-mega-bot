@@ -9,6 +9,7 @@ import Polls from "./polls.jsx";
 import Birthdays from "./birthdays.jsx";
 import TempVoice from "./tempvoice.jsx";
 import Streams from "./streams.jsx";
+import ViewersSection from "./viewers.jsx";
 import AIChat from "./ai.jsx";
 import Scheduler from "./scheduler.jsx";
 import EmbedBuilder from "./embed.jsx";
@@ -42,6 +43,7 @@ export const NAV = [
       { id: "birthdays", icon: "cake", title: "Дни рождения", desc: "Календарь поздравлений для участников.", Component: Birthdays },
       { id: "tempvoice", icon: "speaker", title: "Голосовые", desc: "Активные временные голосовые комнаты.", Component: TempVoice },
       { id: "streams", icon: "monitor", title: "Стримы", desc: "Twitch, Kick и VK: статус эфира, табло и настройки.", Component: Streams },
+      { id: "viewers", icon: "activity", title: "Зрители", desc: "Живой счётчик зрителей, график эфира и чат — без открытия Twitch.", Component: ViewersSection },
       { id: "ai", icon: "bot", title: "AI-чат", desc: "Состояние и управление AI-чатом.", Component: AIChat },
     ],
   },

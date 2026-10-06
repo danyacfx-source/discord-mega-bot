@@ -17,7 +17,7 @@ export function Sparkline({ points = [], height = 56, color = "var(--accent)", l
   const last = { cx: x(values.length - 1), cy: y(values[values.length - 1]) };
   const gid = "sg" + Math.abs(hash(label + color));
   return (
-    <svg class="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+    <svg class="spark" style={{ height: `${h}px` }} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stop-color={color} stop-opacity="0.35" />
