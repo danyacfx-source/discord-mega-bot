@@ -15,6 +15,7 @@ from app.db.chat_coins_repository import ChatCoinsRepository
 from app.db.database import Database
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
+from app.services.viewer_sessions import ViewerSessionStore
 
 
 @pytest.fixture
@@ -362,3 +363,66 @@ def test_chat_env_flags(monkeypatch, tmp_path) -> None:
     assert config.chat_coin_reward == 0
     assert config.chat_command_prefix == "?"
     assert config.chat_poll_seconds == 60
+
+
+# ------------------------------------------------- сессии зрителей (раздел «Зрители»)
+class _MemKv:
+    def __init__(self) -> None:
+        self.data: dict[str, str] = {}
+
+    async def get(self, key: str, default: str | None = None) -> str | None:
+        return self.data.get(key, default)
+
+    async def set(self, key: str, value: str) -> None:
+        self.data[key] = value
+
+    async def delete(self, key: str) -> bool:
+        return self.data.pop(key, None) is not None
+
+
+class _FakeTwitch:
+    def __init__(self) -> None:
+        self._kv = _MemKv()
+        self.session_loads = 0
+
+    def viewer_store(self) -> ViewerSessionStore:
+        return ViewerSessionStore(self._kv, "stream:viewers:twitch")
+
+    def session_store(self, login: str):
+        outer = self
+
+        class _Session:
+            async def load(self) -> dict[str, Any]:
+                outer.session_loads += 1
+                return {"started_at": "2026-10-06T20:00:00+00:00"}
+
+        return _Session()
+
+
+@pytest.mark.asyncio
+async def test_on_message_touches_viewer_session_and_caches_stream_key() -> None:
+    from app.cogs.streams.chat_commands import StreamChatCog
+
+    twitch = _FakeTwitch()
+    chat = SimpleNamespace(handle=AsyncMock())
+    bot = SimpleNamespace(config=SimpleNamespace(twitch_channels=("alice",)))
+    cog = StreamChatCog(bot, chat_commands=chat, twitch=twitch)  # type: ignore[arg-type]
+
+    msg = ChatMessage(
+        platform="twitch",
+        username="dend",
+        display_name="Dend",
+        content="привет",
+        is_mod=False,
+    )
+    await cog._on_message(msg)
+    await cog._on_message(msg)
+
+    active = await twitch.viewer_store().active()
+    assert set(active) == {"dend"}, "каждое IRC-сообщение открывает сессию зрителя"
+    assert active["dend"]["messages"] == 2
+    assert twitch.session_loads == 1, "ключ эфира кэшируется, а не читается на каждое сообщение"
+    assert chat.handle.await_count == 2, "команды обрабатываются как раньше"
+
+    top = await twitch.viewer_store().top_talkers()
+    assert top and top[0]["name"] == "Dend" and top[0]["count"] == 2

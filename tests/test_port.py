@@ -1078,7 +1078,7 @@ def test_webpanel_stream_is_live_freshness(tmp_path):
 
 @pytest.mark.asyncio
 async def test_webpanel_api_streams_watchers(tmp_path):
-    bot = _panel_bot(tmp_path, kick_channel_slug="bob")
+    bot = _panel_bot(tmp_path, kick_channel_slug="bob", twitch_channels=("alice",))
     await bot.setup_hook()
     panel = WebPanel(bot)
     try:
@@ -1086,6 +1086,8 @@ async def test_webpanel_api_streams_watchers(tmp_path):
         await store.touch("alice", stream_id="s1")
         await store.touch("bob", stream_id="s1")
         await store.touch("alice", stream_id="s1")
+        twitch_store = bot.services.twitch.viewer_store()
+        await twitch_store.touch("carol", stream_id="s2")
         async with TestServer(panel._create_app()) as server:
             async with TestClient(server) as client:
                 assert (await client.get("/api/streams/watchers")).status == 401
@@ -1098,6 +1100,14 @@ async def test_webpanel_api_streams_watchers(tmp_path):
                 assert [t["name"] for t in data["top"]] == ["alice", "bob"], "топ по сообщениям за эфир"
                 assert data["top"][0]["name"] == "alice", "alice с двумя сообщениями впереди"
                 assert {r["name"] for r in data["active"]} == {"alice", "bob"}
+                kick_block = data["platforms"]["kick"]
+                assert kick_block["enabled"] is True
+                assert {r["name"] for r in kick_block["active"]} == {"alice", "bob"}
+                twitch_block = data["platforms"]["twitch"]
+                assert twitch_block["enabled"] is True
+                assert [t["name"] for t in twitch_block["top"]] == ["carol"], "чат Twitch отдельно от Kick"
+                assert {r["name"] for r in twitch_block["active"]} == {"carol"}
+                assert data["platforms"]["vk_video"]["enabled"] is False, "у VK чата нет"
     finally:
         await bot.close()
 

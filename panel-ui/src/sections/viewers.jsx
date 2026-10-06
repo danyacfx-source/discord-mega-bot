@@ -85,9 +85,10 @@ export default function ViewersSection() {
   const values = history.map((p) => Number(p.v));
   const viewers = live && session ? Number(session.viewers || 0) : null;
   const peak = session ? Number(session.peak || 0) : 0;
-  const kick = watchers && watchers.kick_enabled;
-  const active = watchers && Array.isArray(watchers.active) ? watchers.active : [];
-  const top = watchers && Array.isArray(watchers.top) ? watchers.top : [];
+  const wb = watchers && watchers.platforms ? watchers.platforms[cur.platform] : null;
+  const chatOn = Boolean(wb && wb.enabled);
+  const active = chatOn ? wb.active : [];
+  const top = chatOn ? wb.top : [];
 
   return (
     <div class="ov">
@@ -144,7 +145,18 @@ export default function ViewersSection() {
           sub="за последние 10 мин"
           tone={live && cur.trend != null && cur.trend < 0 ? "warn" : undefined}
         />
-        <Stat icon="message" label="В чате Kick" value={kick ? String(active.length) : "—"} sub={kick ? "активны прямо сейчас" : "Kick не подключён"} />
+        <Stat
+          icon="message"
+          label={`В чате ${pm.label}`}
+          value={chatOn ? String(active.length) : "—"}
+          sub={
+            chatOn
+              ? "активны прямо сейчас"
+              : cur.platform === "vk_video"
+                ? "чат не отслеживается"
+                : `${pm.label} не подключён`
+          }
+        />
       </div>
 
       <div class="grid charts-grid">
@@ -168,10 +180,16 @@ export default function ViewersSection() {
         <div class="card">
           <div class="card-head">
             <h3>Чат</h3>
-            <span class="muted small">{kick ? "кто сейчас пишет и топ за эфир" : "только для Kick"}</span>
+            <span class="muted small">
+              {chatOn ? `${pm.label} · кто сейчас пишет и топ за эфир` : "недоступно"}
+            </span>
           </div>
-          {!kick ? (
-            <div class="muted small">Kick не подключён — активные в чате и топ говорящих недоступны.</div>
+          {!chatOn ? (
+            <div class="muted small">
+              {cur.platform === "vk_video"
+                ? "Для VK Видео чат не отслеживается — активные и топ есть для Twitch и Kick."
+                : `${pm.label} не подключён — активные в чате и топ говорящих недоступны.`}
+            </div>
           ) : (
             <div class="stack">
               <div>

@@ -15,6 +15,7 @@ from app.core.webpanel.payload import (
     _clean_cards_preset,
 )
 from app.services.stream_rsvp import resolve_rsvp_role
+from app.services.viewer_sessions import ViewerSessionStore
 from app.utils.stream_history import trend
 from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
@@ -116,9 +117,8 @@ class _ProfilesApiMixin:
             }
         )
 
-    async def _api_streams_watchers(self, request: web.Request) -> web.Response:
-        """Кто сейчас в чате Kick и топ говорящих за эфир (KV viewer-sessions)."""
-        store = self.services.kick.viewer_store()
+    async def _watchers_block(self, store: ViewerSessionStore, *, enabled: bool) -> dict[str, Any]:
+        """Активные в чате и топ говорящих за эфир из KV viewer-sessions."""
         active = await store.active()
         top = await store.top_talkers(limit=10)
         rows: list[dict[str, Any]] = []
@@ -137,12 +137,34 @@ class _ProfilesApiMixin:
                 }
             )
         rows.sort(key=lambda row: row["last_seen"], reverse=True)
+        return {"enabled": enabled, "active": rows, "top": top}
+
+    async def _api_streams_watchers(self, request: web.Request) -> web.Response:
+        """Кто сейчас в чате и топ говорящих за эфир — по каждой платформе.
+
+        Kick слушает Pusher, Twitch — IRC; у VK чата нет, блок отдаётся
+        выключенным (фронт покажет «не отслеживается»). Поля ``kick_enabled``/
+        ``active``/``top`` наверху — легаси-срез по Kick.
+        """
+        config = self.bot.config
+        twitch = await self._watchers_block(
+            self.services.twitch.viewer_store(), enabled=bool(config.twitch_channels)
+        )
+        kick = await self._watchers_block(
+            self.services.kick.viewer_store(), enabled=bool(config.kick_channel_slug)
+        )
         return self._json(
             {
                 "ok": True,
-                "kick_enabled": bool(self.bot.config.kick_channel_slug),
-                "active": rows,
-                "top": top,
+                "kick_enabled": kick["enabled"],
+                "twitch_enabled": twitch["enabled"],
+                "active": kick["active"],
+                "top": kick["top"],
+                "platforms": {
+                    "twitch": twitch,
+                    "kick": kick,
+                    "vk_video": {"enabled": False, "active": [], "top": []},
+                },
             }
         )
 

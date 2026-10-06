@@ -180,6 +180,9 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         self.twitch = twitch
         self._irc: TwitchIrc | None = None
         self._irc_task: asyncio.Task[None] | None = None
+        self._stream_key: str | None = None
+        self._stream_key_at = 0.0
+        self._sweep_tick = 0
 
     async def cog_load(self) -> None:
         config = self.bot.config
@@ -210,6 +213,12 @@ class StreamChatCog(MegaCog, name="StreamChat"):
     @tasks.loop(seconds=5.0)
     async def tick_loop(self) -> None:
         await self.chat.tick()
+        self._sweep_tick += 1
+        if self._sweep_tick % 12 == 0:  # раз в минуту: закрыть сессии без сообщений
+            try:
+                await self.twitch.viewer_store().sweep()
+            except Exception:
+                logger.debug("Twitch: не удалось закрыть устаревшие сессии зрителей", exc_info=True)
 
     @tick_loop.before_loop
     async def _before_tick(self) -> None:
@@ -232,7 +241,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             )
             self._irc = irc
             try:
-                await irc.run(self.chat.handle)
+                await irc.run(self._on_message)
             except asyncio.CancelledError:
                 return
             except Exception:
@@ -242,6 +251,36 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             if irc.auth_failed:
                 return
             await asyncio.sleep(pause)
+
+    # --------------------------------------------------------- сессии зрителей
+
+    async def _on_message(self, message: ChatMessage) -> None:
+        """Каждое сообщение чата продлевает сессию зрителя (для раздела «Зрители»)."""
+        try:
+            key = await self._current_stream_key()
+            await self.twitch.viewer_store().touch(
+                message.display_name or message.username, stream_id=key
+            )
+        except Exception:
+            logger.debug("Twitch: не удалось обновить сессию зрителя", exc_info=True)
+        await self.chat.handle(message)
+
+    async def _current_stream_key(self) -> str | None:
+        """Ключ эфира (started_at сессии) для сброса топа говорящих.
+
+        Кэш на 30 с — KV не читается на каждое сообщение чата.
+        """
+        now = asyncio.get_running_loop().time()
+        if now - self._stream_key_at < 30.0:
+            return self._stream_key
+        channels = self.bot.config.twitch_channels
+        if channels:
+            session = await self.twitch.session_store(channels[0]).load()
+            self._stream_key = str((session or {}).get("started_at") or "") or None
+        else:
+            self._stream_key = None
+        self._stream_key_at = now
+        return self._stream_key
 
     # ------------------------------------------------------------- платформа
 

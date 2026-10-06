@@ -11,6 +11,7 @@ from app.core.api_client import ApiClient, ApiRequestError
 from app.services.stream_archive import StreamArchiveStore, parse_dt
 from app.services.stream_rsvp import StreamRsvpStore
 from app.services.stream_session import StreamSessionStore
+from app.services.viewer_sessions import ViewerSessionStore
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -321,6 +322,10 @@ class TwitchService:
     def rsvp_store(self, login: str) -> StreamRsvpStore:
         """Хранилище id старт-анонса для команды /stream_rsvp."""
         return StreamRsvpStore(self._repo, f"stream:rsvp:twitch:{login.lower()}")
+
+    def viewer_store(self) -> ViewerSessionStore:
+        """Онлайн-сессии зрителей чата (из IRC-сообщений, читает StreamChatCog)."""
+        return ViewerSessionStore(self._repo, "stream:viewers:twitch")
 
     def archive_store(self, login: str) -> StreamArchiveStore:
         """Архив завершённых эфиров канала для /stream_stats."""
