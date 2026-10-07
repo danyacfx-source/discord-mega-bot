@@ -31,6 +31,17 @@ export default function ShowcasePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (data) {
+      const g = data.guild;
+      document.title = ((g && g.name) || (data.bot && data.bot.name) || "Сообщество") + " — витрина";
+    } else if (failed) {
+      document.title = "Витрина";
+    } else {
+      document.title = "Загрузка…";
+    }
+  }, [data, failed]);
+
   if (failed) {
     return (
       <div class="sc-page">
