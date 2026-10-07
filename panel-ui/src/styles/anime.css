@@ -1,0 +1,71 @@
+/* Sakura / anime night theme layered over the existing control center. */
+:root {
+  --accent: #a98bff;
+  --accent-soft: rgba(169, 139, 255, .18);
+  --radius: 16px;
+  --shadow: 0 18px 55px rgba(10, 7, 28, .32);
+}
+
+body[data-theme="dark"] {
+  --bg: #0d0d1c;
+  --bg2: rgba(25, 23, 48, .86);
+  --card: rgba(34, 31, 65, .88);
+  --card2: rgba(47, 41, 84, .62);
+  --border: rgba(255, 255, 255, .11);
+  --border-strong: rgba(220, 203, 255, .3);
+  --text: #faf7ff;
+  --muted: #b5aecb;
+  --input: rgba(14, 13, 31, .72);
+  --glow: rgba(169, 139, 255, .2);
+  --ok: #72e6b1;
+  --bad: #ff82a7;
+}
+
+body {
+  background:
+    linear-gradient(90deg, rgba(8, 7, 22, .9) 0%, rgba(10, 9, 28, .7) 48%, rgba(8, 7, 22, .42) 100%),
+    linear-gradient(180deg, rgba(8, 7, 22, .2), rgba(8, 7, 22, .72)),
+    url("/anime-bg.png") center / cover fixed no-repeat,
+    var(--bg);
+}
+
+.app { background: rgba(8, 7, 22, .12); }
+
+body::before, body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: 28px;
+  height: 28px;
+  border-radius: 70% 30% 70% 30%;
+  background: linear-gradient(135deg, rgba(255, 177, 218, .7), rgba(169, 139, 255, .45));
+  filter: blur(.2px);
+  opacity: .45;
+  transform: rotate(25deg);
+}
+
+body::before { top: 16%; right: 7%; box-shadow: -58px 72px 0 -5px rgba(255, 177, 218, .4), 72px 142px 0 -8px rgba(169, 139, 255, .35); }
+body::after { bottom: 14%; left: 7%; box-shadow: 62px -70px 0 -6px rgba(255, 177, 218, .35), 120px -18px 0 -9px rgba(169, 139, 255, .35); }
+
+.sidebar, .topbar { background: rgba(18, 17, 37, .78); backdrop-filter: blur(18px); }
+.brand-ic, .login-logo { background: linear-gradient(135deg, #a98bff, #ff8fc8); box-shadow: 0 10px 28px rgba(169, 139, 255, .3); }
+.card, .stat-card { border-color: var(--border); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
+.card:hover, .stat-card:hover { border-color: rgba(212, 188, 255, .34); }
+.nav-item.active { background: linear-gradient(100deg, rgba(169, 139, 255, .28), rgba(255, 143, 200, .14)); }
+.btn.primary { background: linear-gradient(135deg, #8f72ef, #b18fff); border-color: transparent; box-shadow: 0 8px 20px rgba(143, 114, 239, .25); }
+.btn.success { background: rgba(114, 230, 177, .14); }
+.hero-name { letter-spacing: -.04em; }
+.section.active { animation: anime-rise .3s ease; }
+@keyframes anime-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.welcome-layout { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(420px, 1.1fr); gap: 22px; align-items: start; }
+.welcome-controls { min-width: 0; }
+.welcome-group { padding: 14px 15px; border: 1px solid var(--border); border-radius: 14px; background: rgba(13, 12, 31, .34); }
+.welcome-group h4 { margin: 0 0 9px; font-size: 13px; color: var(--text); letter-spacing: .02em; }
+.welcome-preview-col { position: sticky; top: 18px; }
+.welcome-preview-frame { overflow: hidden; border-radius: 14px; border: 1px solid var(--border-strong); background: #17152d; box-shadow: 0 14px 36px rgba(5, 4, 20, .32); }
+.welcome-preview { display: block; width: 100%; height: auto; aspect-ratio: 8 / 3; object-fit: contain; }
+input[type="range"].range { appearance: none; height: 7px; border-radius: 99px; background: linear-gradient(90deg, #a98bff, #ff8fc8); outline: none; }
+input[type="range"].range::-webkit-slider-thumb { appearance: none; width: 19px; height: 19px; border-radius: 50%; border: 3px solid #fff; background: #a98bff; box-shadow: 0 0 0 4px rgba(169, 139, 255, .2), 0 3px 10px rgba(0, 0, 0, .35); cursor: grab; }
+input[type="range"].range::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; border: 3px solid #fff; background: #a98bff; box-shadow: 0 0 0 4px rgba(169, 139, 255, .2), 0 3px 10px rgba(0, 0, 0, .35); cursor: grab; }
+@media (max-width: 1050px) { .welcome-layout { grid-template-columns: 1fr; } .welcome-preview-col { position: static; } }
