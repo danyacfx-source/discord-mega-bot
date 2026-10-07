@@ -1,7 +1,7 @@
 /* Sakura / anime night theme layered over the existing control center. */
 :root {
-  --accent: #a98bff;
-  --accent-soft: rgba(169, 139, 255, .18);
+  --accent: #ff7eb6;
+  --accent-soft: rgba(255, 126, 182, .18);
   --radius: 16px;
   --shadow: 0 18px 55px rgba(10, 7, 28, .32);
 }
@@ -21,7 +21,7 @@ body[data-theme="dark"] {
   --bad: #ff82a7;
 }
 
-body {
+body[data-theme="dark"] {
   background:
     linear-gradient(90deg, rgba(8, 7, 22, .9) 0%, rgba(10, 9, 28, .7) 48%, rgba(8, 7, 22, .42) 100%),
     linear-gradient(180deg, rgba(8, 7, 22, .2), rgba(8, 7, 22, .72)),
@@ -29,7 +29,7 @@ body {
     var(--bg);
 }
 
-.app { background: rgba(8, 7, 22, .12); }
+body[data-theme="dark"] .app { background: rgba(8, 7, 22, .12); }
 
 body::before, body::after {
   content: "";
@@ -47,7 +47,7 @@ body::before, body::after {
 body::before { top: 16%; right: 7%; box-shadow: -58px 72px 0 -5px rgba(255, 177, 218, .4), 72px 142px 0 -8px rgba(169, 139, 255, .35); }
 body::after { bottom: 14%; left: 7%; box-shadow: 62px -70px 0 -6px rgba(255, 177, 218, .35), 120px -18px 0 -9px rgba(169, 139, 255, .35); }
 
-.sidebar, .topbar { background: rgba(18, 17, 37, .78); backdrop-filter: blur(18px); }
+.sidebar, .topbar { background: color-mix(in srgb, var(--bg2) 84%, transparent); backdrop-filter: blur(18px); }
 .brand-ic, .login-logo { background: linear-gradient(135deg, #a98bff, #ff8fc8); box-shadow: 0 10px 28px rgba(169, 139, 255, .3); }
 .card, .stat-card { border-color: var(--border); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
 .card:hover, .stat-card:hover { border-color: rgba(212, 188, 255, .34); }
