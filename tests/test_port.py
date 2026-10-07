@@ -131,7 +131,7 @@ def test_config_new_options(tmp_path):
     assert config.donation_role_id == 7331
     assert config.donate_button_channel_id == 2311
     assert config.donate_bonuses == ("Смотреть раньше", "Проверка")
-    assert config.version == "3.3.0"
+    assert config.version == "3.4.0"
     assert config.panel_port == 17890
     assert config.panel_host == "127.0.0.1"
     assert config.overlay_port == 8765
