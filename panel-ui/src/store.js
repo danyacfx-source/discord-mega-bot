@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 
-const ACCENTS = ["#5865f2", "#23a55a", "#f23f43", "#1abc9c", "#eb459e", "#f2780d"];
+const ACCENTS = ["#ff7eb6", "#b18cff", "#7ee8fa", "#ffd86f", "#7ee787", "#ff6b6b"];
 
 export const route = signal(parseRoute());
 export const navQuery = signal("");

@@ -24,8 +24,20 @@ export default function Login() {
     }
   }
 
+  const petals = [
+    ["6%", "0s"],
+    ["19%", "2.6s"],
+    ["35%", "5.2s"],
+    ["53%", "1.3s"],
+    ["71%", "6.9s"],
+    ["88%", "3.7s"],
+  ];
+
   return (
     <div class="login" id="login">
+      {petals.map(([left, delay]) => (
+        <span class="petal" style={{ left, animationDelay: delay }} />
+      ))}
       <form class="login-card" onSubmit={submit}>
         <div class="login-logo">A</div>
         <h2>Асуна Юки</h2>
