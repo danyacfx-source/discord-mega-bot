@@ -195,9 +195,7 @@ export default function ShowcasePage() {
       ) : null}
 
       <footer class="sc-footer">
-        <span>
-          {bot.online ? "Бот на связи" : "Бот перезагружается"} · {bot.uptime_days || 0} дней рядом
-        </span>
+        <span>{name}</span>
         <a href="/admin">Владельцу — в панель</a>
       </footer>
     </div>

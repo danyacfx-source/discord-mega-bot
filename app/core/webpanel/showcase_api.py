@@ -12,10 +12,10 @@ import discord
 from aiohttp import web
 
 _SHOWCASE_KEY = "panel.showcase.settings"
-_SHOWCASE_DEFAULTS = {"hero_title": "", "about": "", "invite_url": ""}
+_SHOWCASE_DEFAULTS = {"hero_title": "", "about": "", "invite_url": "", "avatar_url": ""}
 _SHOWCASE_MEDIA_LIMIT = 8
 _SHOWCASE_SCHEDULE_LIMIT = 5
-_SHOWCASE_TEXT_LIMITS = {"hero_title": 120, "about": 600, "invite_url": 300}
+_SHOWCASE_TEXT_LIMITS = {"hero_title": 120, "about": 600, "invite_url": 300, "avatar_url": 300}
 
 
 class _ShowcaseApiMixin:
@@ -34,9 +34,28 @@ class _ShowcaseApiMixin:
             value = data.get(key)
             if isinstance(value, str):
                 settings[key] = value[:limit]
-        if settings["invite_url"] and not settings["invite_url"].startswith(("https://", "http://")):
-            settings["invite_url"] = ""
+        for key in ("invite_url", "avatar_url"):
+            if settings[key] and not settings[key].startswith(("https://", "http://")):
+                settings[key] = ""
         return settings
+
+    async def _owner_avatar(self) -> str:
+        """Аватар владельца: кэш на процесс, чтобы не дёргать Discord на каждый запрос."""
+        cached = getattr(self, "_showcase_owner_avatar", None)
+        if cached is not None:
+            return cached
+        owner_id = self.bot.config.owner_id
+        url = ""
+        if owner_id:
+            try:
+                user = self.bot.get_user(owner_id)
+                if user is None:
+                    user = await self.bot.fetch_user(owner_id)
+                url = user.display_avatar.url if user else ""
+            except Exception:
+                url = ""
+        self._showcase_owner_avatar = url
+        return url
 
     async def _api_showcase_settings_get(self, request: web.Request) -> web.Response:
         return self._json({"ok": True, "settings": await self._showcase_settings()})
@@ -47,8 +66,9 @@ class _ShowcaseApiMixin:
         for key, limit in _SHOWCASE_TEXT_LIMITS.items():
             if key in payload:
                 settings[key] = str(payload.get(key) or "").strip()[:limit]
-        if settings["invite_url"] and not settings["invite_url"].startswith(("https://", "http://")):
-            return self._json({"ok": False, "error": "Ссылка должна начинаться с http"}, status=400)
+        for key in ("invite_url", "avatar_url"):
+            if settings[key] and not settings[key].startswith(("https://", "http://")):
+                return self._json({"ok": False, "error": "Ссылка должна начинаться с http"}, status=400)
         await self.services.kv.set(_SHOWCASE_KEY, json.dumps(settings, ensure_ascii=False))
         return self._json({"ok": True, "settings": settings})
 
@@ -118,7 +138,7 @@ class _ShowcaseApiMixin:
         data["bot"] = {
             "online": ready,
             "name": bot.user.name if bot.user else "",
-            "avatar": bot.user.display_avatar.url if bot.user else "",
+            "avatar": data["settings"]["avatar_url"] or await self._owner_avatar(),
             "uptime_days": int(bot.uptime.total_seconds() // 86400),
         }
 

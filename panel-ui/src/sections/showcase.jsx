@@ -5,7 +5,7 @@ import { Icon } from "../components/icons.jsx";
 import ShowcasePage from "../showcase-page.jsx";
 
 export default function ShowcaseSection() {
-  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "" });
+  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "" });
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const url = location.origin + "/showcase";
@@ -65,6 +65,9 @@ export default function ShowcaseSection() {
             </Field>
             <Field label="Ссылка «Вступить»" hint="Приглашение в Discord или другой канал">
               <input class="input" type="url" placeholder="https://discord.gg/…" value={settings.invite_url} onInput={(e) => set("invite_url", e.target.value)} />
+            </Field>
+            <Field label="Аватар на витрине" hint="Ссылка на картинку; пусто — аватар владельца Discord">
+              <input class="input" type="url" placeholder="https://…/avatar.png" value={settings.avatar_url} onInput={(e) => set("avatar_url", e.target.value)} />
             </Field>
             <div class="row-inline">
               <button class="btn success" type="button" disabled={busy || !loaded} onClick={save}>
