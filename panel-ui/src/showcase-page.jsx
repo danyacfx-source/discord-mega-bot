@@ -73,9 +73,7 @@ export default function ShowcasePage() {
   const statItems = g
     ? [
         { value: g.members, label: "участников" },
-        { value: g.online, label: "онлайн" },
-        { value: g.channels, label: "каналов" },
-        { value: stats.messages_total || 0, label: "сообщений" },
+        { value: g.online, label: "онлайн сейчас" },
         { value: bot.uptime_days || 0, label: "дней вместе" },
       ]
     : [];
@@ -103,6 +101,9 @@ export default function ShowcasePage() {
         ) : (
           <span class="sc-eyebrow">{title}</span>
         )}
+        {bot.avatar ? (
+          <img class="sc-avatar" src={bot.avatar} alt="" width="72" height="72" />
+        ) : null}
         <h1>{name}</h1>
         {settings.about ? <p class="sc-about">{settings.about}</p> : <p class="sc-about">Стримы, события и живое сообщество. Заходи — здесь всегда что-то происходит.</p>}
         <div class="sc-cta">
