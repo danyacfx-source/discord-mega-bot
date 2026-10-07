@@ -105,6 +105,31 @@ const P = {
     </>
   ),
   refresh: <path d="M20 8a8.5 8.5 0 1 0 1 6M20 3.5V8h-4.5" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
+    </>
+  ),
+  film: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M8 5v14M16 5v14M3 9.5h5M3 14.5h5M16 9.5h5M16 14.5h5" />
+    </>
+  ),
+  heart: <path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
+  x: <path d="m6 6 12 12M18 6 6 18" />,
+  "chevron-left": <path d="M14.5 6 8.5 12l6 6" />,
+  "chevron-right": <path d="M9.5 6l6 6-6 6" />,
+  copy: (
+    <>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+    </>
+  ),
+  send: <path d="M21 3 3 10.5l7 3 3 7L21 3zM10 14l4-4" />,
+  trash: <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5" />,
 };
 
 export function Icon({ name, size = 16, class: cls = "" }) {

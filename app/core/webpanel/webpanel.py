@@ -19,6 +19,7 @@ from app.core.webpanel.community_api import _CommunityApiMixin
 from app.core.webpanel.core_api import _CoreApiMixin
 from app.core.webpanel.guild_api import _GuildApiMixin
 from app.core.webpanel.log_ring import RingBufferHandler
+from app.core.webpanel.media_api import _MediaApiMixin
 from app.core.webpanel.payload import (
     _AUDIT_PAGE_PATH,
     _DIST_INDEX_PATH,
@@ -35,6 +36,7 @@ from app.core.webpanel.payload import (
 )
 from app.core.webpanel.profiles_api import _ProfilesApiMixin
 from app.core.webpanel.routes import register_routes
+from app.core.webpanel.showcase_api import _ShowcaseApiMixin
 from app.core.webpanel.tools_api import _ToolsApiMixin
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
 
@@ -46,7 +48,16 @@ logger = logging.getLogger("bot.webpanel")
 
 
 
-class WebPanel(_AuthMixin, _GuildApiMixin, _CommunityApiMixin, _ProfilesApiMixin, _CoreApiMixin, _ToolsApiMixin):
+class WebPanel(
+    _AuthMixin,
+    _GuildApiMixin,
+    _CommunityApiMixin,
+    _ProfilesApiMixin,
+    _CoreApiMixin,
+    _ToolsApiMixin,
+    _MediaApiMixin,
+    _ShowcaseApiMixin,
+):
     def __init__(self, bot: MegaBot) -> None:
         self.bot = bot
         config = bot.config

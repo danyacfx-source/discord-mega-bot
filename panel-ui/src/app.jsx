@@ -2,10 +2,15 @@ import { useEffect } from "preact/hooks";
 import Sidebar from "./shell/sidebar.jsx";
 import Topbar from "./shell/topbar.jsx";
 import Login from "./shell/login.jsx";
+import ShowcasePage from "./showcase-page.jsx";
 import { route, navQuery, navOpen } from "./store.js";
 import { sectionById, renderSection } from "./sections/registry.jsx";
 
 export default function App() {
+  if (location.pathname.replace(/\/+$/, "") === "/showcase") {
+    return <ShowcasePage />;
+  }
+
   const section = sectionById(route.value);
 
   useEffect(() => {

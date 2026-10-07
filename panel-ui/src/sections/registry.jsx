@@ -23,12 +23,15 @@ import LogsSection from "./logs.jsx";
 import AuditSection from "./audit.jsx";
 import StatsSection from "./stats.jsx";
 import BackupSection from "./backup.jsx";
+import MediaSection from "./media.jsx";
+import ShowcaseSection from "./showcase.jsx";
 
 export const NAV = [
   {
     label: "Главное",
     items: [
       { id: "overview", icon: "home", title: "Обзор", desc: "Состояние сервера и главные действия в одном месте.", Component: Overview },
+      { id: "showcase", icon: "globe", title: "Витрина", desc: "Публичная страница сообщества для гостей: живая статистика, эфиры и медиа.", Component: ShowcaseSection },
       { id: "server", icon: "server", title: "Сервер", desc: "Участники, каналы и голосовая активность сервера.", Component: Server },
     ],
   },
@@ -51,6 +54,7 @@ export const NAV = [
     label: "Контент",
     items: [
       { id: "embed", icon: "file-text", title: "Эмбеды", desc: "Создание сообщений и эмбедов с предпросмотром.", Component: EmbedBuilder },
+      { id: "media", icon: "film", title: "Медиатека", desc: "Галерея картинок и GIF: загрузка, теги, лайки и витрина.", Component: MediaSection },
       { id: "welcome", icon: "user-plus", title: "Приветствие", desc: "Конструктор PNG-карточки для новых участников.", Component: WelcomeSection },
       { id: "overlay", icon: "layout", title: "Оверлей", desc: "Конструктор раскладки виджетов для OBS.", Component: OverlaySection },
       { id: "streamcards", icon: "cards", title: "Карточки стримов", desc: "Заголовки, цвета и поля анонсов Twitch/Kick/VK.", Component: StreamCardsSection },
