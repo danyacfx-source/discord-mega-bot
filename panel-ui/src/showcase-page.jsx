@@ -39,10 +39,9 @@ export default function ShowcasePage() {
           <h1>Не удалось загрузить</h1>
           <p>Сервер немного прилёг. Обнови страницу через минуту.</p>
           <div class="sc-cta">
-            <a class="sc-btn primary" href="/admin">Открыть панель</a>
+            <span class="sc-eyebrow">попробуйте позже</span>
           </div>
         </div>
-        <footer class="sc-footer">pannel · discord</footer>
       </div>
     );
   }
@@ -85,9 +84,6 @@ export default function ShowcasePage() {
           <img src="/icon.svg" alt="" width="26" height="26" />
           <b>{name}</b>
         </div>
-        <a class="sc-top-link" href="/admin">
-          <Icon name="sliders" size={14} /> Панель
-        </a>
       </header>
 
       <section class="sc-hero">
@@ -196,7 +192,6 @@ export default function ShowcasePage() {
 
       <footer class="sc-footer">
         <span>{name}</span>
-        <a href="/admin">Владельцу — в панель</a>
       </footer>
     </div>
   );
