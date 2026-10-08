@@ -431,7 +431,7 @@ class Config:
             # loopback и хостинг вернёт 502, не дойдя до процесса.
             panel_host=os.getenv("PANEL_HOST")
             or ("0.0.0.0" if os.getenv("PANEL_PUBLIC_URL", "").strip() else "127.0.0.1"),
-            panel_port=_single_int(os.getenv("PANEL_PORT")),
+            panel_port=_single_int(os.getenv("PANEL_PORT") or os.getenv("PORT")),
             panel_password=os.getenv("PANEL_PASSWORD"),
             panel_admin_password=os.getenv("PANEL_ADMIN_PASSWORD"),
             panel_moderator_password=os.getenv("PANEL_MODERATOR_PASSWORD"),
