@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import discord
@@ -148,8 +149,9 @@ class _ShowcaseApiMixin:
                 "name": guild.name,
                 "members": guild.member_count or len(guild.members),
                 "online": sum(1 for member in guild.members if member.status is not discord.Status.offline),
-                "channels": len(guild.channels),
-                "roles": len(guild.roles),
+            "channels": len(guild.channels),
+            "roles": len(guild.roles),
+            "created_days": max(0, (datetime.now(UTC) - guild.created_at).days),
             }
         else:
             data["guild"] = None

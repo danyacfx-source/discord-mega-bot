@@ -84,7 +84,7 @@ export default function ShowcasePage() {
     ? [
         { value: g.members, label: "участников" },
         { value: g.online, label: "онлайн сейчас" },
-        { value: bot.uptime_days || 0, label: "дней вместе" },
+        { value: g.created_days || 0, label: "дней вместе" },
       ]
     : [];
 
