@@ -119,6 +119,11 @@ export default function ShowcasePage() {
               <Icon name="send" size={16} /> Вступить
             </a>
           ) : null}
+          {settings.donate_url ? (
+            <a class="sc-btn" href={settings.donate_url} target="_blank" rel="noreferrer">
+              <Icon name="heart" size={16} /> Поддержать
+            </a>
+          ) : null}
           {liveStreams.length ? (
             <a class="sc-btn" href={liveStreams[0].url} target="_blank" rel="noreferrer">
               <Icon name="monitor" size={16} /> Смотреть эфир

@@ -13,10 +13,10 @@ import discord
 from aiohttp import web
 
 _SHOWCASE_KEY = "panel.showcase.settings"
-_SHOWCASE_DEFAULTS = {"hero_title": "", "about": "", "invite_url": "", "avatar_url": ""}
+_SHOWCASE_DEFAULTS = {"hero_title": "", "about": "", "invite_url": "", "avatar_url": "", "donate_url": ""}
 _SHOWCASE_MEDIA_LIMIT = 8
 _SHOWCASE_SCHEDULE_LIMIT = 5
-_SHOWCASE_TEXT_LIMITS = {"hero_title": 120, "about": 600, "invite_url": 300, "avatar_url": 300}
+_SHOWCASE_TEXT_LIMITS = {"hero_title": 120, "about": 600, "invite_url": 300, "avatar_url": 300, "donate_url": 300}
 
 
 class _ShowcaseApiMixin:
@@ -35,7 +35,7 @@ class _ShowcaseApiMixin:
             value = data.get(key)
             if isinstance(value, str):
                 settings[key] = value[:limit]
-        for key in ("invite_url", "avatar_url"):
+        for key in ("invite_url", "avatar_url", "donate_url"):
             if settings[key] and not settings[key].startswith(("https://", "http://")):
                 settings[key] = ""
         return settings
@@ -67,7 +67,7 @@ class _ShowcaseApiMixin:
         for key, limit in _SHOWCASE_TEXT_LIMITS.items():
             if key in payload:
                 settings[key] = str(payload.get(key) or "").strip()[:limit]
-        for key in ("invite_url", "avatar_url"):
+        for key in ("invite_url", "avatar_url", "donate_url"):
             if settings[key] and not settings[key].startswith(("https://", "http://")):
                 return self._json({"ok": False, "error": "Ссылка должна начинаться с http"}, status=400)
         await self.services.kv.set(_SHOWCASE_KEY, json.dumps(settings, ensure_ascii=False))
@@ -134,6 +134,10 @@ class _ShowcaseApiMixin:
             return self._json({"ok": False, "error": "Слишком много запросов"}, status=429)
         bot = self.bot
         data: dict[str, Any] = {"ok": True, "settings": await self._showcase_settings()}
+        if not data["settings"]["donate_url"]:
+            data["settings"]["donate_url"] = (
+                self.bot.config.donate_url or self.bot.config.socials_donate or ""
+            )
 
         ready = bot.is_ready() and bot.user is not None
         data["bot"] = {

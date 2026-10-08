@@ -5,7 +5,7 @@ import { Icon } from "../components/icons.jsx";
 import ShowcasePage from "../showcase-page.jsx";
 
 export default function ShowcaseSection() {
-  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "" });
+  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "", donate_url: "" });
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const url = location.origin + "/showcase";
@@ -68,6 +68,9 @@ export default function ShowcaseSection() {
             </Field>
             <Field label="Аватар на витрине" hint="Ссылка на картинку; пусто — аватар владельца Discord">
               <input class="input" type="url" placeholder="https://…/avatar.png" value={settings.avatar_url} onInput={(e) => set("avatar_url", e.target.value)} />
+            </Field>
+            <Field label="Ссылка на донат" hint="Пусто — берётся DONATE_URL из переменных бота">
+              <input class="input" type="url" placeholder="https://donatty.com/…" value={settings.donate_url} onInput={(e) => set("donate_url", e.target.value)} />
             </Field>
             <div class="row-inline">
               <button class="btn success" type="button" disabled={busy || !loaded} onClick={save}>
