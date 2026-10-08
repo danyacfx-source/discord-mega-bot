@@ -862,6 +862,35 @@ async def test_webpanel_audit_page(tmp_path):
             assert "audit=1" in text
 
 
+@pytest.mark.asyncio
+async def test_webpanel_backup_db_postgres_uses_pg_dump(tmp_path):
+    """На PostgreSQL бэкап-эндпоинт не падает на отсутствии файла sqlite,
+    а отдаёт дамп из Database.backup() (pg_dump) с расширением .dump."""
+    from pathlib import Path as _Path
+
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+
+    class _FakeDb:
+        path = "postgresql://user:pass@localhost:5432/bot"
+
+        async def backup(self, destination):
+            target = _Path(destination)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"PGDUMP")
+            return target
+
+    bot.db = _FakeDb()
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            headers = {"X-Panel-Token": panel._static_token or ""}
+            resp = await client.get("/api/backup/db", headers=headers)
+            assert resp.status == 200
+            assert await resp.read() == b"PGDUMP"
+            disposition = resp.headers.get("Content-Disposition", "")
+            assert disposition.endswith('.dump"')
+
+
 def test_webhook_body_multiple_embeds(tmp_path):
     """_webhook_body сохраняет массив из нескольких эмбедов и обрезает лишние."""
     bot = _panel_bot(tmp_path)

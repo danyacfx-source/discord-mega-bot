@@ -250,13 +250,17 @@ class _ToolsApiMixin:
         )
 
     async def _api_backup_db(self, request: web.Request) -> web.Response:
-        db_path = Path(self.bot.config.db_path)
-        if not db_path.is_file():
+        if self.bot.db is None:
+            return self._json({"ok": False, "error": "База данных не подключена"}, status=503)
+        # На PostgreSQL файл db_path не существует — дамп делает pg_dump
+        # внутри Database.backup(), поэтому проверяем сам бэкенд, а не файл.
+        is_postgres = str(getattr(self.bot.db, "path", "")).startswith(("postgresql://", "postgres://"))
+        if not is_postgres and not Path(self.bot.config.db_path).is_file():
             return self._json({"ok": False, "error": "Файл БД не найден"}, status=404)
-        snapshot_path = db_path.with_suffix(f".snapshot-{int(time.time())}.db")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        ext = "dump" if is_postgres else "db"
+        snapshot_path = Path(self.bot.config.db_path).parent / f".db-snapshot-{int(time.time())}.{ext}"
         try:
-            if self.bot.db is None:
-                return self._json({"ok": False, "error": "База данных не подключена"}, status=503)
             await self.bot.db.backup(snapshot_path)
             if not snapshot_path.is_file():
                 return self._json({"ok": False, "error": "Не удалось создать снапшот"}, status=500)
@@ -266,7 +270,7 @@ class _ToolsApiMixin:
                 body=body,
                 content_type="application/octet-stream",
                 headers={
-                    "Content-Disposition": f'attachment; filename="db-snapshot-{datetime.now(UTC).strftime("%Y%m%d-%H%M%S")}.db"'
+                    "Content-Disposition": f'attachment; filename="db-snapshot-{stamp}.{ext}"'
                 },
             )
         except Exception as exc:
