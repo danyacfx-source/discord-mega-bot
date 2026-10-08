@@ -63,7 +63,7 @@ class Config:
     log_level: str
     status_activity: str
     owner_id: int | None
-    version: str = "3.4.0"
+    version: str = "3.5.0"
     database_url: str | None = None
 
     # Резервные копии SQLite (для single-server deployment).

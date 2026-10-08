@@ -1,6 +1,6 @@
 # Discord Mega Bot — структура и возможности
 
-Версия: **3.4.0** · discord.py 2.x · Python 3.11+ · SQLite (aiosqlite)
+Версия: **3.5.0** · discord.py 2.x · Python 3.11+ · SQLite (aiosqlite)
 
 ---
 
