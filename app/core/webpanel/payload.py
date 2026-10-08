@@ -47,9 +47,9 @@ _MAGIC: dict[str, tuple[bytes, ...]] = {
     ".gif": (b"GIF87a", b"GIF89a"),
     ".webp": (b"RIFF",),
 }
-_CSP = (
-    "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline'; "
+_CSP_SCRIPT_SRC = "script-src 'self' 'unsafe-inline'"
+_CSP_SCRIPT_ATTR = "script-src-attr 'unsafe-inline'"
+_CSP_REST = (
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: blob: https: http:; "
     "connect-src 'self'; "
@@ -59,6 +59,7 @@ _CSP = (
     "form-action 'self'; "
     "frame-ancestors 'none'"
 )
+_CSP = f"default-src 'self'; {_CSP_SCRIPT_SRC}; {_CSP_REST}"
 _LOG_RING_SIZE = 2000
 _WELCOME_PRESET_KEY = "welcome_preset"
 

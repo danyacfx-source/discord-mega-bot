@@ -768,6 +768,73 @@ async def test_webpanel_login_rate_limit(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_login_lockout_isolated_by_forwarded_ip(tmp_path):
+    """За доверенным прокси лок-аут считается по X-Forwarded-For:
+    чужие неудачи не блокируют вход другого клиента."""
+    bot = _panel_bot(tmp_path, panel_password="hunter2")
+    panel = WebPanel(bot)
+    panel._trusted_proxy = True
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for _ in range(_LOGIN_LIMIT):
+                resp = await client.post(
+                    "/api/login", json={"password": "nope"}, headers={"X-Forwarded-For": "203.0.113.7"}
+                )
+                assert resp.status == 401
+            locked = await client.post(
+                "/api/login", json={"password": "hunter2"}, headers={"X-Forwarded-For": "203.0.113.7"}
+            )
+            assert locked.status == 429
+            other = await client.post(
+                "/api/login", json={"password": "hunter2"}, headers={"X-Forwarded-For": "198.51.100.9"}
+            )
+            assert other.status == 200
+
+
+@pytest.mark.asyncio
+async def test_webpanel_login_success_resets_attempts(tmp_path):
+    """Успешный вход сбрасывает счётчик неудач — старые опечатки не блокируют."""
+    bot = _panel_bot(tmp_path, panel_password="hunter2")
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for _ in range(_LOGIN_LIMIT - 1):
+                resp = await client.post("/api/login", json={"password": "wrong"})
+                assert resp.status == 401
+            first = await client.post("/api/login", json={"password": "hunter2"})
+            assert first.status == 200
+            miss = await client.post("/api/login", json={"password": "wrong"})
+            assert miss.status == 401
+            second = await client.post("/api/login", json={"password": "hunter2"})
+            assert second.status == 200
+
+
+@pytest.mark.asyncio
+async def test_webpanel_csp_hashes_inline_scripts(tmp_path):
+    """HTML-страницы получают CSP с sha256-хэшами инлайн-скриптов
+    и без script-src 'unsafe-inline'; не-HTML — статичный CSP."""
+    bot = _panel_bot(tmp_path)
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            page = await client.get("/admin")
+            csp = page.headers.get("Content-Security-Policy", "")
+            assert "sha256-" in csp
+            assert "script-src 'self' 'unsafe-inline'" not in csp
+            assert "script-src 'self' 'sha256-" in csp
+            assert "style-src 'self' 'unsafe-inline'" in csp
+
+            logs = await client.get("/logs")
+            logs_csp = logs.headers.get("Content-Security-Policy", "")
+            assert "sha256-" in logs_csp
+
+            api = await client.get("/api/public/showcase")
+            api_csp = api.headers.get("Content-Security-Policy", "")
+            assert "sha256-" not in api_csp
+            assert "script-src 'self' 'unsafe-inline'" in api_csp
+
+
+@pytest.mark.asyncio
 async def test_webpanel_logs_page(tmp_path):
     """Страница /logs отдаёт HTML, содержит фильтры и JS-токен-подстановку."""
     bot = _panel_bot(tmp_path)

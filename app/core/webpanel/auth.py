@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import time
+from base64 import b64encode
+from hashlib import sha256
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -12,6 +15,7 @@ from argon2.exceptions import VerificationError
 
 from app.core.webpanel.payload import (
     _CSP,
+    _CSP_REST,
     _LOCAL_HOSTS,
     _LOGIN_LIMIT,
     _LOGIN_WINDOW,
@@ -24,6 +28,9 @@ from app.core.webpanel.payload import (
 )
 
 logger = logging.getLogger("bot.webpanel")
+
+#: Инлайн-скрипты ищем только в HTML; внешние src= в хэш не берём.
+_INLINE_SCRIPT_RE = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", re.IGNORECASE | re.DOTALL)
 
 
 class _AuthMixin:
@@ -51,7 +58,8 @@ class _AuthMixin:
             "Referrer-Policy": "no-referrer",
             "Permissions-Policy": "geolocation=(), microphone=(), camera=(), usb=(), payment=()",
             "Cross-Origin-Opener-Policy": "same-origin",
-            "Content-Security-Policy": _CSP,
+            "Cross-Origin-Resource-Policy": "same-origin",
+            "Content-Security-Policy": self._csp_for(response),
             "Cache-Control": "no-store",
         }
         proto = request.headers.get("X-Forwarded-Proto") or request.scheme
@@ -59,6 +67,25 @@ class _AuthMixin:
             headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers.update(headers)
         return response
+
+    @staticmethod
+    def _csp_for(response: web.Response) -> str:
+        """Для HTML считаем sha256 каждого инлайн-скрипта — так CSP можно
+        ужать до 'self' + хэшей без unsafe-inline. Не-HTML отдаёт статичный CSP."""
+        if "text/html" not in (response.headers.get("Content-Type") or ""):
+            return _CSP
+        if isinstance(response, web.FileResponse):
+            return _CSP
+        try:
+            body = response.text or ""
+        except Exception:
+            return _CSP
+        hashes = [
+            f"'sha256-{b64encode(sha256(match.group(1).encode('utf-8')).digest()).decode('ascii')}'"
+            for match in _INLINE_SCRIPT_RE.finditer(body)
+        ]
+        script_src = "script-src 'self'" + ("".join(f" {digest}" for digest in hashes) if hashes else "")
+        return f"default-src 'self'; {script_src}; script-src-attr 'unsafe-inline'; {_CSP_REST}"
 
     @staticmethod
     def _role_rank(role: str) -> int:
@@ -325,10 +352,19 @@ class _AuthMixin:
     async def _api_login(self, request: web.Request) -> web.Response:
         if not self._password_auth:
             return self._json({"ok": False, "error": "Пароль не настроен"}, status=400)
+        if not self._rate_ok(request):
+            return self._json({"ok": False, "error": "Слишком много запросов"}, status=429)
         if not self._allowed_origin(request):
             return self._json({"ok": False, "error": "Unauthorized"}, status=401)
-        ip = request.remote or "?"
+        # Ключ — реальный клиент: за прокси request.remote общий, и чужие
+        # неудачи блокировали бы вход для всех сразу.
+        ip = self._rate_key(request)
         now = time.time()
+        if len(self._login_attempts) > 1000:
+            cutoff = now - _LOGIN_WINDOW
+            stale = [key for key, bucket in self._login_attempts.items() if not bucket or bucket[-1] < cutoff]
+            for key in stale:
+                self._login_attempts.pop(key, None)
         attempts = self._login_attempts[ip]
         while attempts and attempts[0] < now - _LOGIN_WINDOW:
             attempts.popleft()
@@ -358,6 +394,8 @@ class _AuthMixin:
         if role is None:
             attempts.append(now)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
+        # Успех сбрасывает счётчик: старые опечатки не должны блокировать вход.
+        self._login_attempts.pop(ip, None)
         token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
         self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role, "csrf": csrf}
