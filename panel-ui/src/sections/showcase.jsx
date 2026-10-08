@@ -5,7 +5,7 @@ import { Icon } from "../components/icons.jsx";
 import ShowcasePage from "../showcase-page.jsx";
 
 export default function ShowcaseSection() {
-  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "", donate_url: "" });
+  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "", donate_url: "", donors_enabled: "1" });
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const url = location.origin + "/showcase";
@@ -71,6 +71,12 @@ export default function ShowcaseSection() {
             </Field>
             <Field label="Ссылка на донат" hint="Пусто — берётся DONATE_URL из переменных бота">
               <input class="input" type="url" placeholder="https://donatty.com/…" value={settings.donate_url} onInput={(e) => set("donate_url", e.target.value)} />
+            </Field>
+            <Field label="Топ донатёров" hint="Блок «Меценаты» на публичной странице (ник и сумма)">
+              <label class="row-inline">
+                <input type="checkbox" checked={settings.donors_enabled === "1"} onInput={(e) => set("donors_enabled", e.target.checked ? "1" : "")} />
+                Показывать меценатов
+              </label>
             </Field>
             <div class="row-inline">
               <button class="btn success" type="button" disabled={busy || !loaded} onClick={save}>

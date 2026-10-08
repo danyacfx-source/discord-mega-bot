@@ -31,10 +31,14 @@ async def test_public_showcase_and_settings(tmp_path):
     try:
         async with TestServer(panel._create_app()) as server:
             async with TestClient(server) as client:
-                # страница отдаётся без токена
+                # страница отдаётся без токена + OG-теги для шаринга
                 resp = await client.get("/showcase")
                 assert resp.status == 200
                 assert "text/html" in resp.headers["Content-Type"]
+                page = await resp.text()
+                assert 'property="og:title"' in page
+                assert 'name="twitter:card"' in page
+                assert "— витрина" in page
 
                 # публичный payload без авторизации
                 resp = await client.get("/api/public/showcase")
@@ -42,23 +46,31 @@ async def test_public_showcase_and_settings(tmp_path):
                 body = await resp.json()
                 assert body["ok"]
                 assert body["settings"]["hero_title"] == ""
+                assert body["settings"]["donors_enabled"] == "1"
                 assert body["stats"]["messages_total"] == 0
                 assert body["streams"] == []
                 assert body["schedule"] == []
                 assert body["media"] == []
+                assert body["donors"] == []
                 assert "bot" in body and "online" in body["bot"]
                 # без подключённых гильдий guild — null, но форма устойчива
                 assert body["guild"] is None
 
-                # сохранение настроек
+                # сохранение настроек + выключение меценатов
                 resp = await client.post(
                     "/api/showcase/settings",
-                    json={"hero_title": "Асуна Юки", "about": "Проект", "invite_url": "https://discord.gg/x"},
+                    json={
+                        "hero_title": "Асуна Юки",
+                        "about": "Проект",
+                        "invite_url": "https://discord.gg/x",
+                        "donors_enabled": False,
+                    },
                     headers=headers,
                 )
                 assert resp.status == 200
                 body = await resp.json()
                 assert body["ok"] and body["settings"]["hero_title"] == "Асуна Юки"
+                assert body["settings"]["donors_enabled"] == ""
 
                 # невалидная ссылка отклоняется
                 resp = await client.post(
@@ -73,6 +85,8 @@ async def test_public_showcase_and_settings(tmp_path):
                 body = await resp.json()
                 assert body["settings"]["hero_title"] == "Асуна Юки"
                 assert body["settings"]["invite_url"] == "https://discord.gg/x"
+                assert body["settings"]["donors_enabled"] == ""
+                assert body["donors"] == []
 
                 # настройки читаются и под авторизацией
                 resp = await client.get("/api/showcase/settings", headers=headers)

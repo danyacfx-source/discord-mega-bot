@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import re
 import secrets
 from collections import defaultdict, deque
 from pathlib import Path
@@ -336,8 +337,13 @@ class WebPanel(
             return "<!doctype html><title>Панель</title><p>Сборка panel-ui не найдена (dist/index.html).</p>"
 
     async def _serve_index(self, request: web.Request) -> web.Response:
-        html = self._inject_panel_bootstrap(self._load_index_html())
-        return web.Response(text=html, content_type="text/html", charset="utf-8")
+        html_text = self._inject_panel_bootstrap(self._load_index_html())
+        if request.path == "/showcase":
+            meta = await self._showcase_meta_tags(request)
+            if meta:
+                html_text = re.sub(r"(?i)<title>.*?</title>", "", html_text, count=1)
+                html_text = html_text.replace("</head>", f"{meta}\n</head>", 1)
+        return web.Response(text=html_text, content_type="text/html", charset="utf-8")
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
         html = self._logs_html or "<h1>/logs</h1><p>Файл logs.html не найден.</p>"

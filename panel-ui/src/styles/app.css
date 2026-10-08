@@ -1926,6 +1926,34 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
 }
 .sc-livebanner:hover .sc-livebanner-go { text-decoration: underline; }
 
+/* --- Меценаты --- */
+.sc-donors { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.sc-donor {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #ffb1da 26%, var(--border));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card) 56%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.sc-donor-rank {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #ffb1da, var(--accent));
+}
+.sc-donor b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-donor-sum { font-weight: 800; color: color-mix(in srgb, var(--accent) 80%, var(--text)); white-space: nowrap; }
+
 @media (max-width: 700px) {
   .media-search { max-width: none; }
   .lightbox { padding: 12px; }

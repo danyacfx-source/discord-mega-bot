@@ -1,6 +1,8 @@
 """Репозиторий обработанных донатов DonationAlerts (предотвращает повторную выдачу)."""
 from __future__ import annotations
 
+from typing import Any
+
 from app.db.base_repository import BaseRepository
 
 
@@ -24,3 +26,19 @@ class DonationsRepository(BaseRepository):
             (da_id, user_name, amount, currency, message, int(vip)),
         )
         return cursor.rowcount > 0
+
+    async def top_donors(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Топ доноров по сумме (для публичной витрины)."""
+        rows = await self.db.fetchall(
+            "SELECT user_name, SUM(amount) AS total, currency FROM donations "
+            "GROUP BY user_name, currency ORDER BY total DESC LIMIT ?",
+            (limit,),
+        )
+        return [
+            {
+                "name": str(row["user_name"] or "Аноним")[:50],
+                "total": round(float(row["total"] or 0), 2),
+                "currency": str(row["currency"] or "")[:8],
+            }
+            for row in rows
+        ]

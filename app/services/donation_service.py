@@ -46,6 +46,14 @@ class DonationService:
     def session(self) -> aiohttp.ClientSession:
         return self._http.session
 
+    async def top_donors(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Топ доноров из локальной БД; пусто при любой ошибке."""
+        try:
+            return await self._repo.top_donors(limit)
+        except Exception:
+            logger.debug("DonationAlerts: не удалось получить топ доноров", exc_info=True)
+            return []
+
     async def aclose(self) -> None:
         await self._http.close()
 

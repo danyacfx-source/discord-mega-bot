@@ -2,6 +2,15 @@ import { useEffect, useState } from "preact/hooks";
 import { api, fmtCount } from "./lib/exports.js";
 import { Icon } from "./components/icons.jsx";
 
+const CURRENCY_SYMBOLS = { RUB: "₽", USD: "$", EUR: "€", UAH: "₴", KZT: "₸" };
+
+function fmtDonation(total, currency) {
+  const amount = Number(total) || 0;
+  const text = Number.isInteger(amount) ? String(amount) : amount.toFixed(1);
+  const symbol = CURRENCY_SYMBOLS[String(currency || "").toUpperCase()] || currency || "";
+  return symbol ? `${text} ${symbol}` : text;
+}
+
 const PLATFORM = {
   twitch: { label: "Twitch", color: "#9146ff" },
   kick: { label: "Kick", color: "#53fc18" },
@@ -74,6 +83,7 @@ export default function ShowcasePage() {
   const streams = data.streams || [];
   const media = data.media || [];
   const schedule = data.schedule || [];
+  const donors = data.donors || [];
   const liveStreams = streams.filter((s) => s.live);
   const name = (g && g.name) || bot.name || "Сообщество";
   const title = settings.hero_title || "Наше сообщество";
@@ -192,6 +202,21 @@ export default function ShowcasePage() {
                 </a>
               );
             })}
+          </div>
+        </section>
+      ) : null}
+
+      {donors.length ? (
+        <section class="sc-section">
+          <h2>Меценаты</h2>
+          <div class="sc-donors">
+            {donors.map((d, i) => (
+              <div class="sc-donor" key={i}>
+                <span class="sc-donor-rank">{i + 1}</span>
+                <b>{d.name}</b>
+                <span class="sc-donor-sum">{fmtDonation(d.total, d.currency)}</span>
+              </div>
+            ))}
           </div>
         </section>
       ) : null}

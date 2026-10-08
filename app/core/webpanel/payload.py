@@ -50,10 +50,10 @@ _MAGIC: dict[str, tuple[bytes, ...]] = {
 _CSP_SCRIPT_SRC = "script-src 'self' 'unsafe-inline'"
 _CSP_SCRIPT_ATTR = "script-src-attr 'unsafe-inline'"
 _CSP_REST = (
-    "style-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
     "img-src 'self' data: blob: https: http:; "
     "connect-src 'self'; "
-    "font-src 'self'; "
+    "font-src 'self' https://fonts.gstatic.com; "
     "object-src 'none'; "
     "base-uri 'none'; "
     "form-action 'self'; "

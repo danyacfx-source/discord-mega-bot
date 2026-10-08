@@ -5,18 +5,37 @@
 """
 from __future__ import annotations
 
+import html
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 import discord
 from aiohttp import web
 
+logger = logging.getLogger("bot.webpanel")
+
 _SHOWCASE_KEY = "panel.showcase.settings"
-_SHOWCASE_DEFAULTS = {"hero_title": "", "about": "", "invite_url": "", "avatar_url": "", "donate_url": ""}
+_SHOWCASE_DEFAULTS = {
+    "hero_title": "",
+    "about": "",
+    "invite_url": "",
+    "avatar_url": "",
+    "donate_url": "",
+    "donors_enabled": "1",
+}
 _SHOWCASE_MEDIA_LIMIT = 8
 _SHOWCASE_SCHEDULE_LIMIT = 5
-_SHOWCASE_TEXT_LIMITS = {"hero_title": 120, "about": 600, "invite_url": 300, "avatar_url": 300, "donate_url": 300}
+_SHOWCASE_DONORS_LIMIT = 8
+_SHOWCASE_TEXT_LIMITS = {
+    "hero_title": 120,
+    "about": 600,
+    "invite_url": 300,
+    "avatar_url": 300,
+    "donate_url": 300,
+    "donors_enabled": 1,
+}
 
 
 class _ShowcaseApiMixin:
@@ -70,8 +89,48 @@ class _ShowcaseApiMixin:
         for key in ("invite_url", "avatar_url", "donate_url"):
             if settings[key] and not settings[key].startswith(("https://", "http://")):
                 return self._json({"ok": False, "error": "Ссылка должна начинаться с http"}, status=400)
+        if "donors_enabled" in payload:
+            settings["donors_enabled"] = "1" if payload.get("donors_enabled") in (True, "1", 1, "true") else ""
         await self.services.kv.set(_SHOWCASE_KEY, json.dumps(settings, ensure_ascii=False))
         return self._json({"ok": True, "settings": settings})
+
+    async def _showcase_donors(self) -> list[dict[str, Any]]:
+        """Топ меценатов из БД донатов; пусто при любой ошибке."""
+        service = getattr(self.bot.services, "donations", None)
+        if service is None:
+            return []
+        return await service.top_donors(_SHOWCASE_DONORS_LIMIT)
+
+    async def _showcase_meta_tags(self, request: web.Request) -> str:
+        """OG-теги для /showcase: краулеры Discord/Telegram не исполняют JS."""
+        try:
+            settings = await self._showcase_settings()
+            guild = self._primary_guild()
+            name = (guild.name if guild else None) or (self.bot.user.name if self.bot.user else "Сообщество")
+            title = settings.get("hero_title") or name
+            about = (settings.get("about") or "Стримы, события и живое сообщество.").strip()
+            members = guild.member_count if guild else 0
+            description = f"{about} · участников: {members}" if members else about
+            image = settings.get("avatar_url") or await self._owner_avatar()
+            base = self._public_base(request)
+            if image and not image.startswith(("http://", "https://")):
+                image = f"{base}{image}"
+            esc = html.escape
+            tags = [
+                '<meta property="og:type" content="website">',
+                f'<meta property="og:site_name" content="{esc(name)}">',
+                f'<meta property="og:title" content="{esc(title)}">',
+                f'<meta property="og:description" content="{esc(description[:300])}">',
+                f'<meta property="og:url" content="{esc(base)}/showcase">',
+                '<meta name="twitter:card" content="summary_large_image">',
+                f"<title>{esc(title)} — витрина</title>",
+            ]
+            if image:
+                tags.append(f'<meta property="og:image" content="{esc(image)}">')
+            return "\n".join(tags)
+        except Exception:
+            logger.debug("Витрина: не удалось собрать OG-теги", exc_info=True)
+            return ""
 
     # --- сборка публичного payload ---
 
@@ -156,6 +215,7 @@ class _ShowcaseApiMixin:
             data["settings"]["donate_url"] = (
                 self.bot.config.donate_url or self.bot.config.socials_donate or ""
             )
+        data["donors"] = await self._showcase_donors() if data["settings"].get("donors_enabled") == "1" else []
 
         ready = bot.is_ready() and bot.user is not None
         data["bot"] = {
