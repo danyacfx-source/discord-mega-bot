@@ -80,24 +80,42 @@ class _ShowcaseApiMixin:
         streams: list[dict[str, Any]] = []
 
         def entry(platform: str, label: str, url: str) -> dict[str, Any]:
-            return {"platform": platform, "label": label, "url": url, "live": False}
+            return {
+                "platform": platform,
+                "label": label,
+                "url": url,
+                "live": False,
+                "title": "",
+                "viewers": 0,
+                "thumbnail": "",
+            }
+
+        def enrich(row: dict[str, Any], session: dict[str, Any] | None) -> None:
+            if not row["live"] or not session:
+                return
+            row["title"] = str(session.get("title") or "")[:200]
+            row["viewers"] = int(session.get("viewers") or 0)
+            row["thumbnail"] = str(session.get("thumbnail") or "")
 
         for login in config.twitch_channels or []:
             row = entry("twitch", f"Twitch · {login}", f"https://www.twitch.tv/{login}")
             session = await self.services.twitch.session_store(login).load()
             row["live"] = self._stream_is_live(session, config.twitch_poll_seconds)
+            enrich(row, session)
             streams.append(row)
         if config.kick_channel_slug:
             slug = config.kick_channel_slug
             row = entry("kick", f"Kick · {slug}", f"https://kick.com/{slug}")
             session = await self.services.kick.session_store(slug).load()
             row["live"] = self._stream_is_live(session, config.kick_poll_seconds)
+            enrich(row, session)
             streams.append(row)
         if config.vk_channel_slug:
             slug = config.vk_channel_slug
             row = entry("vk_video", f"VK · {slug}", f"https://live.vkvideo.ru/{slug}")
             session = await self.services.vk_video.session_store(slug).load()
             row["live"] = self._stream_is_live(session, config.vk_poll_seconds)
+            enrich(row, session)
             streams.append(row)
         return streams
 

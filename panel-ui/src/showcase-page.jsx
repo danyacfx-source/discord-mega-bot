@@ -102,9 +102,7 @@ export default function ShowcasePage() {
           <i /><i /><i /><i /><i />
         </div>
         {liveStreams.length ? (
-          <a class="sc-live" href={liveStreams[0].url} target="_blank" rel="noreferrer">
-            <span class="sc-live-dot" /> В эфире · {PLATFORM[liveStreams[0].platform]?.label || liveStreams[0].platform}
-          </a>
+          <span class="sc-eyebrow">В эфире сейчас</span>
         ) : (
           <span class="sc-eyebrow">{title}</span>
         )}
@@ -113,6 +111,29 @@ export default function ShowcasePage() {
         ) : null}
         <h1>{name}</h1>
         {settings.about ? <p class="sc-about">{settings.about}</p> : <p class="sc-about">Стримы, события и живое сообщество. Заходи — здесь всегда что-то происходит.</p>}
+        {liveStreams.length ? (
+          <a class="sc-livebanner" href={liveStreams[0].url} target="_blank" rel="noreferrer">
+            {liveStreams[0].thumbnail ? (
+              <img class="sc-livebanner-img" src={liveStreams[0].thumbnail} alt="" loading="lazy" />
+            ) : (
+              <span class="sc-livebanner-img sc-livebanner-ph">
+                <Icon name="monitor" size={30} />
+              </span>
+            )}
+            <span class="sc-livebanner-body">
+              <span class="sc-live">
+                <span class="sc-live-dot" /> В эфире · {PLATFORM[liveStreams[0].platform]?.label || liveStreams[0].platform}
+              </span>
+              {liveStreams[0].title ? <b class="sc-livebanner-title">{liveStreams[0].title}</b> : null}
+              <span class="sc-livebanner-meta">
+                {liveStreams[0].viewers ? <span>{fmtCount(liveStreams[0].viewers)} смотрят</span> : null}
+                <span class="sc-livebanner-go">
+                  Смотреть эфир <Icon name="chevron-right" size={15} />
+                </span>
+              </span>
+            </span>
+          </a>
+        ) : null}
         <div class="sc-cta">
           {settings.invite_url ? (
             <a class="sc-btn primary" href={settings.invite_url} target="_blank" rel="noreferrer">

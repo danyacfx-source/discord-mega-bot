@@ -1866,7 +1866,95 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
 }
 .sc-loading { max-width: 1060px; margin: 120px auto; text-align: center; color: var(--muted); }
 
+/* --- Баннер «в эфире» --- */
+.sc-livebanner {
+  position: relative;
+  display: grid;
+  grid-template-columns: 176px 1fr;
+  gap: 16px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 12px;
+  border-radius: 18px;
+  text-decoration: none;
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, #ff3d6e 55%, var(--border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, #ff3d6e 15%, transparent), transparent 70%),
+    color-mix(in srgb, var(--card) 60%, transparent);
+  box-shadow: 0 18px 44px color-mix(in srgb, #ff3d6e 24%, transparent);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.sc-livebanner:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, #ff3d6e 80%, var(--border));
+  box-shadow: 0 22px 52px color-mix(in srgb, #ff3d6e 36%, transparent);
+}
+.sc-livebanner-img {
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 12px;
+  display: block;
+  background: rgba(0, 0, 0, .35);
+}
+.sc-livebanner-ph { display: grid; place-items: center; color: #ff7eb6; }
+.sc-livebanner-body { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.sc-livebanner-body .sc-live { margin-bottom: 0; }
+.sc-livebanner-title {
+  font-size: 16px;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.sc-livebanner-meta {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sc-livebanner-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #ff7eb6;
+  font-weight: 800;
+}
+.sc-livebanner:hover .sc-livebanner-go { text-decoration: underline; }
+
 @media (max-width: 700px) {
   .media-search { max-width: none; }
   .lightbox { padding: 12px; }
+
+  /* --- Витрина на телефоне --- */
+  .sc-page { padding: 0 12px 26px; }
+  .sc-top { padding: 12px 2px; }
+  .sc-brand { font-size: 13.5px; padding: 7px 12px; gap: 7px; }
+  .sc-hero { padding: 30px 18px; border-radius: 20px; margin-top: 6px; }
+  .sc-hero h1 { font-size: clamp(30px, 9vw, 42px); }
+  .sc-about { font-size: 15px; }
+  .sc-eyebrow { font-size: 11px; margin-bottom: 10px; }
+  .sc-cta { flex-direction: column; gap: 10px; margin-top: 18px; }
+  .sc-cta .sc-btn { justify-content: center; width: 100%; }
+  .sc-stats { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 9px; margin-top: 22px; }
+  .sc-stat { padding: 12px 10px; border-radius: 13px; }
+  .sc-stat b { font-size: 21px; }
+  .sc-stat span { font-size: 11px; }
+  .sc-spark { height: 38px; margin-top: 16px; }
+  .sc-livebanner { grid-template-columns: 1fr; gap: 11px; padding: 11px; margin-top: 18px; }
+  .sc-livebanner-img { width: 100%; }
+  .sc-livebanner-title { font-size: 15px; }
+  .sc-section { margin-top: 26px; }
+  .sc-section h2 { font-size: 18px; margin-bottom: 12px; }
+  .sc-streams { grid-template-columns: 1fr; gap: 9px; }
+  .sc-stream { padding: 13px 14px; }
+  .sc-media { grid-template-columns: 1fr 1fr; gap: 9px; }
+  .sc-event { flex-wrap: wrap; padding: 12px 13px; }
+  .sc-event time { white-space: normal; }
+  .sc-footer { flex-direction: column; text-align: center; margin-top: 30px; padding: 13px 14px; }
+  .sc-petals { display: none; }
 }
