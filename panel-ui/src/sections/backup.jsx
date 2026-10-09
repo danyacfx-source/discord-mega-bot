@@ -21,13 +21,16 @@ const MODULE_LABELS = {
 
 export default function BackupSection() {
   const [modules, setModules] = useState(null);
+  const [engine, setEngine] = useState("");
   const [info, setInfo] = useState("");
 
   useEffect(() => {
     (async () => {
       const r = await api("/api/settings");
-      if (r.data && r.data.ok) setModules(r.data.modules || null);
-      else setModules(false);
+      if (r.data && r.data.ok) {
+        setModules(r.data.modules || null);
+        setEngine(r.data.db_engine || "");
+      } else setModules(false);
     })();
   }, []);
 
@@ -42,11 +45,14 @@ export default function BackupSection() {
       <div class="card hl-card">
         <h3 class="sec">Бэкап и экспорт</h3>
         <p class="muted small" style={{ margin: "0 0 6px" }}>
-          Скачайте настройки, конфигурацию и данные бота одним файлом JSON либо снапшот всей базы данных (SQLite).
+          Скачайте настройки, конфигурацию и данные бота одним файлом JSON либо снапшот всей базы данных
+          {engine ? ` (${engine})` : ""}.
         </p>
         <div class="row-actions" style={{ marginTop: 10 }}>
           <button class="btn primary" type="button" onClick={() => download("/api/backup", "Готовим бэкап…")}>Бэкап JSON</button>
-          <button class="btn" type="button" onClick={() => download("/api/backup/db", "Готовим снапшот БД…")}>Снапшот БД (SQLite)</button>
+          <button class="btn" type="button" onClick={() => download("/api/backup/db", "Готовим снапшот БД…")}>
+            Снапшот БД{engine ? ` (${engine})` : ""}
+          </button>
         </div>
         <div class="muted small" style={{ marginTop: 10 }}>{info}</div>
       </div>

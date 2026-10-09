@@ -349,6 +349,12 @@ class _CoreApiMixin:
         if guild.get("online") is not None:
             self._online.append({"t": now, "v": guild.get("online", 0)})
 
+    def _db_engine(self) -> str:
+        path = str(getattr(self.bot.db, "path", "")) if self.bot.db is not None else ""
+        if path.startswith(("postgresql://", "postgres://")):
+            return "PostgreSQL"
+        return "SQLite"
+
     async def _api_settings_get(self, request: web.Request) -> web.Response:
         guild = self._primary_guild()
         if guild is None:
@@ -369,6 +375,7 @@ class _CoreApiMixin:
                 "roles": self._role_options(),
                 "modules": self._modules_status(),
                 "effective_logs": self._effective_log_channels(settings),
+                "db_engine": self._db_engine(),
             }
         )
 
