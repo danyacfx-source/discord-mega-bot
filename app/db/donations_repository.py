@@ -42,3 +42,37 @@ class DonationsRepository(BaseRepository):
             }
             for row in rows
         ]
+
+    async def get_history(self, limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
+        """История донатов (новые первыми)."""
+        rows = await self.db.fetchall(
+            "SELECT da_id, user_name, amount, currency, message, vip, created_at "
+            "FROM donations ORDER BY created_at DESC, da_id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        return [
+            {
+                "da_id": int(row["da_id"]),
+                "user_name": str(row["user_name"] or "Аноним")[:50],
+                "amount": float(row["amount"] or 0),
+                "currency": str(row["currency"] or "")[:8],
+                "message": str(row["message"] or "")[:500],
+                "vip": bool(row["vip"]),
+                "created_at": str(row["created_at"] or ""),
+            }
+            for row in rows
+        ]
+
+    async def get_stats(self) -> dict[str, Any]:
+        """Суммарная статистика донатов."""
+        row = await self.db.fetchone(
+            "SELECT COUNT(*) AS cnt, SUM(amount) AS total, MAX(created_at) AS last_at "
+            "FROM donations WHERE currency = 'RUB'"
+        )
+        row_all = await self.db.fetchone("SELECT COUNT(*) AS cnt FROM donations")
+        return {
+            "total_rub": round(float(row["total"] or 0), 2) if row else 0,
+            "count_rub": int(row["cnt"] or 0) if row else 0,
+            "count_all": int(row_all["cnt"] or 0) if row_all else 0,
+            "last_at": str(row["last_at"] or "") if row else "",
+        }

@@ -10,6 +10,7 @@ from hashlib import sha256
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
+import discord
 from aiohttp import web
 from argon2.exceptions import VerificationError
 
@@ -344,14 +345,25 @@ class _AuthMixin:
             permissions = int(str(member_guild.get("permissions") or 0))
         except (TypeError, ValueError):
             raise web.HTTPUnauthorized(text="Discord вернул некорректные права пользователя")
+
+        # Проверяем роли через бота: PANEL_ADMIN_ROLE_IDS — полный доступ.
+        member = None
+        guild = self._primary_guild()
+        if guild is not None:
+            try:
+                member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+            except (discord.NotFound, discord.HTTPException, ValueError):
+                member = None
+
+        panel_admin_role_ids = getattr(self, "_admin_role_ids", set())
+        has_admin_role = bool(member and panel_admin_role_ids and any(r.id in panel_admin_role_ids for r in member.roles))
+
         if self.bot.config.owner_id == user_id or bool(member_guild.get("owner")):
             role = "owner"
-        elif permissions & (1 << 3):
-            # Только Discord Administrator — MANAGE_GUILD (bit 5) больше
-            # не даёт полный panel-admin (дамп БД, бот-отправка, ре-конфиг).
+        elif has_admin_role or permissions & (1 << 3):
+            # Доверенные роли из PANEL_ADMIN_ROLE_IDS или Discord Administrator.
             role = "admin"
         elif permissions & (1 << 13) or permissions & (1 << 5):
-            # MANAGE_MESSAGES и MANAGE_GUILD — уровень модератора.
             role = "moderator"
         else:
             role = "viewer"

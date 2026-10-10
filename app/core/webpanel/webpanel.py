@@ -72,6 +72,11 @@ class WebPanel(
         self._oauth_client_secret = config.panel_oauth_client_secret
         self._oauth_redirect_url = config.panel_oauth_redirect_url
         self._bridge_token = config.panel_bridge_token
+        self._admin_role_ids: set[int] = set()
+        for part in (config.panel_admin_role_ids or "").split(","):
+            part = part.strip()
+            if part.isdigit():
+                self._admin_role_ids.add(int(part))
         self._trusted_proxy = bool(config.panel_trusted_proxy)
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""

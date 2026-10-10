@@ -54,6 +54,22 @@ class DonationService:
             logger.debug("DonationAlerts: не удалось получить топ доноров", exc_info=True)
             return []
 
+    async def donation_history(self, limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
+        """История донатов из локальной БД."""
+        try:
+            return await self._repo.get_history(limit, offset)
+        except Exception:
+            logger.debug("DonationAlerts: не удалось получить историю", exc_info=True)
+            return []
+
+    async def donation_stats(self) -> dict[str, Any]:
+        """Статистика донатов из локальной БД."""
+        try:
+            return await self._repo.get_stats()
+        except Exception:
+            logger.debug("DonationAlerts: не удалось получить статистику", exc_info=True)
+            return {"total_rub": 0, "count_rub": 0, "count_all": 0, "last_at": ""}
+
     async def aclose(self) -> None:
         await self._http.close()
 

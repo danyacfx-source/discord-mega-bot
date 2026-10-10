@@ -332,3 +332,38 @@ class DonationsCog(MegaCog, name="Donations"):
             return
         embed = embeds.info("Поддержать проект 💛", f"[Открыть страницу доната]({url})")
         await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="donate_history", description="Архив донатов (история и статистика)")
+    @app_commands.describe(page="Номер страницы (каждая — 10 донатов)")
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_guild=True)
+    async def donate_history(self, interaction: discord.Interaction, page: int = 1) -> None:
+        await interaction.response.defer(ephemeral=True)
+        stats = await self.donations.donation_stats()
+        page = max(1, page)
+        per_page = 10
+        offset = (page - 1) * per_page
+        history = await self.donations.donation_history(limit=per_page, offset=offset)
+
+        embed = embeds.brand(
+            "💰 Архив донатов",
+            f"**Всего донатов:** {stats['count_all']}\n"
+            f"**Сумма (RUB):** {stats['total_rub']:g} ₽\n"
+            f"**Последний донат:** {stats['last_at'] or '—'}",
+        )
+
+        if not history:
+            embed.add_field(name="Страница пуста", value="Донатов на этой странице нет.", inline=False)
+        else:
+            lines = []
+            for d in history:
+                vip_mark = " ⭐" if d["vip"] else ""
+                msg = f" — {d['message'][:80]}" if d["message"] else ""
+                lines.append(
+                    f"`{d['created_at'][:16]}` **{d['user_name']}**{vip_mark} — "
+                    f"**{d['amount']:g} {d['currency']}**{msg}"
+                )
+            embed.add_field(name=f"Страница {page}", value="\n".join(lines), inline=False)
+
+        embed.set_footer(text="Страница / N — используй /donate_history page:N для другой страницы")
+        await interaction.followup.send(embed=embed, ephemeral=True)

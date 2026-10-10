@@ -201,6 +201,9 @@ class Config:
     panel_oauth_client_secret: str | None = None
     panel_oauth_redirect_url: str | None = None
     panel_bridge_token: str | None = None
+    # Discord role ID через запятую — эти роли получают полный доступ (admin)
+    # при OAuth-входе, независимо от Discord-прав.
+    panel_admin_role_ids: str = ""
     # Доверенный reverse-proxy перед панелью: с ним rate-limit берёт клиента
     # из X-Forwarded-For. Без него заголовок подделывается любым клиентом,
     # поэтому считается адрес соединения.
@@ -445,6 +448,7 @@ class Config:
             panel_oauth_client_secret=os.getenv("PANEL_OAUTH_CLIENT_SECRET") or None,
             panel_oauth_redirect_url=os.getenv("PANEL_OAUTH_REDIRECT_URL") or None,
             panel_bridge_token=os.getenv("PANEL_BRIDGE_TOKEN") or None,
+            panel_admin_role_ids=os.getenv("PANEL_ADMIN_ROLE_IDS", ""),
             panel_trusted_proxy=_bool(os.getenv("PANEL_TRUSTED_PROXY")),
             birthday_channel_id=_single_int(os.getenv("BIRTHDAY_CHANNEL_ID")),
             birthday_announce_hour=_clamp_hour(os.getenv("BIRTHDAY_ANNOUNCE_HOUR", "9")),
