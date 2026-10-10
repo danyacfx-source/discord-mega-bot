@@ -30,6 +30,10 @@ export function csrf() {
 function unauthorized() {
   if (PASSWORD_LOGIN) {
     window.dispatchEvent(new CustomEvent("panel:login"));
+  } else if (OAUTH_ENABLED) {
+    localStorage.removeItem("panel-token");
+    localStorage.removeItem("panel-csrf");
+    location.href = "/oauth/discord";
   } else if (TOKEN) {
     location.reload();
   }

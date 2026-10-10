@@ -346,6 +346,10 @@ class WebPanel(
             return "<!doctype html><title>Панель</title><p>Сборка panel-ui не найдена (dist/index.html).</p>"
 
     async def _serve_index(self, request: web.Request) -> web.Response:
+        # Discord возвращает OAuth2 code/state на redirect_uri (/admin).
+        # Если параметры есть — это callback, делегируем в _oauth_callback.
+        if request.query.get("code") and request.query.get("state"):
+            return await self._oauth_callback(request)
         html_text = self._inject_panel_bootstrap(self._load_index_html())
         if request.path == "/showcase":
             meta = await self._showcase_meta_tags(request)
