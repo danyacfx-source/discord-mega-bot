@@ -156,7 +156,7 @@ async def test_music_playlists_round_trip(tmp_path) -> None:
         assert restored[0].url == tracks[0].url
         await repo.record_history(1, 7, tracks[0])
         assert (await repo.history(1))[0]["title"] == "Песня"
-        assert await repo.delete_playlist(1, "ИЗБРАННОЕ") is True
+        assert await repo.delete_playlist(1, "ИЗБРАННОЕ", 7) is True
         assert await repo.list_playlists(1) == []
     finally:
         await database.close()

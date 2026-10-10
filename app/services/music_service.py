@@ -54,10 +54,10 @@ class MusicService:
                 logger.warning("Не удалось обновить трек из плейлиста: %s", track.url)
         return refreshed
 
-    async def delete_playlist(self, guild_id: int, name: str) -> bool:
+    async def delete_playlist(self, guild_id: int, name: str, author_id: int) -> bool:
         if self.playlists is None:
             return False
-        return await self.playlists.delete_playlist(guild_id, name)
+        return await self.playlists.delete_playlist(guild_id, name, author_id)
 
     async def record_history(self, guild_id: int, user_id: int, track: Track) -> None:
         if self.playlists is not None and hasattr(self.playlists, "record_history"):

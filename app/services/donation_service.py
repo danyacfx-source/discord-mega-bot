@@ -137,7 +137,8 @@ class DonationService:
         return new_donations
 
     def _gen_code(self) -> str:
-        return f"{self._config.donation_code_prefix}-{secrets.token_hex(4).upper()}"
+        # 8 hex = 64 бита энтропии; 4 hex (32 бита) позволяли перебор кодов (M4).
+        return f"{self._config.donation_code_prefix}-{secrets.token_hex(8).upper()}"
 
     async def create_code(self, user_id: int, guild_id: int, role: str, role_id: int | None) -> str:
         """Генерирует персональный код для доната и сохраняет привязку в kv."""

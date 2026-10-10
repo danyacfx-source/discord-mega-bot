@@ -127,7 +127,9 @@ class _AuthMixin:
             required = required_role or self._required_role(request)
             if role is None or self._role_rank(role) < self._role_rank(required):
                 return self._json({"ok": False, "error": "Недостаточно прав"}, status=403 if role else 401)
-            if request.method != "GET" and self._password_auth:
+            # CSRF обязателен при парольных сессиях и при OAuth-сессиях —
+            # иначе OAuth-режим без пароля работал бы без CSRF (C1-класс).
+            if request.method != "GET" and (self._password_auth or self._sessions):
                 token = request.headers.get("X-Panel-Token", "")
                 expected_csrf = self._csrf_for_token(token)
                 provided_csrf = request.headers.get("X-Panel-CSRF", "")
@@ -151,7 +153,12 @@ class _AuthMixin:
                 and self._rate_ok(request)
                 and secrets.compare_digest(supplied, self._bridge_token)
             ):
-                return await handler(request)
+                # Bridge-запросы идут мимо CSRF и ролей, но не мимо аудита —
+                # иначе утечка bridge-токена даёт невидимые деструктивные действия.
+                request[_PANEL_ROLE_KEY] = "bridge"
+                response = await handler(request)
+                await self._record_admin_audit(request, "bridge", response)
+                return response
             return await authorized(request)
 
         return wrapped
@@ -194,7 +201,12 @@ class _AuthMixin:
         host = parsed.hostname
         if not host:
             return False
-        if host == self.host or host in _LOCAL_HOSTS:
+        if host == self.host:
+            return True
+        # localhost-Origin доверяем только если сама панель локальная —
+        # иначе любой локальный приложение сможет слать кросс-ориджин-запросы
+        # к публичной панели (M6).
+        if host in _LOCAL_HOSTS and self.host in _LOCAL_HOSTS:
             return True
         if host == (request.host or "").split(":")[0]:
             return True
@@ -219,7 +231,9 @@ class _AuthMixin:
     def _check_token_value(self, token: str) -> str | None:
         if not token:
             return None
-        if not self._password_auth:
+        # Статик-режим: только localhost без пароля и без OAuth.
+        # В OAuth-режиме _static_token = None, поэтому сессии проверяются ниже.
+        if not self._password_auth and not self._oauth_enabled:
             return "owner" if self._static_token and secrets.compare_digest(token, self._static_token) else None
         now = time.time()
         active: dict[str, _PanelSession] = {}
@@ -332,9 +346,12 @@ class _AuthMixin:
             raise web.HTTPUnauthorized(text="Discord вернул некорректные права пользователя")
         if self.bot.config.owner_id == user_id or bool(member_guild.get("owner")):
             role = "owner"
-        elif permissions & (1 << 3) or permissions & (1 << 5):
+        elif permissions & (1 << 3):
+            # Только Discord Administrator — MANAGE_GUILD (bit 5) больше
+            # не даёт полный panel-admin (дамп БД, бот-отправка, ре-конфиг).
             role = "admin"
-        elif permissions & (1 << 13):
+        elif permissions & (1 << 13) or permissions & (1 << 5):
+            # MANAGE_MESSAGES и MANAGE_GUILD — уровень модератора.
             role = "moderator"
         else:
             role = "viewer"

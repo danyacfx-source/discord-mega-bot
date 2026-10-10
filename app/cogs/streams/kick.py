@@ -35,7 +35,9 @@ logger = logging.getLogger("bot.cogs")
 def _can_moderate(interaction: discord.Interaction) -> bool:
     user = interaction.user
     perms = getattr(user, "guild_permissions", None)
-    if perms is not None and (perms.administrator or perms.manage_messages):
+    # Kick-модерация идёт под OAuth стримера (бан/пост в чат от его имени) —
+    # Manage_Messages слишком слабый бар, нужен Manage_Guild или админ (M7).
+    if perms is not None and (perms.administrator or perms.manage_guild):
         return True
     config = getattr(interaction.client, "config", None)
     owner_id = getattr(config, "owner_id", None)

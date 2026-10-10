@@ -300,17 +300,21 @@ async def test_birthdays_repository(tmp_path):
     await db.connect()
     try:
         repo = BirthdaysRepository(db)
-        assert await repo.get(10) is None
-        await repo.set(10, 3, 15)
-        assert await repo.get(10) == (3, 15)
-        await repo.set(10, 12, 31)
-        assert await repo.get(10) == (12, 31)
-        assert len(await repo.with_date(12, 31)) == 1
-        await repo.set(11, 12, 31)
-        assert len(await repo.with_date(12, 31)) == 2
-        assert await repo.remove(10)
-        assert await repo.get(10) is None
-        assert len(await repo.all()) == 1
+        assert await repo.get(10, 100) is None
+        await repo.set(10, 100, 3, 15)
+        assert await repo.get(10, 100) == (3, 15)
+        await repo.set(10, 100, 12, 31)
+        assert await repo.get(10, 100) == (12, 31)
+        assert len(await repo.with_date(12, 31, 100)) == 1
+        await repo.set(11, 100, 12, 31)
+        assert len(await repo.with_date(12, 31, 100)) == 2
+        # Другая гильдия — изоляция (LOW-fix).
+        await repo.set(12, 200, 12, 31)
+        assert len(await repo.with_date(12, 31, 100)) == 2
+        assert len(await repo.with_date(12, 31, 200)) == 1
+        assert await repo.remove(10, 100)
+        assert await repo.get(10, 100) is None
+        assert len(await repo.all(100)) == 1
     finally:
         await db.close()
 
@@ -332,7 +336,8 @@ async def test_donation_service_codes(tmp_path):
         )
         service = DonationService(DonationsRepository(db), KvRepository(db), config)
         code = await service.create_code(123, 456, "Спонсор", None)
-        assert len(code) == 12 and code.startswith("VIP-")
+        # M4-fix: 8 hex (64 бита) вместо 4 (32 бита) — длина кода выросла.
+        assert len(code) == 20 and code.startswith("VIP-")
         assert all(ch in "0123456789ABCDEF" for ch in code[4:])
         link = await service.lookup_code(code)
         assert link is not None
@@ -409,9 +414,11 @@ async def test_webpanel_api_bot_send_clicks_fake_channel(tmp_path):
 
     bot = _panel_bot(tmp_path)
     channel = _fake_send_capture(calls)
-    bot.get_channel = lambda cid: channel if int(cid or 0) == 555 else None
+    # H1-fix: резолв идёт через _primary_guild().get_channel, а не bot.get_channel.
+    fake_guild = type("FakeGuild", (), {"get_channel": lambda self, cid: channel if int(cid or 0) == 555 else None})()
 
     panel = WebPanel(bot)
+    panel._primary_guild = lambda: fake_guild  # type: ignore[method-assign]
     async with TestServer(panel._create_app()) as server:
         async with TestClient(server) as client:
             headers = {"X-Panel-Token": panel._static_token or ""}

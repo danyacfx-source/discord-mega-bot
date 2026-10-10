@@ -65,10 +65,10 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
         if channel is None:
             return
         now = datetime.now()
-        rows = await self.birthdays.with_date(now.month, now.day)
+        guild = channel.guild
+        rows = await self.birthdays.with_date(now.month, now.day, guild.id)
         if not rows:
             return
-        guild = channel.guild
         lines = []
         for row in rows:
             display = None
@@ -106,7 +106,7 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
         if not (1 <= month <= 12 and 1 <= day <= calendar.monthrange(2000, month)[1]):
             await interaction.response.send_message(embed=embeds.error("Такой даты не существует"), ephemeral=True)
             return
-        await self.birthdays.set(interaction.user.id, month, day)
+        await self.birthdays.set(interaction.user.id, interaction.guild.id, month, day)
         await interaction.response.send_message(
             embed=embeds.success(
                 "Дата сохранена",
@@ -117,15 +117,15 @@ class BirthdaysCog(MegaCog, name="Birthdays"):
 
     @birthday.command(name="remove", description="Удалить свою дату рождения")
     async def remove_birthday(self, interaction: discord.Interaction) -> None:
-        if await self.birthdays.get(interaction.user.id) is None:
+        if await self.birthdays.get(interaction.user.id, interaction.guild.id) is None:
             await interaction.response.send_message(embed=embeds.info("Дата не установлена"), ephemeral=True)
             return
-        await self.birthdays.remove(interaction.user.id)
+        await self.birthdays.remove(interaction.user.id, interaction.guild.id)
         await interaction.response.send_message(embed=embeds.success("Дата удалена"), ephemeral=True)
 
     @birthday.command(name="list", description="Ближайшие дни рождения")
     async def list_birthdays(self, interaction: discord.Interaction) -> None:
-        rows = await self.birthdays.all()
+        rows = await self.birthdays.all(interaction.guild.id)
         if not rows:
             await interaction.response.send_message(
                 embed=embeds.info("Календарь пока пуст", "Добавьте дату командой `/birthday set`."), ephemeral=True

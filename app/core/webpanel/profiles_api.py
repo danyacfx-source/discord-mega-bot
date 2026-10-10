@@ -25,6 +25,24 @@ logger = logging.getLogger("bot.webpanel")
 class _ProfilesApiMixin:
     """Стримы, дни рождения, temp-voice, AI, карточки и приветствия."""
 
+    @staticmethod
+    def _redact_proxy(url: str | None) -> str | None:
+        """Отдаёт хост:порт прокси без user:pass кредов (H5)."""
+        if not url:
+            return None
+        try:
+            from urllib.parse import urlsplit
+
+            parts = urlsplit(url)
+            if not parts.hostname:
+                return None
+            host = parts.hostname
+            if parts.port:
+                host = f"{host}:{parts.port}"
+            return host
+        except Exception:
+            return None
+
     def _stream_is_live(self, session: dict[str, Any] | None, poll_seconds: float) -> bool:
         """Эфир идёт, пока session-store дописывается поллингом (свежий captured_at)."""
         return session_is_live(
@@ -183,7 +201,7 @@ class _ProfilesApiMixin:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         service = self.services.birthdays
-        rows = await service.all()
+        rows = await service.all(guild.id)
         items = [
             {
                 "user_id": str(row["user_id"]),
@@ -222,7 +240,7 @@ class _ProfilesApiMixin:
         except ValueError:
             return self._json({"ok": False, "error": "Некорректная дата"}, status=400)
         service = self.services.birthdays
-        await service.set(user_id, month, day)
+        await service.set(user_id, guild.id, month, day)
         return self._json({"ok": True, "name": self._member_name(guild, user_id)})
 
     async def _api_birthdays_remove(self, request: web.Request) -> web.Response:
@@ -230,7 +248,7 @@ class _ProfilesApiMixin:
         if guild is None:
             return self._json({"ok": False, "error": "Бот не подключён ни к одному серверу"}, status=400)
         user_id = self._parse_id(request.match_info.get("user_id"))
-        if user_id is None or not await self.services.birthdays.remove(user_id):
+        if user_id is None or not await self.services.birthdays.remove(user_id, guild.id):
             return self._json({"ok": False, "error": "День рождения не найден"}, status=404)
         return self._json({"ok": True})
 
@@ -341,7 +359,9 @@ class _ProfilesApiMixin:
                 "cooldown_seconds": config.ai_cooldown_seconds,
                 "timeout_seconds": config.ai_timeout_seconds,
                 "system_prompt": config.ai_system_prompt or "",
-                "proxy": config.ai_proxy or None,
+                # Прокси может содержать user:pass@host — viewer отдаём
+                # только хост:порт, без кредов (H5).
+                "proxy": self._redact_proxy(config.ai_proxy),
             }
         )
 

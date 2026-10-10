@@ -381,7 +381,7 @@ class MusicCog(MegaCog, name="Music"):
     @app_commands.describe(name="Имя плейлиста")
     @app_commands.guild_only()
     async def playlist_delete(self, interaction: discord.Interaction, name: str) -> None:
-        removed = await self.music.delete_playlist(interaction.guild.id, name)
+        removed = await self.music.delete_playlist(interaction.guild.id, name, interaction.user.id)
         await interaction.response.send_message(
             embed=(
                 embeds.success("Плейлист удалён", f"**{name}**")

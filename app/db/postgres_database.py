@@ -106,8 +106,10 @@ CREATE TABLE IF NOT EXISTS temp_voices (
     owner_id BIGINT PRIMARY KEY, channel_id BIGINT NOT NULL UNIQUE, created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS birthdays (
-    user_id BIGINT PRIMARY KEY, month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
-    day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31)
+    user_id BIGINT NOT NULL, guild_id BIGINT NOT NULL,
+    month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    day INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    PRIMARY KEY (user_id, guild_id)
 );
 CREATE TABLE IF NOT EXISTS season_points (
     user_id BIGINT NOT NULL, guild_id BIGINT NOT NULL, points INTEGER NOT NULL DEFAULT 0,
@@ -213,6 +215,34 @@ class PostgresDatabase:
         )
         async with self.pool.acquire() as connection:
             await connection.execute(_POSTGRES_SCHEMA)
+            # Миграция 10: дни рождения получают guild_id. Старые строки
+            # переносятся с guild_id=0 (скрыты от гильдий, нужен re-set).
+            has_old = await connection.fetchval(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'birthdays' AND column_name = 'user_id' "
+                "AND is_nullable = 'NO' AND column_default IS NULL "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM information_schema.columns "
+                "  WHERE table_name = 'birthdays' AND column_name = 'guild_id'"
+                ")"
+            )
+            if has_old:
+                await connection.execute(
+                    """
+                    ALTER TABLE birthdays RENAME TO birthdays_old;
+                    CREATE TABLE birthdays (
+                        user_id  BIGINT NOT NULL,
+                        guild_id BIGINT NOT NULL,
+                        month    INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+                        day      INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+                        PRIMARY KEY (user_id, guild_id)
+                    );
+                    INSERT INTO birthdays (user_id, guild_id, month, day)
+                        SELECT user_id, 0, month, day FROM birthdays_old;
+                    DROP TABLE birthdays_old;
+                    CREATE INDEX IF NOT EXISTS idx_birthdays_date ON birthdays(month, day);
+                    """
+                )
 
     def _require_pool(self) -> asyncpg.Pool:
         if self.pool is None:

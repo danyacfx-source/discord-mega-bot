@@ -76,7 +76,10 @@ class WebPanel(
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
-        self._static_token: str | None = None if self.password else self._load_static_token()
+        # Статический токен — только для localhost без пароля и без OAuth.
+        # При OAuth-режиме он никогда не грузится: иначе инжектится owner-токен
+        # в публичный HTML и обходит всю аутентификацию (C1).
+        self._static_token: str | None = None if (self.password or self._oauth_enabled) else self._load_static_token()
         self._sessions: dict[str, _PanelSession] = {}
         self._oauth_states: dict[str, float] = {}
         self._panel_passwords: dict[str, str] = {}
@@ -322,8 +325,9 @@ class WebPanel(
         </style></head><body><main>{body}</main></body></html>"""
 
     def _inject_panel_bootstrap(self, html: str) -> str:
-        token = "" if self._password_auth else (self._static_token or "")
-        html = html.replace("__PANEL_TOKEN__", token)
+        # _static_token уже None при пароле или OAuth — инжектим только
+        # localhost-статик-токен, никогда owner-токен в OAuth-режиме.
+        html = html.replace("__PANEL_TOKEN__", self._static_token or "")
         html = html.replace("__PANEL_LOGIN__", "1" if self._password_auth else "0")
         html = html.replace("__PANEL_OAUTH__", "1" if self._oauth_enabled else "0")
         return html
@@ -347,19 +351,19 @@ class WebPanel(
 
     async def _serve_logs_page(self, request: web.Request) -> web.Response:
         html = self._logs_html or "<h1>/logs</h1><p>Файл logs.html не найден.</p>"
-        if self._password_auth:
-            html = html.replace("__PANEL_TOKEN__", "")
-        else:
-            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
-        return web.Response(text=html, content_type="text/html", charset="utf-8")
+        return web.Response(
+            text=html.replace("__PANEL_TOKEN__", self._static_token or ""),
+            content_type="text/html",
+            charset="utf-8",
+        )
 
     async def _serve_audit_page(self, request: web.Request) -> web.Response:
         html = self._audit_html or "<h1>/audit</h1><p>Файл audit.html не найден.</p>"
-        if self._password_auth:
-            html = html.replace("__PANEL_TOKEN__", "")
-        else:
-            html = html.replace("__PANEL_TOKEN__", self._static_token or "")
-        return web.Response(text=html, content_type="text/html", charset="utf-8")
+        return web.Response(
+            text=html.replace("__PANEL_TOKEN__", self._static_token or ""),
+            content_type="text/html",
+            charset="utf-8",
+        )
 
     # --- API: login / status / channels ---
 

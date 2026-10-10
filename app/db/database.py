@@ -186,9 +186,11 @@ CREATE TABLE IF NOT EXISTS temp_voices (
 );
 
 CREATE TABLE IF NOT EXISTS birthdays (
-    user_id INTEGER PRIMARY KEY,
-    month   INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
-    day     INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31)
+    user_id  INTEGER NOT NULL,
+    guild_id INTEGER NOT NULL,
+    month    INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    day      INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+    PRIMARY KEY (user_id, guild_id)
 );
 
 CREATE TABLE IF NOT EXISTS season_points (
@@ -480,6 +482,29 @@ class Database:
             )
             await conn.execute(
                 "INSERT INTO schema_migrations(version, applied_at) VALUES (9, datetime('now'))"
+            )
+        if 10 not in applied:
+            # Дни рождения: скоуп по гильдии. Старые строки (без guild_id)
+            # переносятся с guild_id=0 — они не видны ни одной гильдии,
+            # пользователь пере-установит дату командой /birthday set.
+            await conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS birthdays_new (
+                    user_id  INTEGER NOT NULL,
+                    guild_id INTEGER NOT NULL,
+                    month    INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+                    day      INTEGER NOT NULL CHECK (day BETWEEN 1 AND 31),
+                    PRIMARY KEY (user_id, guild_id)
+                );
+                INSERT INTO birthdays_new (user_id, guild_id, month, day)
+                    SELECT user_id, 0, month, day FROM birthdays;
+                DROP TABLE birthdays;
+                ALTER TABLE birthdays_new RENAME TO birthdays;
+                CREATE INDEX IF NOT EXISTS idx_birthdays_date ON birthdays(month, day);
+                """
+            )
+            await conn.execute(
+                "INSERT INTO schema_migrations(version, applied_at) VALUES (10, datetime('now'))"
             )
         conn = self.conn
         cursor = await conn.execute("PRAGMA table_info(guild_settings)")

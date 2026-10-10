@@ -25,6 +25,7 @@ from app.core.overlay.layout import (
     save_layouts,
 )
 from app.core.webpanel.payload import (
+    _PANEL_ROLE_KEY,
     _WEBHOOK_RE,
     _raw_to_client,
     _trim_components,
@@ -78,6 +79,16 @@ class _ToolsApiMixin:
     async def _api_overlay_get(self, request: web.Request) -> web.Response:
         config = self.bot.config
         overlay = getattr(self.bot, "overlay", None)
+        raw_token = overlay.token if overlay is not None else ""
+        role = request.get(_PANEL_ROLE_KEY, "viewer")
+        # Полный токен — только admin/owner. Viewer получает редакцию,
+        # чтобы не сливать overlay-секрет lowest-роли (H4).
+        if self._role_rank(role) >= self._role_rank("admin"):
+            token_field = raw_token
+        elif raw_token:
+            token_field = f"{raw_token[:4]}…{raw_token[-4:]}"
+        else:
+            token_field = ""
         return self._json(
             {
                 "ok": True,
@@ -85,7 +96,8 @@ class _ToolsApiMixin:
                 "host": config.overlay_host,
                 "port": config.overlay_port,
                 "url_base": self._overlay_url_base(),
-                "token": overlay.token if overlay is not None else "",
+                "token": token_field,
+                "token_redacted": self._role_rank(role) < self._role_rank("admin"),
                 "layouts": await list_layouts(self.services.kv),
                 "canvas_presets": [list(p) for p in CANVAS_PRESETS],
                 "widget_types": list(WIDGET_TYPES),

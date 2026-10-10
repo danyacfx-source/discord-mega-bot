@@ -22,10 +22,21 @@ class MusicRepository(BaseRepository):
             (track.thumbnail or "")[:2048],
         )
 
+    async def get_playlist_owner(self, guild_id: int, name: str) -> int | None:
+        rows = await self.db.fetchall(
+            "SELECT created_by FROM music_playlists WHERE guild_id = ? AND name = ?",
+            (guild_id, name.strip().lower()[:64]),
+        )
+        return int(rows[0]["created_by"]) if rows else None
+
     async def save_playlist(self, guild_id: int, name: str, author_id: int, tracks: list[Track]) -> None:
         normalized = name.strip().lower()[:64]
         if not normalized:
             raise ValueError("Название плейлиста не может быть пустым")
+        # Запрет угона чужого плейлиста: overwrite только своего (M1).
+        owner = await self.get_playlist_owner(guild_id, normalized)
+        if owner is not None and owner != author_id:
+            raise ValueError("Плейлист с таким именем уже существует")
         async with self.db.transaction():
             await self.db.execute(
                 """
@@ -98,10 +109,11 @@ class MusicRepository(BaseRepository):
             for row in rows
         ]
 
-    async def delete_playlist(self, guild_id: int, name: str) -> bool:
+    async def delete_playlist(self, guild_id: int, name: str, author_id: int) -> bool:
+        # Удаляем только свой плейлист — чужие не трогаем (M1).
         cursor = await self.db.execute(
-            "DELETE FROM music_playlists WHERE guild_id = ? AND name = ?",
-            (guild_id, name.strip().lower()[:64]),
+            "DELETE FROM music_playlists WHERE guild_id = ? AND name = ? AND created_by = ?",
+            (guild_id, name.strip().lower()[:64], author_id),
         )
         return cursor.rowcount > 0
 

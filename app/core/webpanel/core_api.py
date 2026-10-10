@@ -484,8 +484,13 @@ class _CoreApiMixin:
     # --- API: отправка через бота ---
 
     def _resolve_channel(self, channel_id: Any) -> discord.TextChannel | None:
+        # Резолвим только внутри основной гильдии — иначе panel-admin одной
+        # гильдии пишет/читает каналы чужих гильдий (H1).
+        guild = self._primary_guild()
+        if guild is None:
+            return None
         try:
-            channel = self.bot.get_channel(int(channel_id))
+            channel = guild.get_channel(int(channel_id))
         except (TypeError, ValueError):
             return None
         return channel if isinstance(channel, discord.TextChannel) else None
