@@ -8,18 +8,10 @@ from __future__ import annotations
 import html
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-import aiohttp
-
-from app.core.api_client import ApiClient, ApiRequestError
-from app.services.stream_archive import StreamArchiveStore
-from app.services.stream_rsvp import StreamRsvpStore
-from app.services.stream_session import StreamSessionStore
-
-if TYPE_CHECKING:
-    from app.config import Config
-    from app.db.kv_repository import KvRepository
+from app.core.api_client import ApiRequestError
+from app.services.stream_platform import StreamPlatformService
 
 logger = logging.getLogger("bot.services")
 
@@ -49,26 +41,12 @@ def _meta(page: str, prop: str) -> str | None:
     return None
 
 
-class VkVideoService:
-    def __init__(self, repo: KvRepository, config: Config) -> None:
-        self._repo = repo
-        self._config = config
-        self._http = ApiClient(
-            "VK Видео",
-            timeout=config.api_timeout_seconds,
-            user_agent=_USER_AGENT,
-            proxy=config.api_proxy,
-            max_concurrency=config.api_max_concurrency,
-            circuit_failure_threshold=config.api_circuit_failure_threshold,
-            circuit_reset_seconds=config.api_circuit_reset_seconds,
-        )
-
-    @property
-    def session(self) -> aiohttp.ClientSession:
-        return self._http.session
-
-    async def aclose(self) -> None:
-        await self._http.close()
+class VkVideoService(StreamPlatformService):
+    platform = "vk"
+    sticky_platform = "vk_video"
+    rsvp_platform = "vk_video"
+    http_name = "VK Видео"
+    default_user_agent = _USER_AGENT
 
     # ------------------------------------------------------------------ стримы
 
@@ -110,31 +88,3 @@ class VkVideoService:
             "live": live,
             "url": url,
         }
-
-    # ------------------------------------------------------------------ sticky
-
-    def session_store(self, slug: str) -> StreamSessionStore:
-        """Хранилище сессии трансляции для карточек."""
-        return StreamSessionStore(self._repo, f"stream:session:vk:{slug.lower()}")
-
-    def rsvp_store(self) -> StreamRsvpStore:
-        """Хранилище id старт-анонса для команды /stream_rsvp."""
-        return StreamRsvpStore(self._repo, "stream:rsvp:vk_video")
-
-    def archive_store(self, slug: str) -> StreamArchiveStore:
-        """Архив завершённых трансляций для /stream_stats."""
-        return StreamArchiveStore(self._repo, f"stream:archive:vk:{slug.lower()}")
-
-    @staticmethod
-    def _sticky_key() -> str:
-        return "vk_video:sticky"
-
-    async def sticky_message_id(self) -> int | None:
-        raw = await self._repo.get(self._sticky_key())
-        return int(raw) if raw and raw.isdigit() else None
-
-    async def set_sticky_message(self, message_id: int) -> None:
-        await self._repo.set(self._sticky_key(), str(message_id))
-
-    async def clear_sticky_message(self) -> None:
-        await self._repo.delete(self._sticky_key())

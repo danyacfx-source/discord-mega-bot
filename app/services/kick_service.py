@@ -6,11 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
-from app.core.api_client import ApiClient, ApiRequestError
-from app.services.stream_archive import StreamArchiveStore
-from app.services.stream_rsvp import StreamRsvpStore
-from app.services.stream_session import StreamSessionStore
-from app.services.viewer_sessions import ViewerSessionStore
+from app.core.api_client import ApiRequestError
+from app.services.stream_platform import StreamPlatformService
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -47,27 +44,16 @@ def _first_viewer_count(*values: Any) -> int:
     return 0
 
 
-class KickService:
+class KickService(StreamPlatformService):
+    platform = "kick"
+    sticky_platform = "kick"
+    rsvp_platform = "kick"
+    http_name = "Kick"
+    default_user_agent = "DiscordMegaBot/3.3 Kick"
+
     def __init__(self, repo: KvRepository, config: Config) -> None:
-        self._repo = repo
-        self._config = config
-        self._http = ApiClient(
-            "Kick",
-            timeout=config.api_timeout_seconds,
-            user_agent="DiscordMegaBot/3.3 Kick",
-            proxy=config.api_proxy,
-            max_concurrency=config.api_max_concurrency,
-            circuit_failure_threshold=config.api_circuit_failure_threshold,
-            circuit_reset_seconds=config.api_circuit_reset_seconds,
-        )
+        super().__init__(repo, config)
         self._broadcaster: dict[str, Any] | None = None
-
-    @property
-    def session(self) -> aiohttp.ClientSession:
-        return self._http.session
-
-    async def aclose(self) -> None:
-        await self._http.close()
 
     # ------------------------------------------------------------------ стримы
 
@@ -96,38 +82,6 @@ class KickService:
             "started_at": live.get("created_at"),
             "thumbnail": thumbnail.get("url"),
         }
-
-    # ------------------------------------------------------------------ sticky
-
-    def session_store(self, slug: str) -> StreamSessionStore:
-        """Хранилище сессии стрима (пик зрителей, метаданные) для карточек."""
-        return StreamSessionStore(self._repo, f"stream:session:kick:{slug.lower()}")
-
-    def rsvp_store(self) -> StreamRsvpStore:
-        """Хранилище id старт-анонса для команды /stream_rsvp."""
-        return StreamRsvpStore(self._repo, "stream:rsvp:kick")
-
-    def viewer_store(self) -> ViewerSessionStore:
-        """Онлайн-сессии зрителей чата (из Pusher-событий)."""
-        return ViewerSessionStore(self._repo)
-
-    def archive_store(self, slug: str) -> StreamArchiveStore:
-        """Архив завершённых эфиров для /stream_stats."""
-        return StreamArchiveStore(self._repo, f"stream:archive:kick:{slug.lower()}")
-
-    @staticmethod
-    def _sticky_key() -> str:
-        return "kick:sticky"
-
-    async def sticky_message_id(self) -> int | None:
-        raw = await self._repo.get(self._sticky_key())
-        return int(raw) if raw and raw.isdigit() else None
-
-    async def set_sticky_message(self, message_id: int) -> None:
-        await self._repo.set(self._sticky_key(), str(message_id))
-
-    async def clear_sticky_message(self) -> None:
-        await self._repo.delete(self._sticky_key())
 
     # ------------------------------------------------------------------ отправка в чат
 

@@ -5,13 +5,9 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
-
-from app.core.api_client import ApiClient, ApiRequestError
-from app.services.stream_archive import StreamArchiveStore, parse_dt
-from app.services.stream_rsvp import StreamRsvpStore
-from app.services.stream_session import StreamSessionStore
-from app.services.viewer_sessions import ViewerSessionStore
+from app.core.api_client import ApiRequestError
+from app.services.stream_archive import parse_dt
+from app.services.stream_platform import StreamPlatformService
 
 if TYPE_CHECKING:
     from app.config import Config
@@ -41,31 +37,20 @@ query Stream($login: String!) {
 """
 
 
-class TwitchService:
+class TwitchService(StreamPlatformService):
+    platform = "twitch"
+    sticky_platform = "twitch"
+    rsvp_platform = "twitch"
+    http_name = "Twitch"
+    default_user_agent = "DiscordMegaBot/3.3 Twitch"
+
     def __init__(self, repo: KvRepository, config: Config) -> None:
-        self._repo = repo
-        self._config = config
-        self._http = ApiClient(
-            "Twitch",
-            timeout=config.api_timeout_seconds,
-            user_agent="DiscordMegaBot/3.3 Twitch",
-            proxy=config.api_proxy,
-            max_concurrency=config.api_max_concurrency,
-            circuit_failure_threshold=config.api_circuit_failure_threshold,
-            circuit_reset_seconds=config.api_circuit_reset_seconds,
-        )
+        super().__init__(repo, config)
         self._token: str | None = None
         self._token_expires: datetime = datetime.now(UTC)
         self._user_token: str | None = None
         self._user_token_expires: datetime = datetime.now(UTC)
         self._user_refresh: str | None = config.twitch_refresh_token
-
-    @property
-    def session(self) -> aiohttp.ClientSession:
-        return self._http.session
-
-    async def aclose(self) -> None:
-        await self._http.close()
 
     async def _access_token(self) -> str:
         config = self._config
@@ -189,7 +174,7 @@ class TwitchService:
                     return None
                 body = await response.json(content_type=None)
         except (ApiRequestError, RuntimeError):
-            logger.debug("Twitch %s: не удалось получить VOD", login, exc_info=True)
+            logger.debug("Twitch: не удалось получить VOD", login, exc_info=True)
             return None
         videos = (body or {}).get("data") or []
         return videos[0].get("url") if videos else None
@@ -315,24 +300,7 @@ class TwitchService:
 
     # ------------------------------------------------------------------ sticky
 
-    def session_store(self, login: str) -> StreamSessionStore:
-        """Хранилище сессии стрима (пик зрителей, метаданные) для карточек."""
-        return StreamSessionStore(self._repo, f"stream:session:twitch:{login.lower()}")
-
-    def rsvp_store(self, login: str) -> StreamRsvpStore:
-        """Хранилище id старт-анонса для команды /stream_rsvp."""
-        return StreamRsvpStore(self._repo, f"stream:rsvp:twitch:{login.lower()}")
-
-    def viewer_store(self) -> ViewerSessionStore:
-        """Онлайн-сессии зрителей чата (из IRC-сообщений, читает StreamChatCog)."""
-        return ViewerSessionStore(self._repo, "stream:viewers:twitch")
-
-    def archive_store(self, login: str) -> StreamArchiveStore:
-        """Архив завершённых эфиров канала для /stream_stats."""
-        return StreamArchiveStore(self._repo, f"stream:archive:twitch:{login.lower()}")
-
-    @staticmethod
-    def _sticky_key(login: str) -> str:
+    def _sticky_key(self, login: str) -> str:
         return f"twitch:sticky:{login.lower()}"
 
     async def sticky_message_id(self, login: str) -> int | None:
