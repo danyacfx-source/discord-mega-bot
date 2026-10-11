@@ -28,12 +28,12 @@ export function csrf() {
 }
 
 function unauthorized() {
-  if (PASSWORD_LOGIN) {
-    window.dispatchEvent(new CustomEvent("panel:login"));
-  } else if (OAUTH_ENABLED) {
+  if (PASSWORD_LOGIN || OAUTH_ENABLED) {
+    TOKEN = "";
+    CSRF = "";
     localStorage.removeItem("panel-token");
     localStorage.removeItem("panel-csrf");
-    location.href = "/oauth/discord";
+    window.dispatchEvent(new CustomEvent("panel:login"));
   } else if (TOKEN) {
     location.reload();
   }
