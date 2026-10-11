@@ -10,6 +10,7 @@ import discord
 from aiohttp import web
 
 from app.core import embeds
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _TICKET_DEFAULTS,
     _TICKET_TEXT_FIELDS,
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from app.types import GiveawayRow
 
 
-class _CommunityApiMixin:
+class _CommunityApiMixin(_BaseApi):
     """Розыгрыши, тикеты, автомод и опросы."""
 
     async def _api_giveaways(self, request: web.Request) -> web.Response:

@@ -24,6 +24,7 @@ from app.core.overlay.layout import (
     save_layout,
     save_layouts,
 )
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _PANEL_ROLE_KEY,
     _WEBHOOK_RE,
@@ -35,7 +36,7 @@ from app.core.webpanel.payload import (
 
 logger = logging.getLogger("bot.webpanel")
 
-class _ToolsApiMixin:
+class _ToolsApiMixin(_BaseApi):
     """Overlay, расписание, бэкапы, вебхуки, логи и аудит."""
 
     def _overlay_url_base(self) -> str:
@@ -315,13 +316,6 @@ class _ToolsApiMixin:
         if match is None:
             return None
         return f"https://discord.com/api/webhooks/{match.group(1)}/{match.group(2)}"
-
-    async def _read_json(self, request: web.Request) -> dict[str, Any]:
-        try:
-            payload = await request.json()
-        except Exception:
-            payload = {}
-        return payload if isinstance(payload, dict) else {}
 
     def _webhook_body(self, payload: dict[str, Any]) -> dict[str, Any]:
         body: dict[str, Any] = {

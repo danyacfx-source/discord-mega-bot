@@ -8,6 +8,8 @@ from typing import Any
 import discord
 from aiohttp import web
 
+from app.core.webpanel.base_api import _BaseApi
+
 _WARDOGS_CATEGORY_ID = 1534711415883956284
 _WARDOGS_ROLE_NAME = "Wardogs"
 _EDITABLE_PERMISSION_NAMES = (
@@ -23,7 +25,7 @@ _EDITABLE_PERMISSION_NAMES = (
 )
 
 
-class _GuildApiMixin:
+class _GuildApiMixin(_BaseApi):
     """Сервер, участники, роли, варны и действия модерации."""
 
     def _resolve_member(self, guild: discord.Guild, value: Any) -> discord.Member | None:

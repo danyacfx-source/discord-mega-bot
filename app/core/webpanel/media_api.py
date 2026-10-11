@@ -10,6 +10,7 @@ from typing import Any
 
 from aiohttp import web
 
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import _PANEL_ROLE_KEY
 
 _MEDIA_KEY = "panel.media.gallery"
@@ -19,7 +20,7 @@ _TAGS_MAX = 6
 _TAG_RE = re.compile(r"^[\wА-Яа-яЁё №+./-]{1,24}$")
 
 
-class _MediaApiMixin:
+class _MediaApiMixin(_BaseApi):
     """Галерея медиатеки хранится одним JSON-документом в KV."""
 
     async def _gallery_load(self) -> list[dict[str, Any]]:

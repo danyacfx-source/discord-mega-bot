@@ -16,6 +16,7 @@ from argon2 import PasswordHasher
 
 from app.core.secrets import attach_redaction
 from app.core.webpanel.auth import _AuthMixin
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.community_api import _CommunityApiMixin
 from app.core.webpanel.core_api import _CoreApiMixin
 from app.core.webpanel.guild_api import _GuildApiMixin
@@ -43,7 +44,6 @@ from app.services.wardogs_service import WardogsService, WardogsUnavailable
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services import Services
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -58,6 +58,7 @@ class WebPanel(
     _ToolsApiMixin,
     _MediaApiMixin,
     _ShowcaseApiMixin,
+    _BaseApi,
 ):
     def __init__(self, bot: MegaBot) -> None:
         self.bot = bot
@@ -121,17 +122,6 @@ class WebPanel(
         self._events_task: asyncio.Task[None] | None = None
         self._event_clients: set[asyncio.Queue[dict[str, Any]]] = set()
         self._events_seq: int = 0
-
-    @property
-    def services(self) -> Services:
-        services = self.bot.services
-        if services is None:
-            raise RuntimeError("Сервисы недоступны до запуска вебпанели")
-        return services
-
-    @property
-    def _oauth_enabled(self) -> bool:
-        return bool(self._oauth_client_id and self._oauth_client_secret and self._oauth_redirect_url)
 
     # --- жизненный цикл ---
 
@@ -232,12 +222,6 @@ class WebPanel(
         if self._http is not None:
             await self._http.close()
             self._http = None
-
-    # --- авторизация, origin и безопасность ---
-
-    @staticmethod
-    def _json(data: dict[str, Any], status: int = 200) -> web.Response:
-        return web.json_response(data, status=status)
 
     # --- страницы ---
 

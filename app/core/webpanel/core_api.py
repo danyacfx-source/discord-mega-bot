@@ -20,6 +20,7 @@ import psutil
 from aiohttp import web
 
 from app.core.api_client import ApiClient
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _MAGIC,
     _MAX_EMBEDS,
@@ -34,7 +35,7 @@ from app.core.webpanel.payload import (
 
 logger = logging.getLogger("bot.webpanel")
 
-class _CoreApiMixin:
+class _CoreApiMixin(_BaseApi):
     """Статус, health, метрики, обзор, настройки, загрузки, отправка сообщений, аналитика и realtime-каналы."""
 
     async def _api_status(self, request: web.Request) -> web.Response:
@@ -154,12 +155,6 @@ class _CoreApiMixin:
         if hours:
             return f"{hours} ч {minutes} мин"
         return f"{minutes} мин"
-
-    def _primary_guild(self) -> discord.Guild | None:
-        configured_id = self.bot.config.guild_id
-        if configured_id is not None:
-            return self.bot.get_guild(configured_id)
-        return self.bot.guilds[0] if self.bot.guilds else None
 
     def _channel_options(self) -> list[dict[str, Any]]:
         channels: list[dict[str, Any]] = []
@@ -482,18 +477,6 @@ class _CoreApiMixin:
         return f"{proto}://{request.host}"
 
     # --- API: отправка через бота ---
-
-    def _resolve_channel(self, channel_id: Any) -> discord.TextChannel | None:
-        # Резолвим только внутри основной гильдии — иначе panel-admin одной
-        # гильдии пишет/читает каналы чужих гильдий (H1).
-        guild = self._primary_guild()
-        if guild is None:
-            return None
-        try:
-            channel = guild.get_channel(int(channel_id))
-        except (TypeError, ValueError):
-            return None
-        return channel if isinstance(channel, discord.TextChannel) else None
 
     async def _api_bot_send(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)

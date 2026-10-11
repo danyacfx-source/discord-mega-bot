@@ -9,6 +9,7 @@ from typing import Any
 import discord
 from aiohttp import web
 
+from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _STREAM_CARDS_KEY,
     _WELCOME_PRESET_KEY,
@@ -22,7 +23,7 @@ from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, rende
 
 logger = logging.getLogger("bot.webpanel")
 
-class _ProfilesApiMixin:
+class _ProfilesApiMixin(_BaseApi):
     """Стримы, дни рождения, temp-voice, AI, карточки и приветствия."""
 
     @staticmethod

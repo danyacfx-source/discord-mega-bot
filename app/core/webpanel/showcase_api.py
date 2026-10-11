@@ -14,6 +14,8 @@ from typing import Any
 import discord
 from aiohttp import web
 
+from app.core.webpanel.base_api import _BaseApi
+
 logger = logging.getLogger("bot.webpanel")
 
 _SHOWCASE_KEY = "panel.showcase.settings"
@@ -38,7 +40,7 @@ _SHOWCASE_TEXT_LIMITS = {
 }
 
 
-class _ShowcaseApiMixin:
+class _ShowcaseApiMixin(_BaseApi):
     # --- настройки витрины ---
 
     async def _showcase_settings(self) -> dict[str, str]:
