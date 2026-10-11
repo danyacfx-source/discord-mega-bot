@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import discord
 
-from app.config import Config
+from app.config import Config, GuardConfig
 from app.core.bot import MegaBot
 from app.core.composition import assemble
 from app.services.command_guard_service import CommandGuardService
@@ -242,7 +242,7 @@ def test_snapshot_reports_state() -> None:
         state = svc.snapshot()
         assert state["enabled"] is True
         assert state["paused"] is False
-        assert state["limits"]["user_max"] == Config.__dataclass_fields__["guard_user_max"].default
+        assert state["limits"]["user_max"] == GuardConfig.__dataclass_fields__["user_max"].default
         assert state["checks"] == 1
 
 
