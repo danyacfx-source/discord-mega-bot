@@ -15,6 +15,7 @@ import discord
 from aiohttp import web
 
 from app.core.webpanel.base_api import _BaseApi
+from app.db.activity_repository import ActivityRepository
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -55,7 +56,7 @@ class _AnalyticsApiMixin(_BaseApi):
         self._pending_activity = defaultdict(int)
         for (guild_id, bucket), amount in pending.items():
             try:
-                await self.bot.db.increment_activity(guild_id, bucket, amount)
+                await ActivityRepository(self.bot.db).increment(guild_id, bucket, amount)
             except Exception:
                 self._pending_activity[(guild_id, bucket)] += amount
                 logger.exception("Не удалось сохранить activity metric")
@@ -74,7 +75,7 @@ class _AnalyticsApiMixin(_BaseApi):
         guild = self._primary_guild()
         if guild is None or self.bot.db is None:
             return {"guild_id": None, "rows": []}
-        rows = await self.bot.db.list_activity(guild.id, 1000)
+        rows = await ActivityRepository(self.bot.db).list_hourly(guild.id, 1000)
         return {"guild_id": str(guild.id), "rows": rows}
 
     async def _api_analytics(self, request: web.Request) -> web.Response:

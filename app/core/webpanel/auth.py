@@ -24,6 +24,7 @@ from app.core.webpanel.payload import (
     _SESSION_MAX,
     _SESSION_TTL,
 )
+from app.db.admin_audit_repository import AdminAuditRepository
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -103,7 +104,7 @@ class _AuthMixin(_BaseApi):
         if request.method == "GET" or response.status >= 400 or self.bot.db is None:
             return
         try:
-            await self.bot.db.record_admin_audit(
+            await AdminAuditRepository(self.bot.db).record(
                 role,
                 "panel request",
                 request.method,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from app.db.activity_repository import ActivityRepository
 from app.db.backup_manager import DatabaseBackupManager
 from app.db.database import Database
 from app.db.postgres_database import PostgresDatabase
@@ -31,8 +32,8 @@ async def test_database_migrations_integrity_and_backup(tmp_path: Path) -> None:
     assert row is not None and row["value"] == "ok"
     migrations = await restored.fetchall("SELECT version FROM schema_migrations ORDER BY version")
     assert [row["version"] for row in migrations] == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    await restored.increment_activity(1, "2026-09-24T00:00:00+00:00")
-    activity = await restored.list_activity(1)
+    await ActivityRepository(restored).increment(1, "2026-09-24T00:00:00+00:00")
+    activity = await ActivityRepository(restored).list_hourly(1)
     assert activity[0]["messages"] == 1
     await restored.close()
 

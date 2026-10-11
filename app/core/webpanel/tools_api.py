@@ -33,6 +33,7 @@ from app.core.webpanel.payload import (
     _trim_embeds,
     overlay_url_base,
 )
+from app.db.admin_audit_repository import AdminAuditRepository
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -413,7 +414,7 @@ class _ToolsApiMixin(_BaseApi):
             limit = max(1, min(int(raw_limit), 1000))
         except (TypeError, ValueError):
             limit = 200
-        return self._json({"ok": True, "audit": await self.bot.db.list_admin_audit(limit)})
+        return self._json({"ok": True, "audit": await AdminAuditRepository(self.bot.db).list_recent(limit)})
 
     @staticmethod
     async def _read_remote_json(response: aiohttp.ClientResponse) -> dict[str, Any]:
