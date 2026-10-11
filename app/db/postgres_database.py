@@ -201,6 +201,9 @@ def _translate_sql(sql: str) -> tuple[str, str | None]:
 class PostgresDatabase:
     """Async PostgreSQL implementation used behind the Database facade."""
 
+    #: Фиксированный признак бэкенда для фасада Database и веб-панели.
+    is_postgres = True
+
     def __init__(self, url: str) -> None:
         self.url = url
         self.pool: asyncpg.Pool | None = None

@@ -267,7 +267,7 @@ class _ToolsApiMixin(_BaseApi):
             return self._json({"ok": False, "error": "База данных не подключена"}, status=503)
         # На PostgreSQL файл db_path не существует — дамп делает pg_dump
         # внутри Database.backup(), поэтому проверяем сам бэкенд, а не файл.
-        is_postgres = str(getattr(self.bot.db, "path", "")).startswith(("postgresql://", "postgres://"))
+        is_postgres = getattr(self.bot.db, "is_postgres", False)
         if not is_postgres and not Path(self.bot.config.db_path).is_file():
             return self._json({"ok": False, "error": "Файл БД не найден"}, status=404)
         stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")

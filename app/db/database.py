@@ -245,6 +245,11 @@ class Database:
         """Последняя ошибка доступности, или ``None`` после восстановления."""
         return self._db_last_error
 
+    @property
+    def is_postgres(self) -> bool:
+        """True, если бэкенд — PostgreSQL (а не SQLite)."""
+        return self.path.startswith(("postgresql://", "postgres://"))
+
     def _note_success(self) -> None:
         if not self._db_available:
             logger.warning("Хранилище снова отвечает: восстановление после %d сбоев", self._db_failures)

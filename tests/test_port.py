@@ -880,6 +880,7 @@ async def test_webpanel_backup_db_postgres_uses_pg_dump(tmp_path):
 
     class _FakeDb:
         path = "postgresql://user:pass@localhost:5432/bot"
+        is_postgres = True
 
         async def backup(self, destination):
             target = _Path(destination)

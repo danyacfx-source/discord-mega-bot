@@ -177,7 +177,7 @@ class _SettingsApiMixin(_BaseApi):
         }
 
     def _db_engine(self) -> str:
-        path = str(getattr(self.bot.db, "path", "")) if self.bot.db is not None else ""
-        if path.startswith(("postgresql://", "postgres://")):
+        db = self.bot.db
+        if db is not None and getattr(db, "is_postgres", False):
             return "PostgreSQL"
         return "SQLite"
