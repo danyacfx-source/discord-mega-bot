@@ -15,10 +15,11 @@ from aiohttp import web
 from argon2 import PasswordHasher
 
 from app.core.secrets import attach_redaction
+from app.core.webpanel.analytics_api import _AnalyticsApiMixin
 from app.core.webpanel.auth import _AuthMixin
 from app.core.webpanel.base_api import _BaseApi
+from app.core.webpanel.bot_api import _BotApiMixin
 from app.core.webpanel.community_api import _CommunityApiMixin
-from app.core.webpanel.core_api import _CoreApiMixin
 from app.core.webpanel.guild_api import _GuildApiMixin
 from app.core.webpanel.log_ring import RingBufferHandler
 from app.core.webpanel.media_api import _MediaApiMixin
@@ -38,8 +39,11 @@ from app.core.webpanel.payload import (
 )
 from app.core.webpanel.profiles_api import _ProfilesApiMixin
 from app.core.webpanel.routes import register_routes
+from app.core.webpanel.settings_api import _SettingsApiMixin
 from app.core.webpanel.showcase_api import _ShowcaseApiMixin
+from app.core.webpanel.status_api import _StatusApiMixin
 from app.core.webpanel.tools_api import _ToolsApiMixin
+from app.core.webpanel.uploads_api import _UploadsApiMixin
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
 
 if TYPE_CHECKING:
@@ -54,7 +58,11 @@ class WebPanel(
     _GuildApiMixin,
     _CommunityApiMixin,
     _ProfilesApiMixin,
-    _CoreApiMixin,
+    _StatusApiMixin,
+    _BotApiMixin,
+    _SettingsApiMixin,
+    _UploadsApiMixin,
+    _AnalyticsApiMixin,
     _ToolsApiMixin,
     _MediaApiMixin,
     _ShowcaseApiMixin,
