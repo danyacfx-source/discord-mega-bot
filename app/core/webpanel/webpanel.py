@@ -146,6 +146,32 @@ class WebPanel(
             pass
         return token
 
+    async def _sync_static_token_to_kv(self) -> None:
+        """Статический токен в KV: файл .panel-token умирает при редеплое.
+
+        Используется только без пароля и OAuth. В БД есть токен — берём его
+        (API-скрипты с X-Panel-Token переживают пересоздание контейнера),
+        нет — сохраняем текущий.
+        """
+        if self._static_token is None:
+            return
+        services = self.bot.services
+        if services is None:
+            return
+        try:
+            stored = await services.kv.get("panel.static_token")
+        except Exception:
+            logger.debug("Не удалось прочитать статический токен из KV", exc_info=True)
+            return
+        if stored and len(stored) >= 16:
+            self._static_token = stored
+            return
+        try:
+            await services.kv.set("panel.static_token", self._static_token)
+            logger.info("Статический токен панели сохранён в БД — переживает редеплой")
+        except Exception:
+            logger.debug("Не удалось сохранить статический токен в KV", exc_info=True)
+
     def _create_app(self) -> web.Application:
         # aiohttp defaults to a 1 MiB request limit. That made the advertised
         # 8 MiB image-upload limit unusable for valid uploads.
@@ -168,6 +194,7 @@ class WebPanel(
                 "PANEL_PASSWORD обязателен для публичной веб-панели "
                 "(задайте пароль или оставьте PANEL_HOST локальным без PANEL_PUBLIC_URL)"
             )
+        await self._sync_static_token_to_kv()
         self._http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15, connect=5))
         if not (self._password_auth or self._oauth_enabled) and self.host not in _LOCAL_HOSTS:
             logger.warning(

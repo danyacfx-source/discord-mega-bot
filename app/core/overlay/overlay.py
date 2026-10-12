@@ -38,17 +38,22 @@ def _read_page() -> str:
 
 
 class Overlay:
-    """aiohttp-сервер оверлея: токен из env или ``data/.overlay-token``."""
+    """aiohttp-сервер оверлея: токен из env, иначе KV-БД, иначе ``data/.overlay-token``."""
+
+    _KV_KEY = "panel.overlay_token"
 
     def __init__(self, bot: MegaBot) -> None:
         self.bot = bot
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._token = self._resolve_token()
+        self._build_pages()
+        self._status_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
+
+    def _build_pages(self) -> None:
         self._page = _read_page().replace("__TOKEN__", self._token)
         self._layout_page = _LAYOUT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
         self._chat_page = _CHAT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
-        self._status_cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
 
     @property
     def token(self) -> str:
@@ -94,6 +99,36 @@ class Overlay:
                 "OVERLAY_TOKEN не задан — сгенерирован временный токен (перезапуск сменит токен, установите OVERLAY_TOKEN в .env)"
             )
         return generated
+
+    async def _sync_token_to_kv(self) -> None:
+        """Токен живёт в KV (PostgreSQL): файл .overlay-token умирает при редеплое.
+
+        env-токен — источник истины и не трогается. Иначе: в БД есть токен —
+        берём его (виджеты OBS переживают пересоздание контейнера), нет —
+        сохраняем текущий.
+        """
+        config = self.bot.config
+        if (config.overlay_token or "").strip():
+            return
+        services = self.bot.services
+        if services is None:
+            return
+        try:
+            stored = await services.kv.get(self._KV_KEY)
+        except Exception:
+            logger.debug("Overlay: не удалось прочитать токен из KV", exc_info=True)
+            return
+        if stored and len(stored) >= 16:
+            if stored != self._token:
+                self._token = stored
+                self._build_pages()
+                logger.info("Overlay: токен восстановлен из БД — виджеты пережили редеплой")
+            return
+        try:
+            await services.kv.set(self._KV_KEY, self._token)
+            logger.info("Overlay: токен сохранён в БД — переживает редеплой контейнера")
+        except Exception:
+            logger.debug("Overlay: не удалось сохранить токен в KV", exc_info=True)
 
     # ------------------------------------------------------------------ HTTP
     @web.middleware
@@ -363,6 +398,7 @@ class Overlay:
     async def start(self) -> None:
         if self._runner is not None:
             return
+        await self._sync_token_to_kv()
         config = self.bot.config
         host = config.overlay_host
         port = config.overlay_port or 8765

@@ -709,3 +709,31 @@ async def test_webpanel_uploads_list_and_delete(make_panel_bot):
                 assert missing.status == 404
     finally:
         await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_bot):
+    """Файл .panel-token умер при редеплое — токен возвращается из БД для API-скриптов."""
+    from types import SimpleNamespace
+
+    from app.db.kv_repository import KvRepository
+    from app.services.kv_service import KvService
+
+    bot = make_panel_bot()
+    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    await bot.db.connect()
+    bot.services = SimpleNamespace(kv=KvService(KvRepository(bot.db)))  # type: ignore[assignment]
+    try:
+        first = WebPanel(bot)
+        await first._sync_static_token_to_kv()
+        token = first._static_token
+        assert token
+        assert await bot.services.kv.get("panel.static_token") == token
+
+        (tmp_path / ".panel-token").unlink()
+        second = WebPanel(bot)
+        assert second._static_token != token, "без файла сгенерирован новый токен"
+        await second._sync_static_token_to_kv()
+        assert second._static_token == token, "токен должен вернуться из БД"
+    finally:
+        await bot.db.close()

@@ -52,3 +52,32 @@ async def test_overlay_token_file(tmp_path, make_panel_bot):
     assert len(saved) >= 16
     overlay2 = Overlay(bot)
     assert overlay2._token == saved
+
+
+@pytest.mark.asyncio
+async def test_overlay_token_survives_redeploy_via_kv(tmp_path, make_panel_bot):
+    """Файл .overlay-token умер при редеплое — токен восстанавливается из БД, виджеты OBS живут."""
+    from types import SimpleNamespace
+
+    from app.db.database import Database
+    from app.db.kv_repository import KvRepository
+    from app.services.kv_service import KvService
+
+    bot = make_panel_bot()
+    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    await bot.db.connect()
+    bot.services = SimpleNamespace(kv=KvService(KvRepository(bot.db)))  # type: ignore[assignment]
+    try:
+        first = Overlay(bot)
+        await first._sync_token_to_kv()
+        token = first._token
+        assert await bot.services.kv.get(Overlay._KV_KEY) == token
+
+        (tmp_path / ".overlay-token").unlink()
+        second = Overlay(bot)
+        assert second._token != token, "без файла сгенерирован новый токен"
+        await second._sync_token_to_kv()
+        assert second._token == token, "токен должен вернуться из БД"
+        assert token in second._page, "страница оверлея пересобрана с восстановленным токеном"
+    finally:
+        await bot.db.close()
