@@ -13,6 +13,7 @@ from app.core.webpanel.payload import (
     _trim_embeds,
 )
 from app.core.webpanel.webpanel import WebPanel
+from app.db.database import Database
 
 
 def _fake_send_capture(target: list) -> discord.TextChannel:
@@ -32,6 +33,12 @@ def _fake_send_capture(target: list) -> discord.TextChannel:
             return discord.Object(id=424242)  # реальный send() вернул бы Message с .id
 
     return _CaptureChannel()
+
+
+async def _boot_db(bot) -> None:
+    """Загрузки хранятся в БД: поднимаем реальную SQLite без setup_hook."""
+    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    await bot.db.connect()
 
 
 @pytest.mark.asyncio
@@ -300,28 +307,32 @@ async def test_webpanel_upload(make_panel_bot):
     import aiohttp
 
     bot = make_panel_bot()
+    await _boot_db(bot)
     panel = WebPanel(bot)
-    async with TestServer(panel._create_app()) as server:
-        async with TestClient(server) as client:
-            headers = {"X-Panel-Token": panel._static_token or ""}
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Panel-Token": panel._static_token or ""}
 
-            fd = aiohttp.FormData()
-            png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
-            fd.add_field("file", png, filename="kartinka.png", content_type="image/png")
-            resp = await client.post("/api/upload", data=fd, headers=headers)
-            assert resp.status == 200
-            body = await resp.json()
-            assert body["ok"] is True and body["name"].endswith(".png")
-            assert body["absolute_url"].endswith("/uploads/" + body["name"])
+                fd = aiohttp.FormData()
+                png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+                fd.add_field("file", png, filename="kartinka.png", content_type="image/png")
+                resp = await client.post("/api/upload", data=fd, headers=headers)
+                assert resp.status == 200
+                body = await resp.json()
+                assert body["ok"] is True and body["name"].endswith(".png")
+                assert body["absolute_url"].endswith("/uploads/" + body["name"])
 
-            got = await client.get("/uploads/" + body["name"])
-            assert got.status == 200
-            assert "image/png" in got.headers.get("Content-Type", "")
+                got = await client.get("/uploads/" + body["name"])
+                assert got.status == 200
+                assert "image/png" in got.headers.get("Content-Type", "")
 
-            bad = aiohttp.FormData()
-            bad.add_field("file", b"hello", filename="a.txt", content_type="text/plain")
-            rejected = await client.post("/api/upload", data=bad, headers=headers)
-            assert rejected.status == 400
+                bad = aiohttp.FormData()
+                bad.add_field("file", b"hello", filename="a.txt", content_type="text/plain")
+                rejected = await client.post("/api/upload", data=bad, headers=headers)
+                assert rejected.status == 400
+    finally:
+        await bot.close()
 
 
 @pytest.mark.asyncio
@@ -348,19 +359,23 @@ async def test_webpanel_upload_magic_mismatch(make_panel_bot):
     import aiohttp
 
     bot = make_panel_bot()
+    await _boot_db(bot)
     panel = WebPanel(bot)
-    async with TestServer(panel._create_app()) as server:
-        async with TestClient(server) as client:
-            headers = {"X-Panel-Token": panel._static_token or ""}
-            fd = aiohttp.FormData()
-            fd.add_field("file", b"etot file ne png", filename="fake.png", content_type="image/png")
-            resp = await client.post("/api/upload", data=fd, headers=headers)
-            assert resp.status == 400
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                fd = aiohttp.FormData()
+                fd.add_field("file", b"etot file ne png", filename="fake.png", content_type="image/png")
+                resp = await client.post("/api/upload", data=fd, headers=headers)
+                assert resp.status == 400
 
-            ok = aiohttp.FormData()
-            ok.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="real.png", content_type="image/png")
-            good = await client.post("/api/upload", data=ok, headers=headers)
-            assert good.status == 200
+                ok = aiohttp.FormData()
+                ok.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="real.png", content_type="image/png")
+                good = await client.post("/api/upload", data=ok, headers=headers)
+                assert good.status == 200
+    finally:
+        await bot.close()
 
 
 @pytest.mark.asyncio
@@ -667,26 +682,30 @@ async def test_webpanel_uploads_list_and_delete(make_panel_bot):
     import aiohttp
 
     bot = make_panel_bot()
+    await _boot_db(bot)
     panel = WebPanel(bot)
-    async with TestServer(panel._create_app()) as server:
-        async with TestClient(server) as client:
-            headers = {"X-Panel-Token": panel._static_token or ""}
-            list_resp = await client.get("/api/uploads", headers=headers)
-            assert (await list_resp.json())["files"] == []
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                headers = {"X-Panel-Token": panel._static_token or ""}
+                list_resp = await client.get("/api/uploads", headers=headers)
+                assert (await list_resp.json())["files"] == []
 
-            fd = aiohttp.FormData()
-            fd.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="del.png", content_type="image/png")
-            up = await client.post("/api/upload", data=fd, headers=headers)
-            name = (await up.json())["name"]
+                fd = aiohttp.FormData()
+                fd.add_field("file", b"\x89PNG\r\n\x1a\n" + b"\x00" * 16, filename="del.png", content_type="image/png")
+                up = await client.post("/api/upload", data=fd, headers=headers)
+                name = (await up.json())["name"]
 
-            listed = await client.get("/api/uploads", headers=headers)
-            names = [f["name"] for f in (await listed.json())["files"]]
-            assert name in names
+                listed = await client.get("/api/uploads", headers=headers)
+                names = [f["name"] for f in (await listed.json())["files"]]
+                assert name in names
 
-            deleted = await client.delete("/api/uploads/" + name, headers=headers)
-            assert (await deleted.json())["ok"] is True
+                deleted = await client.delete("/api/uploads/" + name, headers=headers)
+                assert (await deleted.json())["ok"] is True
 
-            listed2 = await client.get("/api/uploads", headers=headers)
-            assert name not in [f["name"] for f in (await listed2.json())["files"]]
-            missing = await client.delete("/api/uploads/" + name, headers=headers)
-            assert missing.status == 404
+                listed2 = await client.get("/api/uploads", headers=headers)
+                assert name not in [f["name"] for f in (await listed2.json())["files"]]
+                missing = await client.delete("/api/uploads/" + name, headers=headers)
+                assert missing.status == 404
+    finally:
+        await bot.close()

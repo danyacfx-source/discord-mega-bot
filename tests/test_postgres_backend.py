@@ -30,3 +30,10 @@ def test_postgres_schema_defines_chat_coins() -> None:
     assert "chat_coins" in tables
     indexes = postgres_index_names(POSTGRES_SCHEMA)
     assert "idx_chat_coins_top" in indexes
+
+
+def test_postgres_schema_defines_media_files() -> None:
+    """Регрессия: файлы панели переехали в БД — таблица и сид версий 11."""
+    tables = postgres_table_names(POSTGRES_SCHEMA)
+    assert "media_files" in tables
+    assert "generate_series(1, 11)" in POSTGRES_SCHEMA

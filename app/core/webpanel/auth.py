@@ -59,8 +59,10 @@ class _AuthMixin(_BaseApi):
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Resource-Policy": "same-origin",
             "Content-Security-Policy": self._csp_for(response),
-            "Cache-Control": "no-store",
         }
+        # Handler мог задать явный кэш (неизменяемые /uploads/*) — не затираем.
+        if "Cache-Control" not in response.headers:
+            headers["Cache-Control"] = "no-store"
         proto = request.headers.get("X-Forwarded-Proto") or request.scheme
         if proto == "https":
             headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"

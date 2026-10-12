@@ -219,6 +219,23 @@ async def run_migrations(conn: Any) -> None:
         await conn.execute(
             "INSERT INTO schema_migrations(version, applied_at) VALUES (10, datetime('now'))"
         )
+    if 11 not in applied:
+        # Файлы медиатеки/загрузок переезжают из FS в БД: контейнер при
+        # редеплое удаляется целиком, файлы в data/uploads умирал вместе с ним.
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS media_files (
+                name       TEXT PRIMARY KEY,
+                bytes      BLOB NOT NULL,
+                mime       TEXT NOT NULL,
+                size       INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO schema_migrations(version, applied_at) VALUES (11, datetime('now'))"
+        )
     await _backfill_columns(conn)
     await conn.commit()
 

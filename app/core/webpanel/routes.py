@@ -142,7 +142,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/api/uploads", viewer(panel._api_uploads_list))
     router.add_delete("/api/uploads/{name}", viewer(panel._api_uploads_delete))
     panel._uploads_dir.mkdir(parents=True, exist_ok=True)
-    router.add_static("/uploads", str(panel._uploads_dir), show_index=False)
+    router.add_get("/uploads/{name}", panel._serve_upload)
     router.add_get("/api/bot/channels", viewer(panel._api_bot_channels))
     router.add_post("/api/bot/send", viewer(panel._api_bot_send))
     router.add_post("/api/bot/edit", viewer(panel._api_bot_edit))

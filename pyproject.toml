@@ -36,6 +36,7 @@ files = [
     "app/db/reminders_repository.py",
     "app/db/scheduled_repository.py",
     "app/db/giveaways_repository.py",
+    "app/db/media_files_repository.py",
     "app/services/moderation_case_service.py",
 ]
 follow_imports = "skip"
