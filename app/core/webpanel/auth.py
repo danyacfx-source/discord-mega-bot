@@ -14,6 +14,7 @@ import discord
 from aiohttp import web
 from argon2.exceptions import VerificationError
 
+from app.core.shield import is_scanner_path, is_scanner_ua
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _CSP,
@@ -39,6 +40,11 @@ class _AuthMixin(_BaseApi):
 
     @web.middleware
     async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
+        # Сканеры глушим до rate-лимита и хендлеров: пустые 404/403 без логов.
+        if is_scanner_ua(request.headers.get("User-Agent", "")):
+            return web.Response(status=403)
+        if is_scanner_path(request.path):
+            return web.Response(status=404, text="Not Found")
         # Страницы, статика и прочие не-API маршруты не проходят через
         # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
         # в своих обработчиках, чтобы не считать дважды.

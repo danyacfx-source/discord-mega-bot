@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from aiohttp import web
 
 from app.core.overlay.layout import load_layout
+from app.core.shield import is_scanner_path, is_scanner_ua
 from app.utils.stream_history import sparkline, trend
 
 if TYPE_CHECKING:
@@ -133,6 +134,10 @@ class Overlay:
     # ------------------------------------------------------------------ HTTP
     @web.middleware
     async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
+        if is_scanner_ua(request.headers.get("User-Agent", "")):
+            return web.Response(status=403)
+        if is_scanner_path(request.path):
+            return web.Response(status=404, text="Not Found")
         try:
             response = await handler(request)
         except web.HTTPException as exc:
