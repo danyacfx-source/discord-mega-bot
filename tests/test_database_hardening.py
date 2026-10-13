@@ -91,6 +91,36 @@ async def test_backup_manager_keeps_only_configured_retention(tmp_path: Path) ->
     await database.close()
 
 
+async def test_backup_manager_posts_to_external_sink(tmp_path: Path) -> None:
+    """Каждый backup уходит в sink (Discord-канал): внешняя копия переживает хост."""
+    database = Database(str(tmp_path / "source.db"))
+    await database.connect()
+    seen: list[Path] = []
+
+    async def sink(path: Path) -> None:
+        seen.append(path)
+
+    manager = DatabaseBackupManager(database, tmp_path / "backups", interval_hours=1, retention=1, on_backup=sink)
+    result = await manager.backup_now()
+    assert seen == [result]
+    await database.close()
+
+
+async def test_backup_manager_sink_error_does_not_fail_backup(tmp_path: Path) -> None:
+    """Ошибка внешнего sink не проваливает сам backup."""
+    database = Database(str(tmp_path / "source.db"))
+    await database.connect()
+
+    async def boom(path: Path) -> None:
+        raise RuntimeError("discord down")
+
+    manager = DatabaseBackupManager(database, tmp_path / "backups", interval_hours=1, retention=1, on_backup=boom)
+    result = await manager.backup_now()
+    assert result.is_file()
+    assert manager.status()["last_error"] is None
+    await database.close()
+
+
 async def test_backup_manager_prunes_orphan_temp_files(tmp_path: Path) -> None:
     backups = tmp_path / "backups"
     backups.mkdir()

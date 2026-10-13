@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,6 +19,10 @@ class DatabaseBackupManager:
     Каждый backup получает собственное имя. Это безопаснее, чем перезаписывать
     один файл: при повреждении или ручной ошибке остаётся несколько точек
     восстановления, а retention ограничивает рост диска.
+
+    ``on_backup`` — опциональный sink (например, отправка файла в канал
+    Discord): каталог на хосте может умереть при пересоздании рабочей папки,
+    внешняя копия переживает. Ошибка sink не проваливает сам backup.
     """
 
     def __init__(
@@ -26,11 +31,13 @@ class DatabaseBackupManager:
         directory: str | Path,
         interval_hours: float = 24.0,
         retention: int = 7,
+        on_backup: Callable[[Path], Awaitable[None]] | None = None,
     ) -> None:
         self.database = database
         self.directory = Path(directory)
         self.interval_seconds = max(60.0, interval_hours * 3600)
         self.retention = max(1, retention)
+        self._on_backup = on_backup
         self._task: asyncio.Task[None] | None = None
         self._last_backup: Path | None = None
         self._last_error: str | None = None
@@ -81,6 +88,11 @@ class DatabaseBackupManager:
         self._last_backup = result
         self._last_error = None
         logger.info("SQLite backup создан: %s", result)
+        if self._on_backup is not None:
+            try:
+                await self._on_backup(result)
+            except Exception:
+                logger.warning("Backup создан, но не ушёл во внешнее хранилище", exc_info=True)
         return result
 
     async def _run(self) -> None:

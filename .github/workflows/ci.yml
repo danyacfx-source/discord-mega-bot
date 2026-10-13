@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install runtime deps (sha256-locked)
+        run: pip install --require-hashes -r requirements.lock
+
+      - name: Install dev deps
+        run: pip install -r requirements-dev.txt
+
+      - name: ruff
+        run: ruff check .
+
+      - name: mypy
+        run: mypy
+
+      - name: pytest
+        run: python -m pytest tests -q

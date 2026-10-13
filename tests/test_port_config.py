@@ -36,9 +36,10 @@ def test_config_new_options(tmp_path):
         "\n".join(
             [
                 "BOT_TOKEN=t",
-                "DB_BACKUP_DIR=var/backups",
-                "DB_BACKUP_INTERVAL_HOURS=12",
-                "DB_BACKUP_RETENTION=11",
+            "DB_BACKUP_DIR=var/backups",
+            "DB_BACKUP_INTERVAL_HOURS=12",
+            "DB_BACKUP_RETENTION=11",
+            "DB_BACKUP_DISCORD_CHANNEL_ID=555",
                     "API_TIMEOUT_SECONDS=37",
                     "API_PROXY=http://127.0.0.1:8080",
                 "TWITCH_CHANNELS=a,b",
@@ -108,6 +109,7 @@ def test_config_new_options(tmp_path):
     assert config.db_backup_dir == "var/backups"
     assert config.db_backup_interval_hours == 12.0
     assert config.db_backup_retention == 11
+    assert config.db_backup_discord_channel_id == 555
     assert config.twitch_channels == ("a", "b")
     assert config.temp_voice_trigger_ids == (111, 222)
     assert config.logs_ignore_channel_ids == (5,)

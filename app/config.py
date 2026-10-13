@@ -105,6 +105,7 @@ class DbConfig:
     backup_dir: str = str(_PROJECT_ROOT / "data" / "backups")
     backup_interval_hours: float = 24.0
     backup_retention: int = 7
+    backup_discord_channel_id: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -595,6 +596,7 @@ _DIRECT_PROXY = {
     "db_backup_dir": ("db", "backup_dir"),
     "db_backup_interval_hours": ("db", "backup_interval_hours"),
     "db_backup_retention": ("db", "backup_retention"),
+    "db_backup_discord_channel_id": ("db", "backup_discord_channel_id"),
     "api_timeout_seconds": ("api", "timeout_seconds"),
     "api_proxy": ("api", "proxy"),
     "api_max_concurrency": ("api", "max_concurrency"),
@@ -751,6 +753,7 @@ class Config:
                 backup_dir=os.getenv("DB_BACKUP_DIR", str(_PROJECT_ROOT / "data" / "backups")),
                 backup_interval_hours=max(1.0, float(os.getenv("DB_BACKUP_INTERVAL_HOURS", "24"))),
                 backup_retention=max(1, min(90, int(os.getenv("DB_BACKUP_RETENTION", "7")))),
+                backup_discord_channel_id=_single_int(os.getenv("DB_BACKUP_DISCORD_CHANNEL_ID")),
             ),
             panel=PanelConfig(
                 host=os.getenv("PANEL_HOST")

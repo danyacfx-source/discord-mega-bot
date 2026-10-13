@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -73,6 +74,7 @@ class MegaBot(commands.Bot):
             self.config.db_backup_dir,
             self.config.db_backup_interval_hours,
             self.config.db_backup_retention,
+            on_backup=self._upload_backup_to_discord if self.config.db_backup_discord_channel_id else None,
         )
         # Весь граф обязан ссылаться на текущий Discord-клиент. Без явной
         # передачи ``self`` composition root создаст второй MegaBot, и сервисы
@@ -102,6 +104,23 @@ class MegaBot(commands.Bot):
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
 
     # --- guard: глобальный rate-limit и kill-switch команд ---
+
+    async def _upload_backup_to_discord(self, path: Path) -> None:
+        """Backup уходит в канал Discord: файл на хосте умирает при пересоздании рабочей папки."""
+        channel_id = self.config.db_backup_discord_channel_id
+        if not channel_id:
+            return
+        size = path.stat().st_size
+        if size > 25 * 1024 * 1024:
+            logger.warning("Backup %s больше 25 МБ — в Discord не отправляем", path.name)
+            return
+        channel = self.get_channel(channel_id)
+        if channel is None:
+            channel = await self.fetch_channel(channel_id)
+        await channel.send(
+            content=f"Автоматический backup базы `{path.name}` ({size / 1024 / 1024:.1f} МБ)",
+            file=discord.File(path),
+        )
 
     async def _install_guards(self) -> None:
         """Вешает guard на дерево slash-команд и на глобальные префикс-чеки."""
