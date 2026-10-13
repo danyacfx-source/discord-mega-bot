@@ -91,37 +91,6 @@ async def test_webpanel_api_streams_watchers(make_panel_bot):
 
 
 @pytest.mark.asyncio
-async def test_webpanel_api_streams_chat(make_panel_bot):
-    bot = make_panel_bot(twitch_channels=("alice",))
-    await bot.setup_hook()
-    panel = WebPanel(bot)
-    try:
-        async with TestServer(panel._create_app()) as server:
-            async with TestClient(server) as client:
-                assert (await client.get("/api/streams/chat")).status == 401
-                headers = {"X-Panel-Token": panel._static_token or ""}
-                resp = await client.get("/api/streams/chat?n=50", headers=headers)
-                assert resp.status == 200
-                data = await resp.json()
-                assert data["ok"] is True
-                assert data["messages"] == [], "feed пуст — пустой список"
-
-                bot.services.chat_feed.push("twitch", "alice", "привет")
-                bot.services.chat_feed.push("kick", "bob", "го", is_mod=True)
-                resp = await client.get("/api/streams/chat?n=1", headers=headers)
-                data = await resp.json()
-                assert len(data["messages"]) == 1, "n=1 режет ленту"
-                assert data["messages"][-1]["name"] == "bob"
-                assert data["messages"][-1]["mod"] is True
-
-                resp = await client.get("/api/streams/chat?n=мусор", headers=headers)
-                data = await resp.json()
-                assert len(data["messages"]) == 2, "битый n — дефолтный лимит"
-    finally:
-        await bot.close()
-
-
-@pytest.mark.asyncio
 async def test_webpanel_api_streams_archive_csv(make_panel_bot):
     bot = make_panel_bot(twitch_channels=("alice",))
     await bot.setup_hook()

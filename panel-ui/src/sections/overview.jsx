@@ -37,11 +37,6 @@ function uptime(iso, now) {
   return [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
 }
 
-function chatTime(ts) {
-  const d = new Date(Number(ts) * 1000);
-  return isNaN(d.getTime()) ? "" : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-}
-
 function feedLine(ev) {
   const d = ev.data || {};
   const t = String(ev.ts || "").slice(11, 19);
@@ -128,7 +123,6 @@ export default function Overview() {
   const [ov, setOv] = useState(EMPTY);
   const [mon, setMon] = useState({ latency: [], mem: [], online: [] });
   const [streams, setStreams] = useState([]);
-  const [chat, setChat] = useState([]);
   const [feed, setFeed] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -147,23 +141,6 @@ export default function Overview() {
       if (!document.hidden) loadAll();
     }, 10000);
     return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-    async function loadChat() {
-      if (document.hidden) return;
-      const r = await api("/api/streams/chat?n=80");
-      if (alive && r.status === 200) setChat((r.data.messages || []).slice().reverse());
-    }
-    loadChat();
-    const t = setInterval(loadChat, 4000);
-    document.addEventListener("visibilitychange", loadChat);
-    return () => {
-      alive = false;
-      clearInterval(t);
-      document.removeEventListener("visibilitychange", loadChat);
-    };
   }, []);
 
   useEffect(() => {
@@ -248,54 +225,26 @@ export default function Overview() {
         />
       </div>
 
-      <div class="grid two">
-        <div class="card">
-          <div class="card-head">
-            <h3>Чат стрима</h3>
-            <span class="muted small">twitch · kick · discord — живая лента, обновление 4 с</span>
-          </div>
-          <div class="list scroll-box">
-            {chat.length === 0 && (
-              <div class="muted small">Пока тишина — сообщения появятся здесь автоматически.</div>
-            )}
-            {chat.slice(0, 40).map((m, i) => {
-              const pm = meta(m.platform);
-              return (
-                <div class="listline chatline" key={`${m.ts || ""}-${i}`}>
-                  <span class="chat-plat" style={{ background: pm.color }} title={pm.label} />
-                  <span class="grow">
-                    <b style={{ color: pm.color }}>{m.name}</b>
-                    {m.mod ? <span class="chat-mod">mod</span> : null}
-                    <span class="chat-text">{m.text}</span>
-                  </span>
-                  <span class="muted small nowrap">{chatTime(m.ts)}</span>
-                </div>
-              );
-            })}
-          </div>
+      <div class="card">
+        <div class="card-head">
+          <h3>Лента</h3>
+          <span class="muted small">живые события · стримы, донаты, ошибки, аудит</span>
         </div>
-
-        <div class="card">
-          <div class="card-head">
-            <h3>Лента</h3>
-            <span class="muted small">живые события · стримы, донаты, ошибки, аудит</span>
-          </div>
-          <div class="list scroll-box">
-            {feed.length === 0 && (
-              <div class="muted small">Событий пока нет — появятся здесь в реальном времени.</div>
-            )}
-            {feed.map((f) => (
-              <div class="listline" key={f.key}>
-                <span class={"chip " + (f.tone || "")}>
-                  <Icon name={f.icon} size={13} /> {f.tag}
-                </span>
-                <span class="grow">
-                  <div class="sub">{f.msg}</div>
-                </span>
-                <span class="muted small">{f.t}</span>
-              </div>
-            ))}
-          </div>
+        <div class="list scroll-box">
+          {feed.length === 0 && (
+            <div class="muted small">Событий пока нет — появятся здесь в реальном времени.</div>
+          )}
+          {feed.map((f) => (
+            <div class="listline" key={f.key}>
+              <span class={"chip " + (f.tone || "")}>
+                <Icon name={f.icon} size={13} /> {f.tag}
+              </span>
+              <span class="grow">
+                <div class="sub">{f.msg}</div>
+              </span>
+              <span class="muted small">{f.t}</span>
+            </div>
+          ))}
         </div>
       </div>
 

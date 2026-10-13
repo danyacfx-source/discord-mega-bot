@@ -154,20 +154,6 @@ class _ProfilesApiMixin(_BaseApi):
         rows.sort(key=lambda row: row["last_seen"], reverse=True)
         return {"enabled": enabled, "active": rows, "top": top}
 
-    async def _api_streams_chat(self, request: web.Request) -> web.Response:
-        """Последние сообщения чата всех платформ — буфер ChatFeed (память).
-
-        Лента для «Живого пульта» на обзоре: Twitch/Kick IRC, Discord — всё,
-        что уже попало в общий feed; payload лёгкий, поллинг частый.
-        """
-        raw = request.query.get("n", "100")
-        try:
-            limit = int(raw)
-        except ValueError:
-            limit = 100
-        limit = min(max(limit, 1), 300)
-        return self._json({"ok": True, "messages": self.services.chat_feed.recent(limit)})
-
     async def _api_streams_watchers(self, request: web.Request) -> web.Response:
         """Кто сейчас в чате и топ говорящих за эфир — по каждой платформе.
 

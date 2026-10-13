@@ -83,15 +83,12 @@ def test_sanitize_caps_widgets_and_clamps_boxes() -> None:
     assert first["y"] + first["h"] <= 600
 
 
-def test_sanitize_chat_widget_props() -> None:
+def test_sanitize_drops_removed_chat_widget() -> None:
     layout = sanitize_layout(
         {"widgets": [{"type": "chat", "props": {"limit": 9999, "title": "   ", "bg": "red"}}]},
         layout_id="c",
     )
-    props = layout["widgets"][0]["props"]
-    assert props["limit"] == 25, "лимит сообщений зажат верхней границей виджета"
-    assert props["title"] == "", "пустой заголовок выключает шапку виджета"
-    assert props["bg"] == ""
+    assert layout["widgets"] == [], "виджет «Лента чата» удалён — тип выпилен из схемы"
 
 
 def test_chat_titles_default_when_key_missing() -> None:
@@ -100,14 +97,14 @@ def test_chat_titles_default_when_key_missing() -> None:
         layout_id="t",
     )
     titles = [w["props"]["title"] for w in layout["widgets"]]
-    assert titles == ["Лента чата", "Топ чата", "Своя"], "без ключа — дефолт, с пустым значением — без шапки"
+    assert titles == ["Топ чата"], "остался только «Топ чата», «Лента чата» выпилен"
 
 
 def test_layout_page_renders_headers_only_when_title_set() -> None:
     html = (ROOT / "app" / "core" / "overlay" / "layout.html").read_text(encoding="utf-8")
     assert 'function h3(t){return t?"<h3>"+esc(t)+"</h3>":""}' in html
-    assert 'h3(p.title||"Лента чата")' not in html
     assert 'h3(p.title||"Топ чата")' not in html
+    assert 'w.type==="chat"' not in html, "ветка «Лента чата» выпилен из рендера"
 
 
 def test_default_layout_has_widgets() -> None:
@@ -140,7 +137,6 @@ async def test_overlay_layout_page_and_api(tmp_path) -> None:
     try:
         saved = await save_layout(bot.services.kv, default_layout("main"))  # type: ignore[union-attr]
         await save_layouts(bot.services.kv, [{"id": saved["id"], "name": saved["name"]}])  # type: ignore[union-attr]
-        bot.services.chat_feed.push("kick", "Алиса", "привет эфиру", is_mod=True)  # type: ignore[union-attr]
         async with TestServer(overlay._create_app()) as server:
             async with TestClient(server) as client:
                 headers = {"X-Overlay-Token": "overlay-secret-token-32chars"}
@@ -158,8 +154,7 @@ async def test_overlay_layout_page_and_api(tmp_path) -> None:
                 assert len(data["layout"]["widgets"]) == 4
                 assert data["data"]["donation_goal"] == {"enabled": False}
                 assert data["data"]["chat_top"] == []
-                assert data["data"]["chat"][0]["name"] == "Алиса"
-                assert data["data"]["chat"][0]["mod"] is True
+                assert "chat" not in data["data"], "лента чата удалена из payload"
                 # неизвестная раскладка — 404; старые маршруты не тронуты
                 assert (await client.get("/overlay/nope", headers=headers)).status == 404
                 assert (await client.get("/overlay/api", headers=headers)).status == 200
@@ -221,34 +216,20 @@ def test_overlay_url_base(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_overlay_page(tmp_path) -> None:
+async def test_chat_overlay_page_removed(tmp_path) -> None:
     config = _config(tmp_path, overlay_token="overlay-secret-token-32chars")
     bot = MegaBot(config)
     await bot.setup_hook()
     overlay = Overlay(bot)
     try:
-        bot.services.chat_feed.push("kick", "Алиса", "привет эфиру")  # type: ignore[union-attr]
         async with TestServer(overlay._create_app()) as server:
             async with TestClient(server) as client:
                 headers = {"X-Overlay-Token": "overlay-secret-token-32chars"}
-                # без токена — 401; маршрут /overlay/chat не перехватывается раскладкой
+                # страница ленты чата удалена: без токена — 401, с токеном — 404
                 assert (await client.get("/overlay/chat")).status == 401
-                page = await client.get("/overlay/chat", headers=headers)
-                assert page.status == 200
-                html = await page.text()
-                assert 'id="feed"' in html
-                assert "overlay-secret-token-32chars" in html
-                assert "__TOKEN__" not in html
-                # прозрачный фон: цвет ника по платформе (твич/ютуб/кик), без бейджей платформ
-                assert "--bg,transparent" in html
-                assert "#9146ff" in html and "#ff0000" in html and "#53fc18" in html
-                assert "nickColor(m.platform)" in html
-                assert ".badge" not in html
-                assert 'body class="idle"' in html
-                assert '"X-Overlay-Token"' in html
-                # общая выдача /overlay/api теперь несёт ленту чата
+                assert (await client.get("/overlay/chat", headers=headers)).status == 404
+                # общая выдача /overlay/api больше не несёт ленту чата
                 data = await (await client.get("/overlay/api", headers=headers)).json()
-                assert data["chat"][0]["name"] == "Алиса"
-                assert data["chat"][0]["text"] == "привет эфиру"
+                assert "chat" not in data
     finally:
         await bot.close()
