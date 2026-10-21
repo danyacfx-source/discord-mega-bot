@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { api } from "../api.js";
 import { navigate } from "../store.js";
 import { Icon } from "../components/icons.jsx";
+import { prepareScheduleDraft } from "../lib/schedule-draft.js";
 
 const STATUSES = {
   task: [["todo", "В очереди"], ["doing", "В работе"], ["done", "Готово"]],
@@ -16,7 +17,7 @@ const QUICK = [
   { label: "Аналитика", icon: "trending", section: "stats", desc: "Цифры сообщества" },
 ];
 
-function Item({ item, canEdit, busy, onUpdate, onDelete }) {
+function Item({ item, canEdit, busy, onUpdate, onDelete, onSchedule }) {
   return (
     <article class={"cc-entry" + (item.status === "done" || item.status === "published" ? " is-complete" : "")}>
       <div class="cc-entry-info">
@@ -28,6 +29,9 @@ function Item({ item, canEdit, busy, onUpdate, onDelete }) {
         <small>Изменено: {new Date(item.updated_at).toLocaleDateString("ru-RU")}</small>
       </div>
       <div class="cc-entry-controls">
+        <button class="btn mini cc-schedule-btn" type="button" disabled={busy}
+          aria-label={"В планировщик: " + item.title} title="Подготовить публикацию (без отправки)"
+          onClick={() => onSchedule(item)}><Icon name="clock" size={15} /> В планировщик</button>
         <label class="cc-status-control">
           <span class="sr-only">Статус записи</span>
           <select class="input" aria-label={"Статус: " + item.title} value={item.status}
@@ -102,6 +106,9 @@ export default function CommandCenter() {
     const saved = await change({ action: "update", id: item.id, ...patch });
     if (saved) setSuccess("Статус обновлён.");
   }
+  function scheduleItem(item) {
+    if (prepareScheduleDraft(item)) navigate("scheduler");
+  }
   async function remove(item) {
     if (!window.confirm("Удалить запись «" + item.title + "»?")) return;
     const saved = await change({ action: "delete", id: item.id });
@@ -164,7 +171,7 @@ export default function CommandCenter() {
           <div class="cc-entries">
             {loading ? <p class="muted">Загрузка записей…</p> : filtered.length === 0
               ? <div class="cc-empty">Здесь пока ничего нет. {canEdit ? "Создай первую запись выше." : ""}</div>
-              : filtered.map((item) => <Item key={item.id} item={item} canEdit={canEdit} busy={busy} onUpdate={update} onDelete={remove}/>)}
+              : filtered.map((item) => <Item key={item.id} item={item} canEdit={canEdit} busy={busy} onUpdate={update} onDelete={remove} onSchedule={scheduleItem}/>)}
           </div>
         </section>
 
@@ -180,7 +187,7 @@ export default function CommandCenter() {
           </div>
           <div class="cc-note">
             <span class="cc-kicker">ВАЖНО</span>
-            <p>Записи в этом разделе — внутренний план команды. Они не публикуются в Discord автоматически. Для отправки сообщений используй «Планировщик».</p>
+            <p>Записи в этом разделе — внутренний план команды. Нажми «В планировщик», чтобы подготовить публикацию. Сообщение уйдёт в Discord только после выбора канала, времени и подтверждения расписания.</p>
           </div>
         </aside>
       </div>

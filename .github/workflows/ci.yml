@@ -46,6 +46,8 @@ jobs:
           cache-dependency-path: panel-ui/package-lock.json
       - name: Install UI dependencies
         run: npm ci --no-audit --no-fund
+      - name: Test private scheduler draft transfer
+        run: node --test tests/schedule-draft.test.mjs
       - name: Build web admin (Vite)
         run: npm run build
       - name: Check compiled frontend matches source
@@ -74,5 +76,7 @@ jobs:
           name: dendich-admin-showcase-previews
           path: panel-ui/artifacts/*.png
           if-no-files-found: ignore
+
+
 
 

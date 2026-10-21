@@ -31,6 +31,9 @@ async def db(tmp_path):
 
 def _config(tmp_path, monkeypatch, **overrides) -> Config:
     monkeypatch.setenv("BOT_TOKEN", "x")
+    # Make command tests independent of CI/host chat economy overrides.
+    monkeypatch.setenv("CHAT_COMMANDS_ENABLED", "1")
+    monkeypatch.setenv("CHAT_COIN_REWARD", "5")
     for key, value in overrides.items():
         monkeypatch.setenv(key, str(value))
     config = Config.from_env(tmp_path / "absent.env")
