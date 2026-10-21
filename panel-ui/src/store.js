@@ -1,6 +1,6 @@
 import { signal } from "@preact/signals";
 
-const ACCENTS = ["#ff7eb6", "#b18cff", "#7ee8fa", "#ffd86f", "#7ee787", "#ff6b6b"];
+const ACCENTS = ["#b9a47a", "#7d8869", "#c58c59", "#e1d4b7", "#8ba6ac", "#b37d72"];
 
 export const route = signal(parseRoute());
 export const navQuery = signal("");
@@ -9,7 +9,7 @@ export const loginVisible = signal(false);
 export const authed = signal(true);
 
 export const theme = signal(localStorage.getItem("panel-theme") || "dark");
-export const accent = signal(localStorage.getItem("panel-accent") || ACCENTS[0]);
+export const accent = signal(ACCENTS.includes(localStorage.getItem("panel-accent")) ? localStorage.getItem("panel-accent") : ACCENTS[0]);
 export const ACCENT_LIST = ACCENTS;
 
 function parseRoute() {
