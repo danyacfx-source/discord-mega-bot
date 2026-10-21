@@ -18,15 +18,23 @@ function parseRoute() {
   return m ? m[1] : "overview";
 }
 
+function resetPanelScroll() {
+  // The main layout scrolls inside .scroll; changing sections should start at the top.
+  const panel = document.querySelector(".scroll");
+  if (panel) panel.scrollTop = 0;
+}
+
 export function navigate(id) {
   if (location.hash !== "#/" + id) location.hash = "#/" + id;
   route.value = id;
   navOpen.value = false;
+  resetPanelScroll();
 }
 
 window.addEventListener("hashchange", () => {
   route.value = parseRoute();
   navOpen.value = false;
+  resetPanelScroll();
 });
 
 export function applyTheme() {
