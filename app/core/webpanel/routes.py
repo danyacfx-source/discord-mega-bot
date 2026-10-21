@@ -160,6 +160,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/media", viewer(panel._api_media_add, "moderator"))
     router.add_post("/api/media/{media_id}/like", viewer(panel._api_media_like, "viewer"))
     router.add_delete("/api/media/{media_id}", viewer(panel._api_media_delete, "admin"))
+    router.add_get("/api/workboard", viewer(panel._api_workboard_get, "moderator"))
+    router.add_post("/api/workboard", viewer(panel._api_workboard_write, "admin"))
     router.add_get("/api/showcase/settings", viewer(panel._api_showcase_settings_get))
     router.add_post("/api/showcase/settings", viewer(panel._api_showcase_settings_post, "admin"))
     router.add_get("/api/public/showcase", panel._api_public_showcase)
