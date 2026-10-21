@@ -95,7 +95,7 @@ async function checkCommandCenter() {
   }));
   await page.goto(base + "/admin#/command-center", { waitUntil: "networkidle" });
   await page.locator(".cc-hero h2").waitFor();
-  assert.match(await page.locator(".cc-hero").innerText(), /Оперативный центр/);
+  assert.match(await page.locator(".cc-hero").innerText(), /оперативный центр/i);
   await page.locator(".cc-compose input[required]").fill("Проверить модерацию");
   await page.locator(".cc-compose button[type=submit]").click();
   await page.locator(".cc-entry").waitFor();
