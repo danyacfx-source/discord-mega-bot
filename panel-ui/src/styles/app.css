@@ -1,9 +1,9 @@
 /* ============================================================
-   Asuna Control Center — design system (anime edition)
+   DENDICH Control Center — base component styles
    ============================================================ */
 
 :root {
-  --accent: #ff7eb6;
+  --accent: #b9a47a;
   --accent-soft: rgba(255, 126, 182, 0.16);
   --radius: 16px;
   --radius-sm: 12px;
@@ -15,31 +15,31 @@
 }
 
 body[data-theme="dark"] {
-  --bg: #0e0a1a;
-  --bg2: #151027;
-  --card: #1a1430;
-  --card2: #221a3d;
+  --bg: #111713;
+  --bg2: #18201b;
+  --card: #202821;
+  --card2: #293229;
   --border: rgba(190, 160, 255, 0.11);
   --border-strong: rgba(190, 160, 255, 0.22);
-  --text: #f2edff;
-  --muted: #a79fc9;
-  --input: #120d24;
+  --text: #e9e2d4;
+  --muted: #aab0a2;
+  --input: #111a14;
   --glow: transparent;
-  --ok: #5cf2a8;
-  --warn: #ffd166;
-  --bad: #ff6b81;
+  --ok: #96b18a;
+  --warn: #d3a56d;
+  --bad: #c07867;
 }
 
 body[data-theme="light"] {
-  --bg: #fff7fb;
-  --bg2: #fff0f7;
+  --bg: #e9e7db;
+  --bg2: #e9e7db;
   --card: #ffffff;
-  --card2: #fff3f9;
-  --border: #ffd9ea;
-  --border-strong: #f3bfd8;
-  --text: #2b2333;
-  --muted: #8b7f9e;
-  --input: #fffafd;
+  --card2: #e9e7db;
+  --border: #e8dfce;
+  --border-strong: #b0a78e;
+  --text: #202923;
+  --muted: #627060;
+  --input: #f8f6ea;
   --glow: transparent;
   --ok: #1a9e55;
   --warn: #d9920f;
@@ -57,7 +57,7 @@ body {
   color: var(--text);
   background:
     radial-gradient(900px 520px at 88% -8%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 62%),
-    radial-gradient(760px 460px at -8% 108%, rgba(177, 140, 255, 0.14), transparent 62%),
+    radial-gradient(760px 460px at -8% 108%, rgba(125, 136, 105, 0.14), transparent 62%),
     var(--bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
@@ -150,7 +150,7 @@ kbd {
   font-size: 16px;
   border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, var(--accent), #b18cff);
+  background: linear-gradient(135deg, var(--accent), #87947c);
   box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
@@ -258,7 +258,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
   transition: 0.15s;
 }
 .seg-btn.active {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #b18cff));
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #87947c));
   border-color: transparent;
   color: #fff;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 40%, transparent);
@@ -482,7 +482,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
 .btn:hover { background: color-mix(in srgb, var(--accent) 8%, var(--card)); text-decoration: none; transform: translateY(-1px); }
 
 .btn.primary {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #b18cff));
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #87947c));
   border-color: transparent;
   color: #fff;
   box-shadow: 0 4px 16px color-mix(in srgb, var(--accent) 38%, transparent);
@@ -490,7 +490,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
 }
 .btn.primary:hover {
   filter: brightness(1.07);
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #b18cff));
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #87947c));
   transform: translateY(-1px);
   box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 48%, transparent);
 }
@@ -510,7 +510,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
   overflow: hidden;
   background:
     radial-gradient(1000px 620px at 72% 18%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 65%),
-    radial-gradient(820px 520px at 12% 88%, rgba(177, 140, 255, 0.20), transparent 62%),
+    radial-gradient(820px 520px at 12% 88%, rgba(125, 136, 105, 0.20), transparent 62%),
     var(--bg);
 }
 
@@ -519,7 +519,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
   top: -30px;
   width: 15px;
   height: 15px;
-  background: linear-gradient(135deg, #ffd9ea, #ff8fbd);
+  background: linear-gradient(135deg, #e8dfce, #ad9974);
   border-radius: 14px 0 14px 0;
   opacity: 0;
   animation: petal-fall 11s linear infinite;
@@ -557,7 +557,7 @@ nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding-right: 2px; scrollb
   font-weight: 700;
   color: #fff;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--accent), #b18cff);
+  background: linear-gradient(135deg, var(--accent), #87947c);
   box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
@@ -1330,7 +1330,7 @@ input[type="range"].range {
   font-size: 10.5px;
   letter-spacing: 0.14em;
   color: #fff;
-  background: linear-gradient(135deg, #ff5c7a, #ff3d71);
+  background: linear-gradient(135deg, #be8064, #b76552);
   padding: 4px 13px;
   border-radius: 999px;
   box-shadow: 0 0 16px rgba(255, 90, 122, 0.55);
@@ -1497,9 +1497,9 @@ input[type="range"].range {
   color: var(--text);
   background:
     radial-gradient(1100px 520px at 15% -8%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 62%),
-    radial-gradient(860px 460px at 92% 6%, color-mix(in srgb, #ffb1da 16%, transparent), transparent 58%),
+    radial-gradient(860px 460px at 92% 6%, color-mix(in srgb, #d4bea0 16%, transparent), transparent 58%),
     linear-gradient(180deg, rgba(10, 7, 26, .52), rgba(10, 7, 26, .84)),
-    url("/anime-bg.png") center / cover fixed no-repeat,
+    url("/radio-terrain.svg") center / cover fixed no-repeat,
     var(--bg);
   padding: 0 18px 34px;
 }
@@ -1507,8 +1507,8 @@ body[data-theme="light"] .sc-page {
   background:
     radial-gradient(1100px 520px at 15% -8%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 62%),
     linear-gradient(180deg, rgba(255, 247, 251, .88), rgba(255, 247, 251, .95)),
-    url("/anime-bg.png") center / cover fixed no-repeat,
-    #fff7fb;
+    url("/radio-terrain.svg") center / cover fixed no-repeat,
+    #e9e7db;
 }
 .sc-top {
   max-width: 1060px;
@@ -1567,7 +1567,7 @@ body[data-theme="light"] .sc-page {
   width: 14px;
   height: 14px;
   border-radius: 70% 30% 70% 30%;
-  background: linear-gradient(135deg, #ffb1da, color-mix(in srgb, var(--accent) 70%, #ffb1da));
+  background: linear-gradient(135deg, #d4bea0, color-mix(in srgb, var(--accent) 70%, #d4bea0));
   opacity: .5;
   animation: sc-fall 9s linear infinite;
 }
@@ -1599,7 +1599,7 @@ body[data-theme="light"] .sc-page {
   letter-spacing: .1em;
   text-transform: uppercase;
   color: #fff;
-  background: linear-gradient(135deg, #ff3d6e, #ff7eb6);
+  background: linear-gradient(135deg, #b76552, #b9a47a);
   border-radius: 999px;
   padding: 7px 14px;
   text-decoration: none;
@@ -1614,7 +1614,7 @@ body[data-theme="light"] .sc-page {
   font-size: clamp(34px, 6vw, 58px);
   line-height: 1.02;
   letter-spacing: -.03em;
-  background: linear-gradient(115deg, var(--text) 45%, color-mix(in srgb, var(--accent) 72%, #ffb1da));
+  background: linear-gradient(115deg, var(--text) 45%, color-mix(in srgb, var(--accent) 72%, #d4bea0));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1652,7 +1652,7 @@ body[data-theme="light"] .sc-page {
 }
 .sc-btn.primary {
   border: 0;
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #b18cff));
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #87947c));
   box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .sc-btn.primary:hover { box-shadow: 0 16px 36px color-mix(in srgb, var(--accent) 55%, transparent); }
@@ -1680,7 +1680,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
 .sc-stat b {
   font-size: 27px;
   letter-spacing: -.02em;
-  background: linear-gradient(120deg, var(--accent), #ffb1da);
+  background: linear-gradient(120deg, var(--accent), #d4bea0);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1707,7 +1707,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   width: 7px;
   height: 22px;
   border-radius: 5px;
-  background: linear-gradient(180deg, var(--accent), #ffb1da);
+  background: linear-gradient(180deg, var(--accent), #d4bea0);
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .sc-streams { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
@@ -1739,13 +1739,13 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   flex: none;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--card2) 70%, transparent), 0 0 12px currentColor;
 }
-.sc-stream.live { border-color: color-mix(in srgb, #ff3d6e 55%, var(--border)); box-shadow: 0 10px 30px color-mix(in srgb, #ff3d6e 20%, transparent); }
+.sc-stream.live { border-color: color-mix(in srgb, #b76552 55%, var(--border)); box-shadow: 0 10px 30px color-mix(in srgb, #b76552 20%, transparent); }
 .sc-badge-live {
   font-size: 10px;
   font-weight: 900;
   letter-spacing: .12em;
   color: #fff;
-  background: linear-gradient(135deg, #ff3d6e, #ff7eb6);
+  background: linear-gradient(135deg, #b76552, #b9a47a);
   padding: 4px 9px;
   border-radius: 7px;
   animation: sc-pulse 1.4s ease infinite;
@@ -1828,7 +1828,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   color: #fff;
   text-decoration: none;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--accent), #ff7eb6);
+  background: linear-gradient(135deg, var(--accent), #b9a47a);
   border-radius: 999px;
   padding: 7px 14px;
   box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 32%, transparent);
@@ -1847,17 +1847,17 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   border-radius: 18px;
   text-decoration: none;
   color: var(--text);
-  border: 1px solid color-mix(in srgb, #ff3d6e 55%, var(--border));
+  border: 1px solid color-mix(in srgb, #b76552 55%, var(--border));
   background:
-    linear-gradient(135deg, color-mix(in srgb, #ff3d6e 15%, transparent), transparent 70%),
+    linear-gradient(135deg, color-mix(in srgb, #b76552 15%, transparent), transparent 70%),
     color-mix(in srgb, var(--card) 60%, transparent);
-  box-shadow: 0 18px 44px color-mix(in srgb, #ff3d6e 24%, transparent);
+  box-shadow: 0 18px 44px color-mix(in srgb, #b76552 24%, transparent);
   transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
 }
 .sc-livebanner:hover {
   transform: translateY(-3px);
-  border-color: color-mix(in srgb, #ff3d6e 80%, var(--border));
-  box-shadow: 0 22px 52px color-mix(in srgb, #ff3d6e 36%, transparent);
+  border-color: color-mix(in srgb, #b76552 80%, var(--border));
+  box-shadow: 0 22px 52px color-mix(in srgb, #b76552 36%, transparent);
 }
 .sc-livebanner-img {
   width: 176px;
@@ -1867,7 +1867,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   display: block;
   background: rgba(0, 0, 0, .35);
 }
-.sc-livebanner-ph { display: grid; place-items: center; color: #ff7eb6; }
+.sc-livebanner-ph { display: grid; place-items: center; color: #b9a47a; }
 .sc-livebanner-body { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .sc-livebanner-body .sc-live { margin-bottom: 0; }
 .sc-livebanner-title {
@@ -1890,7 +1890,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #ff7eb6;
+  color: #b9a47a;
   font-weight: 800;
 }
 .sc-livebanner:hover .sc-livebanner-go { text-decoration: underline; }
@@ -1902,7 +1902,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   align-items: center;
   gap: 11px;
   padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, #ffb1da 26%, var(--border));
+  border: 1px solid color-mix(in srgb, #d4bea0 26%, var(--border));
   border-radius: 14px;
   background: color-mix(in srgb, var(--card) 56%, transparent);
   backdrop-filter: blur(12px);
@@ -1918,7 +1918,7 @@ body[data-theme="light"] .sc-stat { background: rgba(255, 255, 255, .6); }
   font-size: 12px;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, #ffb1da, var(--accent));
+  background: linear-gradient(135deg, #d4bea0, var(--accent));
 }
 .sc-donor b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-donor-sum { font-weight: 800; color: color-mix(in srgb, var(--accent) 80%, var(--text)); white-space: nowrap; }
