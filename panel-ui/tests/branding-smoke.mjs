@@ -93,9 +93,6 @@ async function checkCommandCenter() {
     status: 200, contentType: "application/json",
     body: JSON.stringify({ ok: true, permissions: { read: true, moderate: true, admin: true } }),
   }));
-  await page.route("**/api/**", route => route.fulfill({
-    status: 200, contentType: "application/json", body: JSON.stringify({}),
-  }));
   await page.goto(base + "/admin#/command-center", { waitUntil: "networkidle" });
   await page.locator(".cc-hero h2").waitFor();
   assert.match(await page.locator(".cc-hero").innerText(), /Оперативный центр/);
