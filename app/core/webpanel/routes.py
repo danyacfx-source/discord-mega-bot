@@ -34,8 +34,14 @@ async def _serve_icon(request: web.Request) -> web.Response:
     return await _serve_pwa_file(request, "icon.svg")
 
 
-async def _serve_anime_background(request: web.Request) -> web.Response:
-    return await _serve_pwa_file(request, "anime-bg.png", {"Cache-Control": "public, max-age=31536000, immutable"})
+async def _serve_radio_background(request: web.Request) -> web.Response:
+    """Новый фон DENDICH — явный маршрут, иначе aiohttp вернёт 404."""
+    return await _serve_pwa_file(request, "radio-terrain.svg", {"Cache-Control": "public, max-age=3600"})
+
+
+async def _serve_brand_version(request: web.Request) -> web.Response:
+    """Публичный маркер версии фронтенда для диагностики деплоя."""
+    return await _serve_pwa_file(request, "brand-version.json", {"Cache-Control": "no-store"})
 
 
 def register_routes(panel: Any, app: web.Application) -> None:
@@ -52,7 +58,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/manifest.webmanifest", _serve_manifest)
     router.add_get("/sw.js", _serve_sw)
     router.add_get("/icon.svg", _serve_icon)
-    router.add_get("/anime-bg.png", _serve_anime_background)
+    router.add_get("/radio-terrain.svg", _serve_radio_background)
+    router.add_get("/brand-version.json", _serve_brand_version)
     router.add_get("/logs", panel._serve_logs_page)
     router.add_get("/audit", panel._serve_audit_page)
     router.add_get("/wardogs/join", panel._wardogs_join_page)
