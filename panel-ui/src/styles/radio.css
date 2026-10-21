@@ -275,6 +275,23 @@ body[data-theme="light"] .sc-page {background:#101813;color:#ede7db;}
 .showcase-preview .sc-channel-card.sc-stream {min-height:85px;padding:12px}
 .showcase-preview .sc-section-heading h2 {font-size:24px}
 
+
+/* Remaining editor and edge-state refinements */
+.sc-editor-kicker { font:600 10px var(--mono);letter-spacing:.18em;color:var(--accent);margin-bottom:11px; }
+.sc-stat-section:not(:has(.sc-activity-panel)) { display:block; }
+.sc-stat-section:not(:has(.sc-activity-panel)) .sc-operational-stats { width:100%; }
+.sc-channel-grid .sc-channel-card:focus-visible,
+.sc-btn:focus-visible,.sc-site-nav a:focus-visible { outline:2px solid #e4d2a6;outline-offset:3px; }
+.showcase-preview .sc-state { margin:35px auto;min-height:320px; }
+@media(max-width:700px) {
+  .sc-page .sc-wordmark {gap:8px}
+  .sc-page .sc-main {min-width:0}
+  .sc-stat-section {margin-bottom:36px}
+  .showcase-preview .sc-command-content h1 {font-size:47px}
+  .showcase-preview .sc-command-content {padding:42px 16px}
+  .showcase-preview .sc-operational-stats .sc-stat b {font-size:22px}
+}
+
 /* 05 / RESPONSIVE */
 @media (max-width:1100px) {
  .topbar-radio {display:none}
