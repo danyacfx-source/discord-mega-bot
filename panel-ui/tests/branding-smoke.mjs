@@ -41,6 +41,24 @@ async function checkShowcase(width, height, file) {
   assert.equal(await page.locator(".sc-content-section").count(), 4);
   assert.equal(await page.locator(".sc-featured-live").count(), 1);
   assert.equal(await page.locator(".sc-hero-kicker").count(), 1);
+  assert.equal(await page.locator(".sc-command-emblem").count(), 0,
+    "Old overlapping logo must not cover the hero illustration");
+  const heroPhoto = await page.evaluate(async () => {
+    const bg = getComputedStyle(document.querySelector(".sc-command-hero")).backgroundImage;
+    const source = bg.match(/data:image\/webp;base64,[A-Za-z0-9+/=]+/);
+    if (!source) return { loaded: false, reason: "Missing embedded WebP source" };
+    const img = new Image();
+    img.src = source[0];
+    try {
+      await img.decode();
+      return { loaded: img.naturalWidth >= 500 && img.naturalHeight >= 200,
+        width: img.naturalWidth, height: img.naturalHeight };
+    } catch {
+      return { loaded: false, reason: "Invalid WebP image" };
+    }
+  });
+  assert.equal(heroPhoto.loaded, true,
+    "The real Showcase photo should decode correctly at " + width + "px: " + JSON.stringify(heroPhoto));
   const horizontalOverflow = await page.evaluate(() =>
     document.documentElement.scrollWidth > window.innerWidth + 3
   );
