@@ -38,6 +38,7 @@ async def test_pwa_assets_are_served(tmp_path):
                 manifest = json.loads(await resp.text())
                 assert manifest["start_url"] == "/admin"
                 assert manifest["display"] == "standalone"
+                assert manifest["short_name"] == "DENDICH"
                 assert any(icon["src"] == "/icon.svg" for icon in manifest["icons"])
 
                 # service worker: запрет кэша (no-store от security middleware, no-cache от роута)
@@ -46,7 +47,7 @@ async def test_pwa_assets_are_served(tmp_path):
                 assert resp.headers.get("Cache-Control") in ("no-cache", "no-store")
                 assert resp.headers.get("Service-Worker-Allowed") == "/"
                 body = await resp.text()
-                assert "panel-shell-v1" in body
+                assert "dendich-radio-silence-v2" in body
                 assert "cache.put" in body
 
                 # иконка
