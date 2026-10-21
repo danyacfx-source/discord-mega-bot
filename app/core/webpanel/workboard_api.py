@@ -41,7 +41,7 @@ def _read_items(raw: str | None) -> list[dict[str, Any]]:
         return []
     return [
         item for item in data[:_MAX_ITEMS]
-        if isinstance(item, dict) and item.get("type") in _TYPES
+        if isinstance(item, dict) and isinstance(item.get("type"), str) and item["type"] in _TYPES
         and isinstance(item.get("id"), str) and isinstance(item.get("title"), str)
     ]
 
@@ -73,11 +73,11 @@ class _WorkboardApiMixin(_BaseApi):
                 title = _clean_text(payload.get("title"), 120)
                 note = payload.get("note", "")
                 priority = payload.get("priority", "normal")
-                if kind not in _TYPES or title is None:
+                if not isinstance(kind, str) or kind not in _TYPES or title is None:
                     return self._json({"ok": False, "error": "Укажи тип и название (до 120 символов)"}, status=400)
                 if not isinstance(note, str) or len(note) > 2000:
                     return self._json({"ok": False, "error": "Описание не должно превышать 2000 символов"}, status=400)
-                if priority not in _PRIORITIES:
+                if not isinstance(priority, str) or priority not in _PRIORITIES:
                     return self._json({"ok": False, "error": "Некорректный приоритет"}, status=400)
                 if len(items) >= _MAX_ITEMS:
                     return self._json({"ok": False, "error": "Достигнут лимит записей"}, status=409)
@@ -109,11 +109,11 @@ class _WorkboardApiMixin(_BaseApi):
                             return self._json({"ok": False, "error": "Слишком длинное описание"}, status=400)
                         row["note"] = note.strip()
                     if "status" in payload:
-                        if payload["status"] not in _STATUSES[row["type"]]:
+                        if not isinstance(payload["status"], str) or payload["status"] not in _STATUSES[row["type"]]:
                             return self._json({"ok": False, "error": "Некорректный статус"}, status=400)
                         row["status"] = payload["status"]
                     if "priority" in payload:
-                        if payload["priority"] not in _PRIORITIES:
+                        if not isinstance(payload["priority"], str) or payload["priority"] not in _PRIORITIES:
                             return self._json({"ok": False, "error": "Некорректный приоритет"}, status=400)
                         row["priority"] = payload["priority"]
                     row["updated_at"] = now
