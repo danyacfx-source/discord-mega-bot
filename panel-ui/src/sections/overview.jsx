@@ -126,6 +126,7 @@ export default function Overview() {
   const [feed, setFeed] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [board, setBoard] = useState(null);
 
   async function loadAll() {
     const [a, b, c] = await Promise.all([api("/api/overview"), api("/api/monitor"), api("/api/streams")]);
@@ -136,6 +137,13 @@ export default function Overview() {
   }
 
   useEffect(() => {
+    (async () => {
+      const session = await api("/api/session");
+      if (session.status === 200 && session.data.permissions?.moderate) {
+        const response = await api("/api/workboard");
+        if (response.status === 200 && response.data.ok) setBoard(response.data.items || []);
+      }
+    })();
     loadAll();
     const t = setInterval(() => {
       if (!document.hidden) loadAll();
@@ -184,6 +192,23 @@ export default function Overview() {
           <button class="btn" onClick={() => navigate("audit")}>Аудит</button>
         </div>
       </div>
+
+      {board !== null ? (
+        <div class="card cc-home">
+          <div>
+            <span class="cc-kicker">DENDICH / OPERATIONS</span>
+            <h3 class="cc-home-title">План команды</h3>
+            <p class="cc-home-desc">Задачи по серверу, идеи для видео и подготовка к стримам.</p>
+            <div class="cc-home-values">
+              <span><b>{board.filter((item) => item.type === "task" && item.status !== "done").length}</b> активных задач</span>
+              <span><b>{board.filter((item) => item.type === "idea" && item.status === "ready").length}</b> идей к публикации</span>
+            </div>
+          </div>
+          <button class="btn primary" type="button" onClick={() => navigate("command-center")}>
+            <Icon name="list-check" size={16} /> Открыть центр
+          </button>
+        </div>
+      ) : null}
 
       <div class="stack">
         {live.length > 0 ? (

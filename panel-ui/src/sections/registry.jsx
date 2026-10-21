@@ -1,4 +1,5 @@
 import Overview from "./overview.jsx";
+import CommandCenter from "./command-center.jsx";
 import Placeholder from "./placeholder.jsx";
 import Server from "./server.jsx";
 import Moderation from "./moderation.jsx";
@@ -31,6 +32,7 @@ export const NAV = [
     label: "Главное",
     items: [
       { id: "overview", icon: "home", title: "Обзор", desc: "Состояние сервера и главные действия в одном месте.", Component: Overview },
+      { id: "command-center", icon: "list-check", title: "Оперативный центр", desc: "Задачи сервера, идеи для контента и быстрые действия.", Component: CommandCenter },
       { id: "showcase", icon: "globe", title: "Витрина", desc: "Публичная страница сообщества для гостей: живая статистика, эфиры и медиа.", Component: ShowcaseSection },
       { id: "server", icon: "server", title: "Сервер", desc: "Участники, каналы и голосовая активность сервера.", Component: Server },
     ],

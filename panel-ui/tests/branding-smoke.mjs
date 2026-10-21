@@ -68,11 +68,54 @@ async function checkAdmin() {
   await context.close();
 }
 
+async function checkCommandCenter() {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 850 } });
+  const page = await context.newPage();
+  page.on("pageerror", error => errors.push(error.message));
+  let board = [];
+  await page.route("**/api/workboard", async route => {
+    const req = route.request();
+    if (req.method() === "POST") {
+      const payload = req.postDataJSON();
+      if (payload.action === "create") {
+        board.unshift({ id: "a".repeat(32), type: payload.type, title: payload.title,
+          note: payload.note, priority: payload.priority, status: "todo",
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+      } else if (payload.action === "update") {
+        board = board.map(item => item.id === payload.id ? { ...item, status: payload.status } : item);
+      } else if (payload.action === "delete") {
+        board = board.filter(item => item.id !== payload.id);
+      }
+    }
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, items: board, limit: 120 }) });
+  });
+  await page.route("**/api/session", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ ok: true, permissions: { read: true, moderate: true, admin: true } }),
+  }));
+  await page.goto(base + "/admin#/command-center", { waitUntil: "networkidle" });
+  await page.locator(".cc-hero h2").waitFor();
+  assert.match(await page.locator(".cc-hero").innerText(), /оперативный центр/i);
+  await page.locator(".cc-compose input[required]").fill("Проверить модерацию");
+  await page.locator(".cc-compose button[type=submit]").click();
+  await page.locator(".cc-entry").waitFor();
+  assert.equal(await page.locator(".cc-entry").count(), 1);
+  await page.locator(".cc-entry select").selectOption("done");
+  await page.locator(".cc-entry.is-complete").waitFor();
+  await page.screenshot({ path: "artifacts/command-center-desktop.png", fullPage: true, animations: "disabled" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "artifacts/command-center-mobile.png", fullPage: true, animations: "disabled" });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 3), false,
+    "Command center overflows horizontally on phone");
+  await context.close();
+}
+
 await fs.mkdir("artifacts", { recursive: true });
 try {
   await checkShowcase(1440, 900, "showcase-desktop.png");
   await checkShowcase(390, 844, "showcase-mobile.png");
   await checkAdmin();
+  await checkCommandCenter();
   assert.equal(errors.length, 0, "Browser errors:\n" + errors.join("\n"));
   console.log("DENDICH: Showcase, admin, and mobile smoke checks passed.");
 } finally {
