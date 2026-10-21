@@ -1,5 +1,6 @@
 const P = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5M9.5 21v-6h5v6" />,
+  "list-check": <path d="M9 5h12M9 12h12M9 19h12M2.8 5l1.6 1.5L7 3.5M2.8 12l1.6 1.5L7 10.5M2.8 19l1.6 1.5L7 17.5" />,
   server: (
     <>
       <path d="M3 4.5h18v6H3zM3 13.5h18v6H3zM6.5 7.5h2M6.5 16.5h2" />
