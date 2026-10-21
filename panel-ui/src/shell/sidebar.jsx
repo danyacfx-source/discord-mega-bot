@@ -10,9 +10,9 @@ export default function Sidebar() {
       <div class="sidebar-scrim" onClick={() => (navOpen.value = false)} />
       <aside class={"sidebar" + (navOpen.value ? " open" : "")}>
         <div class="brand">
-          <span class="brand-ic">A</span>
+          <span class="brand-ic"><img src="/icon.svg" alt="" /></span>
           <span class="brand-copy">
-            Асуна Юки<small>Control center</small>
+            DENDICH<small>RADIO SILENCE / CONTROL</small>
           </span>
         </div>
 
