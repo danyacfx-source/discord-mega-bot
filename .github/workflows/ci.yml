@@ -30,3 +30,21 @@ jobs:
 
       - name: pytest
         run: python -m pytest tests -q
+
+  panel-ui:
+    name: panel-ui / build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panel-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: panel-ui/package-lock.json
+      - name: Install UI dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build web admin (Vite)
+        run: npm run build
