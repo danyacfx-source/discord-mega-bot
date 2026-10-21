@@ -88,7 +88,7 @@ export default function Sidebar() {
           <button class="link-btn" onClick={doLogout} type="button">
             Выйти
           </button>
-          <span class="badge">v2</span>
+          <span class="badge">R/S · 01</span>
         </div>
       </aside>
 
