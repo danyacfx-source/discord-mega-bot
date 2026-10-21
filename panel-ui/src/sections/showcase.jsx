@@ -39,9 +39,10 @@ export default function ShowcaseSection() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">Витрина сообщества</h3>
+        <p class="sc-editor-kicker">DENDICH / PUBLIC CHANNEL</p>
+        <h3 class="sec">Витрина RADIO SILENCE</h3>
         <p class="muted small">
-          Публичная страница для гостей — без входа в панель. Показывает живую статистику, эфиры, расписание и медиа
+          Публичная страница DENDICH — без входа в панель. Показывает живую статистику, эфиры, расписание и медиа
           с флагом «показывать на витрине».
         </p>
         <div class="two">
@@ -57,16 +58,16 @@ export default function ShowcaseSection() {
                 </a>
               </div>
             </Field>
-            <Field label="Заголовок над героем" hint="Пусто — покажется название сервера">
-              <input class="input" type="text" maxLength={120} placeholder="Наше сообщество" value={settings.hero_title} onInput={(e) => set("hero_title", e.target.value)} />
+            <Field label="Подзаголовок на главном экране" hint="Пусто — будет показано «Наше сообщество»">
+              <input class="input" type="text" maxLength={120} placeholder="Операция: Радиомолчание" value={settings.hero_title} onInput={(e) => set("hero_title", e.target.value)} />
             </Field>
             <Field label="Описание для гостей">
-              <textarea class="input" rows={3} maxLength={600} placeholder="Стримы, события и живое сообщество…" value={settings.about} onInput={(e) => set("about", e.target.value)} />
+              <textarea class="input" rows={3} maxLength={600} placeholder="Тактические игры, стримы, чат и команда на связи…" value={settings.about} onInput={(e) => set("about", e.target.value)} />
             </Field>
             <Field label="Ссылка «Вступить»" hint="Приглашение в Discord или другой канал">
               <input class="input" type="url" placeholder="https://discord.gg/…" value={settings.invite_url} onInput={(e) => set("invite_url", e.target.value)} />
             </Field>
-            <Field label="Аватар на витрине" hint="Ссылка на картинку; пусто — аватар владельца Discord">
+            <Field label="Аватар на витрине" hint="Ссылка на картинку; пусто — фирменный знак DENDICH">
               <input class="input" type="url" placeholder="https://…/avatar.png" value={settings.avatar_url} onInput={(e) => set("avatar_url", e.target.value)} />
             </Field>
             <Field label="Ссылка на донат" hint="Пусто — берётся DONATE_URL из переменных бота">
@@ -86,7 +87,7 @@ export default function ShowcaseSection() {
             </div>
           </div>
           <div class="stack">
-            <span class="field-label">Что видят гости</span>
+            <span class="field-label">Предпросмотр публичной страницы</span>
             <div class="showcase-preview">
               <ShowcasePage />
             </div>
