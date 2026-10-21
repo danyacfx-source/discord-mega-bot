@@ -1,7 +1,7 @@
 /* Service worker панели: кэширует только hash-статику /assets/*, иконку и манифест.
    HTML и /api/* никогда не кэшируются — в index подставляется токен, а API несёт данные. */
-const CACHE = "panel-shell-v1";
-const SAFE = [/^\/assets\//, /^\/icon\.svg$/, /^\/manifest\.webmanifest$/];
+const CACHE = "dendich-radio-silence-v2";
+const SAFE = [/^\/assets\//, /^\/icon\.svg$/, /^\/radio-terrain\.svg$/, /^\/manifest\.webmanifest$/];
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
