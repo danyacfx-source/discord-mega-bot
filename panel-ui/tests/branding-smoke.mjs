@@ -121,6 +121,9 @@ async function checkCommandCenter() {
   await page.screenshot({ path: "artifacts/command-center-desktop.png", fullPage: true, animations: "disabled" });
   await page.locator(".cc-schedule-btn").click();
   await page.locator(".scheduler-source").waitFor();
+  assert.equal(await page.locator(".scroll").evaluate(el => el.scrollTop), 0,
+    "Changing from workboard to scheduler must reset panel scroll");
+  await page.screenshot({ path: "artifacts/publishing-desk-draft-desktop.png", fullPage: true, animations: "disabled" });
   assert.equal(await page.locator(".scheduler-source b").innerText(), "Проверить модерацию");
   assert.equal(await page.locator('input[maxlength="256"]').inputValue(), "Проверить модерацию");
   assert.equal(await page.locator(".three select").inputValue(), "");
@@ -153,6 +156,7 @@ async function checkCommandCenter() {
   assert.equal(scheduled.length, 1);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator(".scroll").evaluate(el => { el.scrollTop = 0; });
   await page.screenshot({ path: "artifacts/publishing-desk-mobile.png", fullPage: true, animations: "disabled" });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 3), false,
     "Publishing desk overflows horizontally on phone");
