@@ -142,11 +142,6 @@ export default function ShowcasePage() {
               ) : null}
             </div>
           </div>
-          <div class="sc-command-emblem" aria-hidden="true">
-            <img src={settings.avatar_url || "/icon.svg"} alt="" />
-            <span>D / R-S</span>
-            <small>СООБЩЕСТВО НА СВЯЗИ</small>
-          </div>
           <div class="sc-command-bottom" aria-hidden="true">
             <span>TACTICAL STREAMS // OPEN FREQUENCY</span>
             <span>EST. DENDICH</span>
