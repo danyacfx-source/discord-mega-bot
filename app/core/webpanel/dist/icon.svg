@@ -1,11 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="sakura" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ff7eb6"/>
-      <stop offset="1" stop-color="#b18cff"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#151027"/>
-  <circle cx="256" cy="256" r="168" fill="url(#sakura)"/>
-  <path d="M292 116 L172 296 h68 l-34 100 124-196 h-74 z" fill="#ffffff"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="82" fill="#111713"/><path d="M121 86h152c105 0 171 67 171 169S378 426 273 426H121Zm85 76v189h63c59 0 91-34 91-95s-32-94-91-94Z" fill="#dcc9a1" fill-rule="evenodd"/><g fill="none" stroke="#e4d6b5" stroke-width="10" stroke-linecap="round"><path d="M255 203q44 52 0 105m24-129q66 76 0 151"/><path d="M221 271l-16 66m19-66 17 66m-28-27h20" stroke-width="5"/></g><circle cx="221" cy="260" r="8" fill="#e4d6b5"/></svg>

@@ -48,6 +48,13 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build web admin (Vite)
         run: npm run build
+      - name: Check compiled frontend matches source
+        run: |
+          if [ -n "$(git -C .. status --porcelain -- app/core/webpanel/dist)" ]; then
+            echo 'Prebuilt frontend is out of sync with panel-ui. Run npm run build and commit app/core/webpanel/dist.'
+            git -C .. status --short -- app/core/webpanel/dist
+            exit 1
+          fi
       - name: Install Chromium for visual smoke checks
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.1
@@ -67,3 +74,4 @@ jobs:
           name: dendich-admin-showcase-previews
           path: panel-ui/artifacts/*.png
           if-no-files-found: ignore
+
