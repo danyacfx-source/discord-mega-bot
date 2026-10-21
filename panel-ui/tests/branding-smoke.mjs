@@ -93,6 +93,22 @@ async function checkCommandCenter() {
     status: 200, contentType: "application/json",
     body: JSON.stringify({ ok: true, permissions: { read: true, moderate: true, admin: true } }),
   }));
+  let scheduled = [];
+  await page.route("**/api/bot/channels", route => route.fulfill({
+    status: 200, contentType: "application/json",
+    body: JSON.stringify({ channels: [{ id: "123456789", name: "анонсы", category: "DENDICH" }] }),
+  }));
+  await page.route("**/api/schedule", async route => {
+    if (route.request().method() === "POST") {
+      const payload = route.request().postDataJSON();
+      scheduled.push(payload);
+      await route.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ ok: true, id: 77, send_at: payload.send_at }) });
+    } else {
+      await route.fulfill({ status: 200, contentType: "application/json",
+        body: JSON.stringify({ ok: true, upcoming: [], done: [] }) });
+    }
+  });
   await page.goto(base + "/admin#/command-center", { waitUntil: "networkidle" });
   await page.locator(".cc-hero h2").waitFor();
   assert.match(await page.locator(".cc-hero").innerText(), /оперативный центр/i);
@@ -103,10 +119,43 @@ async function checkCommandCenter() {
   await page.locator(".cc-entry select").selectOption("done");
   await page.locator(".cc-entry.is-complete").waitFor();
   await page.screenshot({ path: "artifacts/command-center-desktop.png", fullPage: true, animations: "disabled" });
+  await page.locator(".cc-schedule-btn").click();
+  await page.locator(".scheduler-source").waitFor();
+  assert.equal(await page.locator(".scheduler-source b").innerText(), "Проверить модерацию");
+  assert.equal(await page.locator('input[maxlength="256"]').inputValue(), "Проверить модерацию");
+  assert.equal(await page.locator(".three select").inputValue(), "");
+  assert.equal(scheduled.length, 0, "Draft transfer must never publish or queue by itself");
+
+  // A Discord channel and a future time must be explicitly selected.
+  await page.getByRole("button", { name: "Запланировать", exact: true }).click();
+  assert.equal(scheduled.length, 0, "No destination means no scheduled post");
+  await page.locator(".three select").selectOption("123456789");
+  const due = await page.evaluate(() => {
+    const d = new Date(Date.now() + 2 * 86400000);
+    const p = v => String(v).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  });
+  await page.locator('input[type="datetime-local"]').fill(due);
+  const responsePromise = page.waitForResponse(r => r.url().endsWith("/api/schedule") && r.request().method() === "POST");
+  await page.getByRole("button", { name: "Запланировать", exact: true }).click();
+  await responsePromise;
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].channel_id, "123456789");
+  assert.equal(scheduled[0].embed.title, "Проверить модерацию");
+  assert.equal(await page.locator(".scheduler-source").count(), 0);
+  await page.screenshot({ path: "artifacts/publishing-desk-desktop.png", fullPage: true, animations: "disabled" });
+
+  // Scheduler can also pick an existing workboard record without route handoff.
+  await page.locator(".scheduler-picker select").selectOption("a".repeat(32));
+  await page.locator(".scheduler-picker button").click();
+  await page.locator(".scheduler-source").waitFor();
+  assert.equal(await page.locator('input[maxlength="256"]').inputValue(), "Проверить модерацию");
+  assert.equal(scheduled.length, 1);
+
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: "artifacts/command-center-mobile.png", fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: "artifacts/publishing-desk-mobile.png", fullPage: true, animations: "disabled" });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 3), false,
-    "Command center overflows horizontally on phone");
+    "Publishing desk overflows horizontally on phone");
   await context.close();
 }
 
