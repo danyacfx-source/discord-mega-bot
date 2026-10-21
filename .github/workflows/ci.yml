@@ -50,9 +50,9 @@ jobs:
         run: npm run build
       - name: Check compiled frontend matches source
         run: |
-          if [ -n "$(git status --porcelain -- app/core/webpanel/dist)" ]; then
+          if [ -n "$(git -C .. status --porcelain -- app/core/webpanel/dist)" ]; then
             echo 'Prebuilt frontend is out of sync with panel-ui. Run npm run build and commit app/core/webpanel/dist.'
-            git status --short -- app/core/webpanel/dist
+            git -C .. status --short -- app/core/webpanel/dist
             exit 1
           fi
       - name: Install Chromium for visual smoke checks
