@@ -11,3 +11,7 @@ __pycache__
 /logs
 tests
 *.md
+# UI is compiled by the dedicated Node builder stage
+panel-ui/node_modules/
+panel-ui/.vite/
+app/core/webpanel/dist/
