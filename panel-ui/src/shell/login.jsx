@@ -39,8 +39,8 @@ export default function Login() {
         <span class="petal" style={{ left, animationDelay: delay }} />
       ))}
       <form class="login-card" onSubmit={submit}>
-        <div class="login-logo">A</div>
-        <h2>Асуна Юки</h2>
+        <div class="login-logo"><img src="/icon.svg" alt="" /></div>
+        <h2>DENDICH / CONTROL</h2><p class="login-tagline">Связь есть. Плана нет.</p>
         {PASSWORD_LOGIN ? (
           <>
             <p class="login-sub muted">Введите пароль, чтобы продолжить</p>
