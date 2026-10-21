@@ -11,6 +11,7 @@ export default function Topbar() {
           <Icon name="menu" size={18} />
         </button>
         <div class="topbar-title">
+          <div class="topbar-kicker">DENDICH <span>/</span> ADMIN CONSOLE</div>
           <h1>
             <Icon name={sec.icon} size={19} />
             {sec.title}
@@ -18,6 +19,7 @@ export default function Topbar() {
           <p class="topbar-desc muted">{sec.desc}</p>
         </div>
       </div>
+      <div class="topbar-radio" aria-label="DENDICH Radio Silence"><span class="radio-dot" aria-hidden="true" /> <b>RADIO SILENCE</b><em>/</em> ПАНЕЛЬ УПРАВЛЕНИЯ</div>
     </header>
   );
 }

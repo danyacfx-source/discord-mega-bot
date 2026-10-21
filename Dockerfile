@@ -1,3 +1,12 @@
+# Build the Vite/Preact web panel from source for every Docker deployment.
+# The repository may contain older checked-in dist files; never serve those in a fresh image.
+FROM node:22-alpine AS panel-builder
+WORKDIR /frontend/panel-ui
+COPY panel-ui/package.json panel-ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY panel-ui/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -31,6 +40,10 @@ COPY requirements.txt requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
+
+# Replace the tracked legacy bundle with the just-built Radio Silence UI.
+RUN rm -rf /app/app/core/webpanel/dist
+COPY --from=panel-builder /frontend/app/core/webpanel/dist /app/app/core/webpanel/dist
 
 RUN sed -i 's/\r$//' /app/scripts/docker-entrypoint.sh \
     && chmod +x /app/scripts/docker-entrypoint.sh \
