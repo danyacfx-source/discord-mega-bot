@@ -48,3 +48,22 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build web admin (Vite)
         run: npm run build
+      - name: Install Chromium for visual smoke checks
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Test desktop and mobile views
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/dendich-preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173/showcase >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/branding-smoke.mjs
+      - name: Save UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dendich-admin-showcase-previews
+          path: panel-ui/artifacts/*.png
+          if-no-files-found: ignore
