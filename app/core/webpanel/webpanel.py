@@ -44,6 +44,7 @@ from app.core.webpanel.showcase_api import _ShowcaseApiMixin
 from app.core.webpanel.status_api import _StatusApiMixin
 from app.core.webpanel.tools_api import _ToolsApiMixin
 from app.core.webpanel.uploads_api import _UploadsApiMixin
+from app.core.webpanel.workboard_api import _WorkboardApiMixin
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
 
 if TYPE_CHECKING:
@@ -66,6 +67,7 @@ class WebPanel(
     _ToolsApiMixin,
     _MediaApiMixin,
     _ShowcaseApiMixin,
+    _WorkboardApiMixin,
     _BaseApi,
 ):
     def __init__(self, bot: MegaBot) -> None:
@@ -130,6 +132,7 @@ class WebPanel(
         self._events_task: asyncio.Task[None] | None = None
         self._event_clients: set[asyncio.Queue[dict[str, Any]]] = set()
         self._events_seq: int = 0
+        self._workboard_lock = asyncio.Lock()
 
     # --- жизненный цикл ---
 
