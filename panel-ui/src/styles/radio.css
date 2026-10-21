@@ -424,3 +424,26 @@ body[data-theme="light"] .sc-page {background:#101813;color:#ede7db;}
 @media(max-width:1110px){.cc-layout{grid-template-columns:1fr}.cc-links-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.cc-hero{padding:25px 17px}.cc-hero:after{display:none}.cc-overview{gap:8px}.cc-overview>div{display:block}.cc-overview b{font-size:32px;display:block;margin-bottom:4px}.cc-layout>.card{padding:17px}.cc-entry{flex-direction:column;align-items:stretch}.cc-entry-controls{justify-content:space-between}.cc-entry-controls select{max-width:none}.cc-links-grid{grid-template-columns:1fr}.cc-toolbar{align-items:stretch}.cc-search{max-width:none;width:100%}}
 @media(prefers-reduced-motion:reduce){.cc-nav-card,.cc-entry{transition:none}}
+
+
+/* PUBLISHING DESK — Command Center → Discord scheduler */
+.scheduler-workflow{position:relative;overflow:hidden;border:1px solid var(--border-strong)}
+.scheduler-workflow:before{content:"PUBLISHING / RS-03";position:absolute;right:20px;top:16px;font:500 9px var(--mono);letter-spacing:.11em;color:var(--muted);opacity:.55;pointer-events:none}
+.scheduler-workflow>.card-head{padding-right:140px}
+.scheduler-workflow>.muted{display:block;line-height:1.7;margin:10px 0 15px}
+.scheduler-workflow .cc-kicker{font-size:9px;margin-bottom:6px}
+.scheduler-picker{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-top:15px}
+.scheduler-picker>label{display:flex;flex:1;flex-direction:column;gap:8px;min-width:215px}
+.scheduler-picker .field-label{font-size:11px;font-weight:600;color:var(--muted)}
+.scheduler-picker select{width:100%;min-height:42px}
+.scheduler-picker button{display:flex;gap:7px;align-items:center;min-height:42px}
+.scheduler-source{display:flex;align-items:center;gap:13px;background:color-mix(in srgb,var(--accent) 11%,var(--card));border:1px solid var(--border-strong);border-radius:9px;padding:14px 16px;margin-top:14px;min-width:0}
+.scheduler-source>.icn{color:var(--accent);flex:none}
+.scheduler-source>.grow{display:flex;flex-direction:column;gap:5px;min-width:0;overflow-wrap:anywhere}
+.scheduler-source small{font:500 10px var(--mono);letter-spacing:.07em;color:var(--muted)}
+.scheduler-source b{font-size:13px}
+.scheduler-source button{flex:none}
+.cc-schedule-btn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;border:1px solid var(--border-strong);background:var(--card);color:var(--accent);font-size:11px;border-radius:7px;min-height:34px}
+.cc-schedule-btn:hover{border-color:var(--accent)}
+@media(max-width:1050px){.cc-entry-controls{flex-wrap:wrap}.cc-status-control{flex:1}}
+@media(max-width:700px){.scheduler-workflow>.card-head{padding-right:0}.scheduler-workflow:before{display:none}.scheduler-picker{align-items:stretch}.scheduler-picker>label{min-width:100%}.scheduler-picker button{justify-content:center;width:100%}.scheduler-source{flex-wrap:wrap}.scheduler-source>.grow{flex-basis:calc(100% - 35px)}.scheduler-source button{margin-left:auto}.cc-schedule-btn{flex:1;justify-content:center}}
