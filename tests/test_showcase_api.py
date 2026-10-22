@@ -112,6 +112,28 @@ async def test_public_showcase_and_settings(tmp_path):
                 }]
                 assert body["donors"] == []
 
+                # Текущий эфир заменяет ссылку на канал ссылкой на watch-видео.
+                video_id = "Abc_123-xYz"
+                await bot.services.kv.set("stream:youtube:active", video_id)
+                await bot.services.kv.set("stream:session:youtube:dendosich", __import__("json").dumps({
+                    "url": f"https://www.youtube.com/watch?v={video_id}",
+                    "title": "Squad — прямой эфир",
+                    "viewers": 43,
+                    "thumbnail": "https://i.ytimg.com/test.jpg",
+                    "captured_at": "2026-10-22T19:00:00+00:00",
+                }))
+                resp = await client.get("/api/public/showcase")
+                live = (await resp.json())["streams"][0]
+                assert live["live"] is True
+                assert live["url"] == f"https://www.youtube.com/watch?v={video_id}"
+                assert live["viewers"] == 43
+
+                await bot.services.kv.delete("stream:youtube:active")
+                resp = await client.get("/api/public/showcase")
+                offline = (await resp.json())["streams"][0]
+                assert offline["live"] is False
+                assert offline["url"] == "https://www.youtube.com/@Dendosich"
+
                 # настройки читаются и под авторизацией
                 resp = await client.get("/api/showcase/settings", headers=headers)
                 body = await resp.json()
