@@ -62,8 +62,10 @@ def probe_youtube_live(channel_url: str) -> dict[str, Any] | None:
         "socket_timeout": 18,
         "retries": 1,
         "extractor_retries": 1,
+        "ignore_no_formats_error": True,
     }
     with YoutubeDL(options) as ydl:
-        # process=False avoids resolving/downloading formats just to check LIVE.
-        info = ydl.extract_info(live_url, download=False, process=False)
+        # Resolve /live redirects to the actual video so live_status is available.
+        # This extracts metadata only; no video is downloaded.
+        info = ydl.extract_info(live_url, download=False)
     return parse_youtube_live(info)
