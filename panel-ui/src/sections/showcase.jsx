@@ -5,7 +5,7 @@ import { Icon } from "../components/icons.jsx";
 import ShowcasePage from "../showcase-page.jsx";
 
 export default function ShowcaseSection() {
-  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "", donate_url: "", donors_enabled: "1" });
+  const [settings, setSettings] = useState({ hero_title: "", about: "", invite_url: "", avatar_url: "", donate_url: "", youtube_url: "", donors_enabled: "1" });
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const url = location.origin + "/showcase";
@@ -72,6 +72,9 @@ export default function ShowcaseSection() {
             </Field>
             <Field label="Ссылка на донат" hint="Пусто — берётся DONATE_URL из переменных бота">
               <input class="input" type="url" placeholder="https://donatty.com/…" value={settings.donate_url} onInput={(e) => set("donate_url", e.target.value)} />
+            </Field>
+            <Field label="Канал YouTube" hint="Видео и записи появятся отдельной карточкой на витрине; статус прямого эфира для YouTube не показываем">
+              <input class="input" type="url" maxLength={300} placeholder="https://www.youtube.com/@ваш_канал" value={settings.youtube_url || ""} onInput={(e) => set("youtube_url", e.target.value)} />
             </Field>
             <Field label="Топ донатёров" hint="Блок «Меценаты» на публичной странице (ник и сумма)">
               <label class="row-inline">
