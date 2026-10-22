@@ -268,15 +268,28 @@ class _ShowcaseApiMixin(_BaseApi):
         }
         data["streams"] = await self._showcase_streams()
         if data["settings"]["youtube_url"]:
+            # Active marker is deleted immediately on offline; cached session
+            # remains available for history without showing a false LIVE badge.
+            youtube_active = await self.services.kv.get("stream:youtube:active")
+            session = None
+            if youtube_active:
+                from app.services.stream_session import StreamSessionStore
+
+                session = await StreamSessionStore(
+                    self.services.kv, "stream:session:youtube:dendosich"
+                ).load()
+            is_live = bool(
+                youtube_active and session and session.get("url", "").endswith(youtube_active)
+            )
             data["streams"].append({
                 "platform": "youtube",
-                "label": "YouTube · видео и записи",
-                "url": data["settings"]["youtube_url"],
-                "live": False,
-                "content_only": True,
-                "title": "",
-                "viewers": 0,
-                "thumbnail": "",
+                "label": "YouTube · @Dendosich",
+                "url": str(session["url"]) if is_live else data["settings"]["youtube_url"],
+                "live": is_live,
+                "content_only": not is_live,
+                "title": str(session.get("title") or "") if is_live else "",
+                "viewers": int(session.get("viewers") or 0) if is_live else 0,
+                "thumbnail": str(session.get("thumbnail") or "") if is_live else "",
             })
         data["schedule"] = await self._showcase_schedule()
         data["media"] = await self._showcase_media()
