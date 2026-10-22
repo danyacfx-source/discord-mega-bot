@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 import discord
 from aiohttp import web
@@ -25,6 +26,7 @@ _SHOWCASE_DEFAULTS = {
     "invite_url": "",
     "avatar_url": "",
     "donate_url": "",
+    "youtube_url": "",
     "donors_enabled": "1",
 }
 _SHOWCASE_MEDIA_LIMIT = 8
@@ -36,8 +38,24 @@ _SHOWCASE_TEXT_LIMITS = {
     "invite_url": 300,
     "avatar_url": 300,
     "donate_url": 300,
+    "youtube_url": 300,
     "donors_enabled": 1,
 }
+
+
+def _valid_youtube_url(url: str) -> bool:
+    """Only direct HTTPS links to a YouTube channel/profile are accepted."""
+    if not url:
+        return True
+    try:
+        parsed = urlsplit(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in {"youtube.com", "www.youtube.com", "m.youtube.com"}
+            and bool(parsed.path.strip("/"))
+        )
+    except ValueError:
+        return False
 
 
 class _ShowcaseApiMixin(_BaseApi):
@@ -59,6 +77,8 @@ class _ShowcaseApiMixin(_BaseApi):
         for key in ("invite_url", "avatar_url", "donate_url"):
             if settings[key] and not settings[key].startswith(("https://", "http://")):
                 settings[key] = ""
+        if not _valid_youtube_url(settings["youtube_url"]):
+            settings["youtube_url"] = ""
         return settings
 
     async def _owner_avatar(self) -> str:
@@ -91,6 +111,8 @@ class _ShowcaseApiMixin(_BaseApi):
         for key in ("invite_url", "avatar_url", "donate_url"):
             if settings[key] and not settings[key].startswith(("https://", "http://")):
                 return self._json({"ok": False, "error": "Ссылка должна начинаться с http"}, status=400)
+        if not _valid_youtube_url(settings["youtube_url"]):
+            return self._json({"ok": False, "error": "Укажи HTTPS-ссылку на канал YouTube"}, status=400)
         if "donors_enabled" in payload:
             settings["donors_enabled"] = "1" if payload.get("donors_enabled") in (True, "1", 1, "true") else ""
         await self.services.kv.set(_SHOWCASE_KEY, json.dumps(settings, ensure_ascii=False))
@@ -245,6 +267,17 @@ class _ShowcaseApiMixin(_BaseApi):
             "by_day": list(self._msg_by_day)[-7:],
         }
         data["streams"] = await self._showcase_streams()
+        if data["settings"]["youtube_url"]:
+            data["streams"].append({
+                "platform": "youtube",
+                "label": "YouTube · видео и записи",
+                "url": data["settings"]["youtube_url"],
+                "live": False,
+                "content_only": True,
+                "title": "",
+                "viewers": 0,
+                "thumbnail": "",
+            })
         data["schedule"] = await self._showcase_schedule()
         data["media"] = await self._showcase_media()
         return self._json(data)
