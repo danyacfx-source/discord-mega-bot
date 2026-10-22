@@ -43,6 +43,19 @@ async function checkShowcase(width, height, file) {
   assert.equal(await youtube.count(), 1, "YouTube must be visible as a channel card");
   assert.match(await youtube.innerText(), /ВИДЕО/);
   assert.doesNotMatch(await youtube.innerText(), /ОФЛАЙН/);
+  // YouTube automatically changes from the archive card to a real LIVE link.
+  const videoUrl = "https://www.youtube.com/watch?v=Abc_123-xYz";
+  const liveSample = { ...sample, streams: sample.streams.map(s =>
+    s.platform === "youtube" ? { ...s, url: videoUrl, live: true, content_only: false, title: "Squad в эфире" } : s
+  ) };
+  await page.route("**/api/public/showcase", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(liveSample) })
+  );
+  await page.reload({ waitUntil: "networkidle" });
+  const liveYoutube = page.locator('.sc-channel-card[href="' + videoUrl + '"]');
+  assert.equal(await liveYoutube.count(), 1);
+  assert.match(await liveYoutube.innerText(), /В ЭФИРЕ/);
+  assert.match(await liveYoutube.innerText(), /Идёт прямой эфир/);
   assert.equal(await page.locator(".sc-operational-stats .sc-stat").count(), 3);
   assert.equal(await page.locator(".sc-content-section").count(), 4);
   assert.equal(await page.locator(".sc-featured-live").count(), 1);
