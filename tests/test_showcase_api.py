@@ -47,6 +47,7 @@ async def test_public_showcase_and_settings(tmp_path):
                 assert body["ok"]
                 assert body["settings"]["hero_title"] == ""
                 assert body["settings"]["donors_enabled"] == "1"
+                assert body["settings"]["youtube_url"] == ""
                 assert body["stats"]["messages_total"] == 0
                 assert body["streams"] == []
                 assert body["schedule"] == []
@@ -63,6 +64,7 @@ async def test_public_showcase_and_settings(tmp_path):
                         "hero_title": "Асуна Юки",
                         "about": "Проект",
                         "invite_url": "https://discord.gg/x",
+                        "youtube_url": "https://www.youtube.com/@dendich",
                         "donors_enabled": False,
                     },
                     headers=headers,
@@ -71,6 +73,7 @@ async def test_public_showcase_and_settings(tmp_path):
                 body = await resp.json()
                 assert body["ok"] and body["settings"]["hero_title"] == "Асуна Юки"
                 assert body["settings"]["donors_enabled"] == ""
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@dendich"
 
                 # невалидная ссылка отклоняется
                 resp = await client.post(
@@ -79,6 +82,13 @@ async def test_public_showcase_and_settings(tmp_path):
                     headers=headers,
                 )
                 assert resp.status == 400
+                for invalid_url in ("https://example.org/@dendich", "javascript:alert(1)", "https://youtube.com/"):
+                    resp = await client.post(
+                        "/api/showcase/settings",
+                        json={"youtube_url": invalid_url},
+                        headers=headers,
+                    )
+                    assert resp.status == 400
 
                 # публичный payload подхватил настройки
                 resp = await client.get("/api/public/showcase")
@@ -86,6 +96,17 @@ async def test_public_showcase_and_settings(tmp_path):
                 assert body["settings"]["hero_title"] == "Асуна Юки"
                 assert body["settings"]["invite_url"] == "https://discord.gg/x"
                 assert body["settings"]["donors_enabled"] == ""
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@dendich"
+                assert body["streams"] == [{
+                    "platform": "youtube",
+                    "label": "YouTube · видео и записи",
+                    "url": "https://www.youtube.com/@dendich",
+                    "live": False,
+                    "content_only": True,
+                    "title": "",
+                    "viewers": 0,
+                    "thumbnail": "",
+                }]
                 assert body["donors"] == []
 
                 # настройки читаются и под авторизацией
