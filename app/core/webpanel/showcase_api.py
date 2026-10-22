@@ -26,7 +26,7 @@ _SHOWCASE_DEFAULTS = {
     "invite_url": "",
     "avatar_url": "",
     "donate_url": "",
-    "youtube_url": "",
+    "youtube_url": "https://www.youtube.com/@Dendosich",
     "donors_enabled": "1",
 }
 _SHOWCASE_MEDIA_LIMIT = 8
