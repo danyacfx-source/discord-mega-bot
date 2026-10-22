@@ -47,9 +47,12 @@ async def test_public_showcase_and_settings(tmp_path):
                 assert body["ok"]
                 assert body["settings"]["hero_title"] == ""
                 assert body["settings"]["donors_enabled"] == "1"
-                assert body["settings"]["youtube_url"] == ""
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@Dendosich"
                 assert body["stats"]["messages_total"] == 0
-                assert body["streams"] == []
+                assert len(body["streams"]) == 1
+                assert body["streams"][0]["platform"] == "youtube"
+                assert body["streams"][0]["url"] == "https://www.youtube.com/@Dendosich"
+                assert body["streams"][0]["content_only"] is True
                 assert body["schedule"] == []
                 assert body["media"] == []
                 assert body["donors"] == []
@@ -64,7 +67,7 @@ async def test_public_showcase_and_settings(tmp_path):
                         "hero_title": "Асуна Юки",
                         "about": "Проект",
                         "invite_url": "https://discord.gg/x",
-                        "youtube_url": "https://www.youtube.com/@dendich",
+                        "youtube_url": "https://www.youtube.com/@Dendosich",
                         "donors_enabled": False,
                     },
                     headers=headers,
@@ -73,7 +76,7 @@ async def test_public_showcase_and_settings(tmp_path):
                 body = await resp.json()
                 assert body["ok"] and body["settings"]["hero_title"] == "Асуна Юки"
                 assert body["settings"]["donors_enabled"] == ""
-                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@dendich"
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@Dendosich"
 
                 # невалидная ссылка отклоняется
                 resp = await client.post(
@@ -96,11 +99,11 @@ async def test_public_showcase_and_settings(tmp_path):
                 assert body["settings"]["hero_title"] == "Асуна Юки"
                 assert body["settings"]["invite_url"] == "https://discord.gg/x"
                 assert body["settings"]["donors_enabled"] == ""
-                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@dendich"
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@Dendosich"
                 assert body["streams"] == [{
                     "platform": "youtube",
                     "label": "YouTube · видео и записи",
-                    "url": "https://www.youtube.com/@dendich",
+                    "url": "https://www.youtube.com/@Dendosich",
                     "live": False,
                     "content_only": True,
                     "title": "",
@@ -130,5 +133,6 @@ async def test_showcase_corrupt_settings_degrade(tmp_path):
                 assert resp.status == 200
                 body = await resp.json()
                 assert body["ok"] and body["settings"]["hero_title"] == ""
+                assert body["settings"]["youtube_url"] == "https://www.youtube.com/@Dendosich"
     finally:
         await bot.close()
