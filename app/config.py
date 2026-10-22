@@ -171,6 +171,7 @@ class StreamConfig:
     kick_chat_send_as_user: bool = False
 
     # YouTube LIVE
+    youtube_api_key: str | None = None
     youtube_notify_channel_id: int | None = None
     youtube_ping_role_id: int | None = None
     youtube_poll_seconds: float = 300.0
@@ -442,6 +443,7 @@ _STREAM_FIELDS = {
     "kick_chat_auto_link": "kick_chat_auto_link",
     "kick_chat_link_text": "kick_chat_link_text",
     "kick_chat_send_as_user": "kick_chat_send_as_user",
+    "youtube_api_key": "youtube_api_key",
     "youtube_notify_channel_id": "youtube_notify_channel_id",
     "youtube_ping_role_id": "youtube_ping_role_id",
     "youtube_poll_seconds": "youtube_poll_seconds",
@@ -816,6 +818,7 @@ class Config:
                 kick_chat_send_as_user=_bool(os.getenv("KICK_CHAT_SEND_AS_USER")),
                 kick_pusher_app_key=os.getenv("KICK_PUSHER_APP_KEY", "32cbd69e4b950bf97679"),
                 kick_pusher_host=os.getenv("KICK_PUSHER_HOST", "ws-us2.pusher.com"),
+                youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
                 youtube_notify_channel_id=_single_int(os.getenv("YOUTUBE_NOTIFY_CHANNEL_ID")),
                 youtube_ping_role_id=_single_int(os.getenv("YOUTUBE_PING_ROLE_ID")),
                 youtube_poll_seconds=max(120.0, float(os.getenv("YOUTUBE_POLL_SECONDS", "300"))),
