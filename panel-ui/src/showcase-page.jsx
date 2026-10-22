@@ -192,7 +192,7 @@ export default function ShowcasePage() {
             <div class="sc-streams sc-channel-grid">
               {streams.map((s) => {
                 const p = PLATFORM[s.platform] || { label: s.platform, color: "var(--accent)" };
-                const videoArchive = s.platform === "youtube" || !!s.content_only;
+                const videoArchive = !!s.content_only && !s.live;
                 return (
                   <a class={"sc-stream sc-channel-card" + (s.live ? " live" : "")} key={s.url} href={s.url} target="_blank" rel="noopener noreferrer">
                     <span class="sc-channel-symbol"><Icon name={videoArchive ? "film" : "monitor"} size={24}/></span>
