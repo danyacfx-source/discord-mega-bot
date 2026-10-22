@@ -13,13 +13,15 @@ const sample = {
     hero_title: "Тактическое сообщество",
     about: "Игровые стримы Arma Reforger, WARDOGS, юмор и связь с чатом.",
     invite_url: "https://discord.gg/example",
+    youtube_url: "https://www.youtube.com/@Dendosich",
     donate_url: "https://example.org/donations",
     avatar_url: ""
   },
   stats: { by_day: [{ n: 3 }, { n: 5 }, { n: 2 }, { n: 8 }, { n: 6 }] },
   streams: [
     { platform: "twitch", url: "https://www.twitch.tv/dendich", live: true, title: "Arma Reforger — в бой", viewers: 58 },
-    { platform: "kick", url: "https://kick.com/dendich", live: false }
+    { platform: "kick", url: "https://kick.com/dendich", live: false },
+    { platform: "youtube", url: "https://www.youtube.com/@Dendosich", live: false, content_only: true }
   ],
   schedule: [{ title: "Сбор сообщества", send_at: "2026-10-23 20:00:00" }],
   media: [{ id: 1, title: "Наши моменты", url: "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E" }],
@@ -36,7 +38,11 @@ async function checkShowcase(width, height, file) {
   await page.goto(base + "/showcase", { waitUntil: "networkidle" });
   await page.locator(".sc-command-content h1").waitFor();
   assert.match(await page.locator(".sc-command-content h1").innerText(), /DENDICH/);
-  assert.equal(await page.locator(".sc-channel-card").count(), 2);
+  assert.equal(await page.locator(".sc-channel-card").count(), 3);
+  const youtube = page.locator('.sc-channel-card[href="https://www.youtube.com/@Dendosich"]');
+  assert.equal(await youtube.count(), 1, "YouTube must be visible as a channel card");
+  assert.match(await youtube.innerText(), /ВИДЕО/);
+  assert.doesNotMatch(await youtube.innerText(), /ОФЛАЙН/);
   assert.equal(await page.locator(".sc-operational-stats .sc-stat").count(), 3);
   assert.equal(await page.locator(".sc-content-section").count(), 4);
   assert.equal(await page.locator(".sc-featured-live").count(), 1);

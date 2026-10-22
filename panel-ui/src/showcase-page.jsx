@@ -14,6 +14,7 @@ function fmtDonation(total, currency) {
 const PLATFORM = {
   twitch: { label: "Twitch", color: "#9146ff" },
   kick: { label: "Kick", color: "#53fc18" },
+  youtube: { label: "YouTube", color: "#c9af84" },
   vk_video: { label: "VK Видео", color: "#0077ff" },
 };
 
@@ -191,11 +192,12 @@ export default function ShowcasePage() {
             <div class="sc-streams sc-channel-grid">
               {streams.map((s) => {
                 const p = PLATFORM[s.platform] || { label: s.platform, color: "var(--accent)" };
+                const videoArchive = s.platform === "youtube" || !!s.content_only;
                 return (
                   <a class={"sc-stream sc-channel-card" + (s.live ? " live" : "")} key={s.url} href={s.url} target="_blank" rel="noopener noreferrer">
-                    <span class="sc-channel-symbol"><Icon name="monitor" size={24}/></span>
-                    <span class="sc-channel-body"><span class="sc-channel-type">ПЛАТФОРМА / {p.label}</span><b>{p.label}</b><small>{s.live ? "Идёт прямой эфир" : "Следи за следующими трансляциями"}</small></span>
-                    <span class={"sc-channel-state" + (s.live ? " is-live" : "")}>{s.live ? "● В ЭФИРЕ" : "○ ОФЛАЙН"}</span>
+                    <span class="sc-channel-symbol"><Icon name={videoArchive ? "film" : "monitor"} size={24}/></span>
+                    <span class="sc-channel-body"><span class="sc-channel-type">ПЛАТФОРМА / {p.label}</span><b>{p.label}</b><small>{videoArchive ? "Записи операций, нарезки и лучшие моменты" : s.live ? "Идёт прямой эфир" : "Следи за следующими трансляциями"}</small></span>
+                    <span class={"sc-channel-state" + (s.live && !videoArchive ? " is-live" : "")}>{videoArchive ? "▶ ВИДЕО" : s.live ? "● В ЭФИРЕ" : "○ ОФЛАЙН"}</span>
                     <Icon name="chevron-right" size={18}/>
                   </a>
                 );
