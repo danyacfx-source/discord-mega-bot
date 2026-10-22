@@ -102,7 +102,7 @@ async def test_public_showcase_and_settings(tmp_path):
                 assert body["settings"]["youtube_url"] == "https://www.youtube.com/@Dendosich"
                 assert body["streams"] == [{
                     "platform": "youtube",
-                    "label": "YouTube · видео и записи",
+                    "label": "YouTube · @Dendosich",
                     "url": "https://www.youtube.com/@Dendosich",
                     "live": False,
                     "content_only": True,
