@@ -6,14 +6,10 @@ API key передаётся только в заголовке X-Goog-Api-Key, 
 """
 from __future__ import annotations
 
-import asyncio
-import logging
 from time import monotonic
 from typing import Any
 
 import aiohttp
-
-logger = logging.getLogger("bot.cogs")
 
 _API = "https://www.googleapis.com/youtube/v3/"
 _SEARCH_INTERVAL_SECONDS = 1200.0
