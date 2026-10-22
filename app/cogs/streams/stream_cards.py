@@ -27,21 +27,25 @@ _HEX_RE = re.compile(r"#?([0-9a-fA-F]{6})\Z")
 _COLORS = {
     "twitch": discord.Color(0x9146FF),
     "kick": discord.Color(0x53FC18),
+    "youtube": discord.Color(0xC9AF84),
     "vk_video": discord.Color(0x0077FF),
 }
 _LABELS = {
     "twitch": "Twitch",
     "kick": "Kick",
+    "youtube": "YouTube",
     "vk_video": "VK Видео",
 }
 _LIVE_TITLES = {
     "twitch": "🔴 Twitch: стрим идёт",
     "kick": "🔴 Kick: стрим идёт",
+    "youtube": "🔴 YouTube: стрим идёт",
     "vk_video": "🔴 VK Видео: трансляция идёт",
 }
 _OFFLINE_TITLES = {
     "twitch": "📺 Twitch: стрим завершён",
     "kick": "📺 Kick: стрим завершён",
+    "youtube": "📺 YouTube: стрим завершён",
     "vk_video": "📺 VK Видео: трансляция завершена",
 }
 
