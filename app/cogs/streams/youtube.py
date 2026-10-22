@@ -17,6 +17,7 @@ from app.cogs.streams.stream_announce import pin_sticky, unpin_sticky
 from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.core.base import MegaCog, wait_ready_or_stop
 from app.services.stream_session import StreamSessionStore
+from app.services.youtube_data_api import YouTubeDataAPI
 from app.services.youtube_live import probe_youtube_live
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class YouTubeCog(MegaCog, name="YouTubeMonitor"):
     def __init__(self, bot: MegaBot) -> None:
         super().__init__(bot)
         self._guard = PollGuard()
+        self._api = YouTubeDataAPI()
 
     async def cog_load(self) -> None:
         self.poll_loop.change_interval(seconds=self.bot.config.youtube_poll_seconds)
@@ -96,11 +98,17 @@ class YouTubeCog(MegaCog, name="YouTubeMonitor"):
         if not url:
             await self._offline()
             return
-        try:
-            status = await asyncio.to_thread(probe_youtube_live, url)
-        except UserNotLive:
-            status = None
-        # Other errors must propagate: a failed request is NOT proof a stream ended.
+        if self.bot.config.youtube_api_key:
+            status = await self._api.channel_status(
+                self.bot.config.youtube_api_key,
+                active_video_id=str(await self.services.kv.get(_ACTIVE) or ""),
+            )
+        else:
+            try:
+                status = await asyncio.to_thread(probe_youtube_live, url)
+            except UserNotLive:
+                status = None
+        # API/yt-dlp failures propagate: a failed request is NOT proof a stream ended.
         if status is None:
             await self._offline()
         else:
