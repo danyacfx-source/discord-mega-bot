@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_admin_exposes_standalone_chat_even_without_layout() -> None:
     source = (ROOT / "panel-ui/src/sections/overlay.jsx").read_text(encoding="utf-8")
-    no_layout = source.split("if (!layout) {", 1)[1].split("// ------------------------------------------------------------- редактор", 1)[0]
+    no_layout = source.split("if (!layout) {", 1)[1]
+    no_layout = no_layout.split("// ------------------------------------------------------------- редактор", 1)[0]
     assert "Лента чата для OBS" in no_layout
     assert "onClick={copyChatUrl}" in no_layout
     assert "/overlay/chat?token=" in source
