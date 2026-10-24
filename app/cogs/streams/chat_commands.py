@@ -149,7 +149,7 @@ class TwitchIrc:
                     display_name=privmsg.display_name,
                     content=privmsg.text,
                     is_mod=privmsg.is_mod,
-                    is_bot=privmsg.is_bot or privmsg.login == self._write_login.lower(),
+                    is_bot=privmsg.is_bot or (bool(self._token) and privmsg.login == self._write_login.lower()),
                     reply_to=privmsg.channel,
                 )
             )
