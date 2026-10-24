@@ -33,7 +33,7 @@ export default function AIChat() {
   return (
     <div class="stack">
       <div class="card">
-        <h3 class="sec">AI-чат (Gemini)</h3>
+        <h3 class="sec">ИИ-чат · {data.persona_name || "DendichControl"} (Gemini)</h3>
         <div class="row-inline">
           <button class="btn primary" type="button" onClick={togglePause}>
             {data.paused ? "Снять паузу" : "Пауза"}
@@ -75,7 +75,7 @@ export default function AIChat() {
             Ключ: <b>{data.has_key ? "задан" : "не задан"}</b> · прокси: <b>{data.proxy ? "задан" : "нет"}</b>
           </div>
           {data.system_prompt ? (
-            <div>Промпт (начало):<br />{data.system_prompt.slice(0, 240)}</div>
+            <div>Действующий характер: <b>{data.default_persona ? "RADIO SILENCE — ИИ-радист" : "пользовательский"}</b><br />Промпт (начало):<br />{data.system_prompt.slice(0, 240)}</div>
           ) : null}
         </div>
       </div>
