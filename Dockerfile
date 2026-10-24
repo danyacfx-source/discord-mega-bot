@@ -22,11 +22,18 @@ RUN apt-get update \
 # sing-box — опциональный прокси только для Gemini (если хост в EEA/NL, где API недоступен).
 # Запускается entrypoint'ом при заданном SINGBOX_CONFIG_B64 (см. .env.example).
 ARG SINGBOX_VERSION=1.14.1
-RUN curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-linux-amd64-musl.tar.gz" -o /tmp/sb.tgz \
-    && tar -xzf /tmp/sb.tgz -C /tmp \
-    && install -m 0755 "/tmp/sing-box-${SINGBOX_VERSION}-linux-amd64-musl/sing-box" /usr/local/bin/sing-box \
-    && rm -rf /tmp/sb.tgz "/tmp/sing-box-${SINGBOX_VERSION}-linux-amd64-musl" \
-    && sing-box version
+# BuildKit supplies TARGETARCH for the VPS architecture; old builds always
+# fetched amd64 and failed with "exec format error" on ARM64 servers.
+ARG TARGETARCH
+RUN set -eu; \
+    arch="${TARGETARCH:-amd64}"; \
+    case "$arch" in amd64|arm64) ;; *) echo "Unsupported sing-box architecture: $arch" >&2; exit 1 ;; esac; \
+    archive="sing-box-${SINGBOX_VERSION}-linux-${arch}-musl"; \
+    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${archive}.tar.gz" -o /tmp/sb.tgz; \
+    tar -xzf /tmp/sb.tgz -C /tmp; \
+    install -m 0755 "/tmp/${archive}/sing-box" /usr/local/bin/sing-box; \
+    rm -rf /tmp/sb.tgz "/tmp/${archive}"; \
+    sing-box version
 
 WORKDIR /app
 
