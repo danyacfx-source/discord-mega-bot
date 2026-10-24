@@ -156,6 +156,8 @@ class StreamConfig:
     twitch_chat_token: str = ""
     twitch_bot_login: str = ""
     twitch_bot_refresh_token: str = ""
+    twitch_bot_client_id: str = ""
+    twitch_bot_refresh_provider: str = "twitch"
     twitch_schedule_channel_id: int | None = None
 
     # Kick
@@ -434,6 +436,8 @@ _STREAM_FIELDS = {
     "twitch_chat_token": "twitch_chat_token",
     "twitch_bot_login": "twitch_bot_login",
     "twitch_bot_refresh_token": "twitch_bot_refresh_token",
+    "twitch_bot_client_id": "twitch_bot_client_id",
+    "twitch_bot_refresh_provider": "twitch_bot_refresh_provider",
     "twitch_schedule_channel_id": "twitch_schedule_channel_id",
     "kick_channel_slug": "kick_channel_slug",
     "kick_notify_channel_id": "kick_notify_channel_id",
@@ -808,6 +812,8 @@ class Config:
                 twitch_chat_token=os.getenv("TWITCH_CHAT_TOKEN", ""),
                 twitch_bot_login=os.getenv("TWITCH_BOT_LOGIN", "").strip().lower(),
                 twitch_bot_refresh_token=os.getenv("TWITCH_BOT_REFRESH_TOKEN", "").strip(),
+                twitch_bot_client_id=os.getenv("TWITCH_BOT_CLIENT_ID", "").strip(),
+                twitch_bot_refresh_provider=os.getenv("TWITCH_BOT_REFRESH_PROVIDER", "twitch").strip().lower(),
                 twitch_schedule_channel_id=_single_int(os.getenv("TWITCH_SCHEDULE_CHANNEL_ID")),
                 kick_channel_slug=os.getenv("KICK_CHANNEL_SLUG"),
                 kick_notify_channel_id=_single_int(os.getenv("KICK_NOTIFY_CHANNEL_ID")),
