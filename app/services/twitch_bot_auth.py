@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import quote
 from pathlib import Path
 
 import aiohttp
@@ -18,6 +19,7 @@ logger = logging.getLogger("bot.services")
 
 _TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 _VALIDATE_URL = "https://id.twitch.tv/oauth2/validate"
+_TTG_REFRESH_URL = "https://twitchtokengenerator.com/api/refresh/"
 _REQUIRED_IRC_SCOPES = {"chat:read", "chat:edit"}
 
 
@@ -32,8 +34,12 @@ class TwitchBotAuth:
         client_secret: str,
         refresh_token: str,
         access_token: str = "",
+        refresh_provider: str = "twitch",
         cache_file: str = "data/twitch_bot_oauth.json",
     ) -> None:
+        if refresh_provider not in {"twitch", "ttg"}:
+            raise ValueError("Unsupported Twitch bot token refresh provider")
+        self.provider = refresh_provider
         self.login = login.strip().lower()
         self.client_id = client_id
         self.client_secret = client_secret
@@ -48,7 +54,11 @@ class TwitchBotAuth:
             payload = json.loads(self._file.read_text(encoding="utf-8"))
         except (FileNotFoundError, OSError, ValueError):
             return
-        if payload.get("login") != self.login or payload.get("client_id") != self.client_id:
+        if (
+            payload.get("login") != self.login
+            or payload.get("client_id") != self.client_id
+            or payload.get("provider", "twitch") != self.provider
+        ):
             return
         if payload.get("refresh_token"):
             self._refresh = str(payload["refresh_token"])
@@ -61,6 +71,7 @@ class TwitchBotAuth:
             {
                 "login": self.login,
                 "client_id": self.client_id,
+                "provider": self.provider,
                 "access_token": self._access,
                 "refresh_token": self._refresh,
                 "expires_at": self._expires,
@@ -78,15 +89,33 @@ class TwitchBotAuth:
             if temp.exists():
                 temp.unlink()
 
-    async def token(self) -> str:
-        """Return a validated IRC access token or an empty string in read-only mode."""
-        if not self.login:
-            return self._access
-
-        if not self._refresh and not self._access:
-            return ""
-
-        if self._refresh and (not self._access or self._expires <= time.time() + 120):
+    async def _refresh_token(self) -> None:
+        """Rotate a Twitch bot user's credentials, never logging tokens or URLs."""
+        if self.provider == "ttg":
+            # TwitchTokenGenerator's API (not a Twitch-operated service).
+            # This HTTPS request exposes the refresh token in the path to TTG
+            # and its access logs. Never follow redirects to other hosts.
+            if not self.client_id:
+                raise RuntimeError("Twitch bot: TWITCH_BOT_CLIENT_ID is required for TTG")
+            url = _TTG_REFRESH_URL + quote(self._refresh, safe="")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url,
+                    allow_redirects=False,
+                    timeout=aiohttp.ClientTimeout(total=20),
+                ) as response:
+                    if response.status != 200:
+                        raise RuntimeError("Twitch TTG token refresh failed (HTTP status)")
+                    payload = await response.json(content_type=None)
+            if (
+                not isinstance(payload, dict)
+                or payload.get("success") is not True
+                or str(payload.get("client_id") or "") != self.client_id
+            ):
+                raise RuntimeError("Twitch TTG token refresh failed or client ID mismatch")
+            access = str(payload.get("token") or "")
+            refresh = str(payload.get("refresh") or "")
+        else:
             if not self.client_id or not self.client_secret:
                 raise RuntimeError("Twitch OAuth: TWITCH_CLIENT_ID/SECRET are required")
             async with aiohttp.ClientSession() as session:
@@ -103,14 +132,36 @@ class TwitchBotAuth:
                     if response.status != 200:
                         raise RuntimeError("Twitch OAuth: refresh failed")
                     payload = await response.json()
-            self._access = str(payload["access_token"])
-            self._refresh = str(payload.get("refresh_token") or self._refresh)
-            self._expires = time.time() + int(payload.get("expires_in") or 3600)
-            try:
-                self._save()
-            except OSError:
-                logger.error("Twitch OAuth: failed to persist rotated refresh token")
-                raise RuntimeError("Twitch OAuth: unable to save rotated token") from None
+            access = str(payload.get("access_token") or "")
+            refresh = str(payload.get("refresh_token") or "")
+
+        if not access or not refresh:
+            raise RuntimeError("Twitch OAuth: refresh response missing access/refresh token")
+        self._access = access.removeprefix("oauth:")
+        self._refresh = refresh
+        # Twitch's validation endpoint provides the authoritative time-to-live.
+        self._expires = 0.0
+        try:
+            self._save()
+        except OSError:
+            logger.error("Twitch OAuth: failed to persist rotated refresh token")
+            raise RuntimeError("Twitch OAuth: unable to save rotated token") from None
+
+    def seconds_until_refresh(self) -> float | None:
+        """Duration until the IRC session should reconnect with rotated credentials."""
+        if not self._refresh or not self._expires:
+            return None
+        return max(1.0, self._expires - time.time() - 120.0)
+
+    async def token(self) -> str:
+        """Return a validated bot IRC token; refresh the user token when needed."""
+        if not self.login:
+            return self._access
+        if not self._refresh and not self._access:
+            return ""
+
+        if self._refresh and (not self._access or self._expires <= time.time() + 120):
+            await self._refresh_token()
 
         async with aiohttp.ClientSession() as session:
             async with session.get(
@@ -126,13 +177,12 @@ class TwitchBotAuth:
             raise RuntimeError("Twitch OAuth: token belongs to a different user than TWITCH_BOT_LOGIN")
         if not _REQUIRED_IRC_SCOPES.issubset(set(payload.get("scopes") or [])):
             raise RuntimeError("Twitch OAuth: missing chat:read / chat:edit scopes")
-        # A manually supplied IRC chat token can come from a different Twitch
-        # application (e.g. a bot chat-token generator). It only needs to
-        # belong to this bot login and have the IRC read/write scopes.
-        # For our own rotating refresh-token flow, require matching client ID.
+        # Manual IRC tokens can come from a separate OAuth app; managed refresh
+        # tokens must match their own app, not the broadcaster stream API app.
         if self._refresh and self.client_id and payload.get("client_id") != self.client_id:
             raise RuntimeError("Twitch OAuth: token client_id mismatch")
         expires_in = int(payload.get("expires_in") or 0)
         if expires_in < 60:
-            raise RuntimeError("Twitch OAuth: access token expiring; add TWITCH_BOT_REFRESH_TOKEN")
+            raise RuntimeError("Twitch OAuth: access token expiring; reauthorization may be needed")
+        self._expires = time.time() + expires_in
         return self._access
