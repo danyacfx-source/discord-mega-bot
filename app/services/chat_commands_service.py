@@ -185,7 +185,8 @@ class ChatCommandsService:
             return
         now = time.monotonic()
         key = (msg.platform, msg.username)
-        if now - self._passive_ready.get(key, 0.0) < _PASSIVE_SECONDS:
+        last = self._passive_ready.get(key)
+        if last is not None and now - last < _PASSIVE_SECONDS:
             return
         self._passive_ready[key] = now
         try:
@@ -201,7 +202,8 @@ class ChatCommandsService:
             return True
         now = time.monotonic()
         key = (msg.platform, msg.username)
-        if now < self._cmd_ready.get(key, 0.0):
+        last = self._cmd_ready.get(key)
+        if last is not None and now < last:
             return False
         self._cmd_ready[key] = now + cooldown
         return True
