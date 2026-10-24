@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -52,3 +54,34 @@ def test_disallow_injected_line_breaks(wizard, tmp_path) -> None:
             tmp_path / "secrets.env", bot_login="radiobot\nINJECTED=value",
             client_id="abc", client_secret="private", refresh_token="safe",
         )
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (b'{"status":400,"message":"Invalid client secret"}', "Client Secret"),
+        (b'{"status":400,"message":"Invalid authorization code"}', "single-use"),
+        (b'{"status":400,"message":"Invalid redirect URI"}', "http://localhost"),
+        (b'{"status":400,"message":"Unexpected value"}', "Check Client ID"),
+        (b'not JSON', "Check Client ID"),
+    ],
+)
+def test_diagnostics_are_safe_and_actionable(wizard, body, expected) -> None:
+    error = HTTPError(
+        "https://id.twitch.tv/oauth2/token",
+        400,
+        "bad request",
+        None,
+        io.BytesIO(body),
+    )
+    diagnosis = wizard.describe_twitch_http_error(error)
+    assert diagnosis.startswith("Twitch OAuth HTTP 400.")
+    assert expected in diagnosis
+    assert "Unexpected value" not in diagnosis
+
+
+def test_http_diagnostics_never_echo_tokens(wizard) -> None:
+    private_token = "ultraprivatesecrettoken9381"
+    body = ('{"status":400,"message":"Unknown token ' + private_token + '"}').encode()
+    error = HTTPError("https://id.twitch.tv/oauth2/token", 400, "bad", None, io.BytesIO(body))
+    assert private_token not in wizard.describe_twitch_http_error(error)

@@ -45,7 +45,7 @@ def exchange_code(client_id: str, client_secret: str, code: str) -> dict:
         "code": code,
         "grant_type": "authorization_code",
         "redirect_uri": REDIRECT_URI,
-    } ).encode()
+    }).encode()
     request = Request(
         TOKEN_URL,
         data=body,
@@ -54,6 +54,46 @@ def exchange_code(client_id: str, client_secret: str, code: str) -> dict:
     )
     with urlopen(request, timeout=20) as response:
         return json.load(response)
+
+
+
+def describe_twitch_http_error(error: HTTPError) -> str:
+    """Give actionable OAuth diagnostics without echoing response secrets."""
+    try:
+        data = json.loads(error.read(4096))
+    except (ValueError, UnicodeDecodeError):
+        data = {}
+    details = ""
+    if isinstance(data, dict):
+        details = " ".join(
+            str(data.get(field) or "") for field in ("error", "message")
+        ).lower()
+
+    if "secret" in details or "client" in details:
+        advice = (
+            "Check that Client ID and Client Secret belong to the SAME Twitch app, "
+            "and that its Client Type is Confidential."
+        )
+    elif "redirect" in details:
+        advice = (
+            "Check registered OAuth Redirect URL is exactly "
+            "http://localhost:3000/callback."
+        )
+    elif "code" in details or "grant" in details:
+        advice = (
+            "Authorization codes are single-use and expire; start a FRESH "
+            "authorization from the script, do not reuse the previous link."
+        )
+    elif "scope" in details:
+        advice = "Check authorization scopes chat:read and chat:edit."
+    elif error.code >= 500:
+        advice = "Twitch server error; retry a fresh authorization."
+    else:
+        advice = (
+            "Check Client ID, Client Secret and redirect URL in Twitch Developer Console; "
+            "then try a fresh authorization."
+        )
+    return f"Twitch OAuth HTTP {error.code}. {advice}"
 
 
 def validate_token(access_token: str) -> dict:
@@ -191,8 +231,10 @@ if __name__ == "__main__":
         main()
     except (RuntimeError, ValueError, HTTPError, URLError, FileExistsError) as exc:
         # Do not dump HTTP response bodies or credentials into exception logs.
-        if isinstance(exc, (HTTPError, URLError)):
-            print("Twitch connection/authentication failed; check app settings and retry.")
+        if isinstance(exc, HTTPError):
+            print(describe_twitch_http_error(exc))
+        elif isinstance(exc, URLError):
+            print("Twitch network connection failed. Check your internet connection.")
         elif isinstance(exc, FileExistsError):
             print("Credentials file already exists: " + str(OUTPUT_PATH))
             print("Move the old file somewhere safe before attempting authorization again.")
