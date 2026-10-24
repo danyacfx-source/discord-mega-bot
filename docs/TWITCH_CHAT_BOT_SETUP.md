@@ -18,6 +18,39 @@ for reading and Helix for sending; IRC remains a compatibility transport here.
    For authorization-code flow guidance:
    https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/
 
+## Quick chat-only setup without Client Secret (temporary option)
+
+If you already have a valid Twitch IRC chat **user access token** for your
+dedicated bot account, you can skip our OAuth wizard and Client Secret entirely.
+
+For an easy token generator, a third-party option is
+https://twitchtokengenerator.com/ → **Bot Chat Token**. Authenticate there as
+your **bot** account; do not enter your own Twitch developer Client ID or
+Client Secret. Use only the minimal IRC scopes `chat:read` and `chat:edit`.
+This service is not Twitch-operated: only use it if you trust that external
+OAuth application. Never share its generated access token in chat or GitHub.
+
+Put the generated **Access Token** (not the refresh token) in the
+existing server environment:
+
+    TWITCH_CHANNELS=your_broadcaster_login
+    TWITCH_BOT_LOGIN=your_bot_login
+    TWITCH_CHAT_TOKEN=the_private_bot_user_access_token
+    TWITCH_BOT_REFRESH_TOKEN=
+    CHAT_COMMANDS_ENABLED=1
+
+The IRC bot will validate that the token belongs to your bot login, has
+`chat:read` and `chat:edit` scopes, and is not about to expire. It does not
+need this token's Client ID to match the Twitch API app configured for the
+broadcaster's stream tracking. Keep existing stream API Client ID/Secret
+separate and unchanged.
+
+**Limitation:** This manually supplied access token expires. Without a
+bot refresh token and its associated app credentials, the bot cannot
+renew it automatically. Repeat token authorization and update the server
+secret when needed. For unattended long-term use, use the private local
+authorization-code setup below.
+
 ## 2. Easiest private token setup (Python + your own browser)
 
 The Twitch developer console shows **Client ID** and **Client Secret**, but it

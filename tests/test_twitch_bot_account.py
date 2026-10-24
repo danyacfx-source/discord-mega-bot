@@ -1,8 +1,9 @@
 """Twitch bot-account wiring and RADIO SILENCE chat commands."""
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -86,3 +87,59 @@ async def test_anonymous_chat_keeps_broadcaster_commands() -> None:
     line = ":streamer!streamer@streamer.tmi.twitch.tv PRIVMSG #streamer :!help"
     assert not await irc._dispatch(line, SimpleNamespace(), on_message)
     assert collected and collected[0].is_bot is False
+
+
+
+@pytest.mark.asyncio
+async def test_manual_chat_token_does_not_need_same_app_client_id(monkeypatch, tmp_path) -> None:
+    """External IRC bot token works even when Twitch stream API uses another app."""
+    from app.services import twitch_bot_auth as auth_module
+
+    session = MagicMock()
+    response = MagicMock(status=200)
+    response.json = AsyncMock(return_value={
+        "login": "radiobot",
+        "client_id": "external_chat_token_app",
+        "scopes": ["chat:read", "chat:edit"],
+        "expires_in": 3600,
+    })
+    session.get.return_value.__aenter__.return_value = response
+    session.__aenter__.return_value = session
+    monkeypatch.setattr(auth_module.aiohttp, "ClientSession", lambda: session)
+
+    auth = TwitchBotAuth(
+        login="radiobot",
+        client_id="stream_api_app",
+        client_secret="",
+        refresh_token="",
+        access_token="oauth:manual_chat_token",
+        cache_file=str(tmp_path / "not-present.json"),
+    )
+    assert await auth.token() == "manual_chat_token"
+
+
+@pytest.mark.asyncio
+async def test_managed_refresh_token_still_checks_app_client_id(monkeypatch, tmp_path) -> None:
+    """Protect app-owned refresh tokens against accepting the wrong OAuth app."""
+    from app.services import twitch_bot_auth as auth_module
+
+    session = MagicMock()
+    response = MagicMock(status=200)
+    response.json = AsyncMock(return_value={
+        "login": "radiobot",
+        "client_id": "incorrect_app",
+        "scopes": ["chat:read", "chat:edit"],
+        "expires_in": 3600,
+    })
+    session.get.return_value.__aenter__.return_value = response
+    session.__aenter__.return_value = session
+    monkeypatch.setattr(auth_module.aiohttp, "ClientSession", lambda: session)
+
+    auth = TwitchBotAuth(
+        login="radiobot", client_id="managed_app", client_secret="secret",
+        refresh_token="managed_refresh", access_token="managed_access",
+        cache_file=str(tmp_path / "not-present.json"),
+    )
+    auth._expires = time.time() + 3600
+    with pytest.raises(RuntimeError, match="client_id mismatch"):
+        await auth.token()

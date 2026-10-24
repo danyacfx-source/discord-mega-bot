@@ -126,7 +126,11 @@ class TwitchBotAuth:
             raise RuntimeError("Twitch OAuth: token belongs to a different user than TWITCH_BOT_LOGIN")
         if not _REQUIRED_IRC_SCOPES.issubset(set(payload.get("scopes") or [])):
             raise RuntimeError("Twitch OAuth: missing chat:read / chat:edit scopes")
-        if self.client_id and payload.get("client_id") != self.client_id:
+        # A manually supplied IRC chat token can come from a different Twitch
+        # application (e.g. a bot chat-token generator). It only needs to
+        # belong to this bot login and have the IRC read/write scopes.
+        # For our own rotating refresh-token flow, require matching client ID.
+        if self._refresh and self.client_id and payload.get("client_id") != self.client_id:
             raise RuntimeError("Twitch OAuth: token client_id mismatch")
         expires_in = int(payload.get("expires_in") or 0)
         if expires_in < 60:
