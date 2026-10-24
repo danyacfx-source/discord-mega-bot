@@ -45,7 +45,7 @@ def exchange_code(client_id: str, client_secret: str, code: str) -> dict:
         "code": code,
         "grant_type": "authorization_code",
         "redirect_uri": REDIRECT_URI,
-    }).encode("utf-8")
+    } ).encode()
     request = Request(
         TOKEN_URL,
         data=body,
