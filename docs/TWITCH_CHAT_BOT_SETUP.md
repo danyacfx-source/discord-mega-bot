@@ -28,16 +28,16 @@ Run this built-in helper on your **own computer with a browser** (Python 3.11+):
     python scripts/twitch_bot_oauth_setup.py
 
 - In the developer console, set OAuth redirect URL exactly to
-  \`http://localhost:3000/callback\` and choose a **Confidential** application.
+  `http://localhost:3000/callback` and choose a **Confidential** application.
 - Enter your Twitch application Client ID, Client Secret and intended bot login.
 - The helper opens the **official** Twitch OAuth consent page. Make sure the
   signed-in Twitch user is the *bot account*, not your broadcaster account.
-- The helper only listens on \`127.0.0.1:3000\`, verifies OAuth state, exchanges
+- The helper only listens on `127.0.0.1:3000`, verifies OAuth state, exchanges
   the code directly with Twitch and validates the authenticated user and scopes.
 - The resulting private credentials are written to
-  \`~/dendich_twitch_bot_credentials.env\` (permissions 0600 on Unix).
+  `~/dendich_twitch_bot_credentials.env` (permissions 0600 on Unix).
   The helper never prints your credentials or uploads them to a third party.
-- Copy the four values from this file into the **server** \`.env\`. Do not send
+- Copy the four values from this file into the **server** `.env`. Do not send
   that file through chat, screenshots, GitHub, or an unencrypted public link.
 - If port 3000 is occupied, close the conflicting application and try again.
 - If you already use the Twitch app for stream status, use the **same**
