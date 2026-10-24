@@ -515,7 +515,7 @@ _ALIASES: dict[str, str] = {
     "callsign": "callsign", "позывной": "callsign",
     "ping": "ping", "пинг": "ping",
     "uptime": "uptime", "аптайм": "uptime", "эфир": "uptime", "live": "uptime",
-    "links": "links", "ссылки": "links", "discord": "links", "ссылка": "links",
+    "links": "links", "ссылки": "links", "ссылка": "links",
     "schedule": "schedule", "расписание": "schedule",
     "top": "top", "топ": "top", "лидерборд": "top",
     "bal": "bal", "balance": "bal", "баланс": "bal", "монеты": "bal", "coins": "bal", "кэш": "bal",
