@@ -9,6 +9,7 @@ from typing import Any
 import discord
 from aiohttp import web
 
+from app.cogs.ai.chat_ai import DEFAULT_PROMPT, resolve_ai_system_prompt
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _STREAM_CARDS_KEY,
@@ -326,6 +327,8 @@ class _ProfilesApiMixin(_BaseApi):
         config = self.bot.config
         cog = self.bot.cogs.get("ChatAI")
         paused = bool(getattr(cog, "_paused", False))
+        effective_prompt = resolve_ai_system_prompt(config.ai_system_prompt)
+        using_default_persona = effective_prompt == DEFAULT_PROMPT
         channels = []
         for cid in config.ai_channels:
             channel = self.bot.get_channel(cid)
@@ -345,7 +348,9 @@ class _ProfilesApiMixin(_BaseApi):
                 "history_size": config.ai_history_size,
                 "cooldown_seconds": config.ai_cooldown_seconds,
                 "timeout_seconds": config.ai_timeout_seconds,
-                "system_prompt": config.ai_system_prompt or "",
+                "system_prompt": effective_prompt,
+                "persona_name": "DendichControl" if using_default_persona else "Свой промпт",
+                "default_persona": using_default_persona,
                 # Прокси может содержать user:pass@host — viewer отдаём
                 # только хост:порт, без кредов (H5).
                 "proxy": self._redact_proxy(config.ai_proxy),
