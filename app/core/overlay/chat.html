@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat overlay</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg,transparent);font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden;display:flex;flex-direction:column;padding:12px}
+#feed{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;opacity:1;transition:opacity .35s ease;scrollbar-width:none;-ms-overflow-style:none}
+#feed::before{content:"";margin-top:auto}
+#feed::-webkit-scrollbar{width:0;height:0}
+body.idle #feed{opacity:0}
+.m{flex:none;display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.4;word-break:break-word;animation:m-in .22s ease-out both}
+@keyframes m-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes m-out{to{opacity:0;transform:translateY(-6px)}}
+.m.out{animation:m-out .18s ease-in both}
+.name{font-weight:700;color:var(--c,#c084fc);text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.7),0 0 16px rgba(0,0,0,.4)}
+.name::after{content:": "}
+.name.mod{font-weight:800}
+.text{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45)}
+@media (prefers-reduced-motion:reduce){.m{animation:none}}
+</style></head><body class="idle"><div id="feed"></div>
+<script>
+const TOKEN="__TOKEN__";
+const Q=new URLSearchParams(location.search);
+const num=(key,lo,hi,dflt)=>{const v=Number(Q.get(key));return Number.isFinite(v)&&v?Math.min(hi,Math.max(lo,v)):dflt};
+const LIMIT=Math.round(num("limit",1,80,20));
+const IDLE=(()=>{const raw=Q.get("idle");if(raw===null)return 10;const v=Number(raw);return Number.isFinite(v)?Math.max(0,v):10})();
+const PLAT=(Q.get("platform")||"").toLowerCase().split(",").map(s=>s.trim()).filter(Boolean);
+const okPlat=m=>!PLAT.length||PLAT.includes(String(m.platform||"").toLowerCase());
+document.documentElement.style.setProperty("--fs",num("size",11,44,16)+"px");
+const bg=Q.get("bg");
+if(bg&&window.CSS&&CSS.supports("color",bg))document.documentElement.style.setProperty("--bg",bg);
+
+const PCOLOR={twitch:"#9146ff",youtube:"#ff0000",kick:"#53fc18",discord:"#5865f2",vk_video:"#0077ff",vk:"#0077ff"};
+function nickColor(platform){
+  return PCOLOR[String(platform||"").toLowerCase()]||"#cbd5e1";
+}
+
+const feed=document.getElementById("feed");
+const live=new Map();
+const key=m=>[m.ts,m.platform,m.name,m.text].join("|");
+
+let idleTimer=null;
+function wake(){
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  if(IDLE>0)idleTimer=setTimeout(()=>document.body.classList.add("idle"),IDLE*1000);
+}
+
+function build(m){
+  const row=document.createElement("div");
+  row.className="m";
+  const name=document.createElement("b");
+  name.className="name"+(m.mod?" mod":"");
+  name.style.setProperty("--c",nickColor(m.platform));
+  name.textContent=m.name||"?";
+  row.appendChild(name);
+  const text=document.createElement("span");
+  text.className="text";
+  text.textContent=m.text||"";
+  row.appendChild(text);
+  return row;
+}
+
+function render(rows){
+  const want=new Set(rows.map(key));
+  for(const [k,el] of Array.from(live)){
+    if(want.has(k))continue;
+    live.delete(k);
+    el.classList.add("out");
+    setTimeout(()=>el.remove(),180);
+  }
+  let added=0;
+  for(const m of rows){
+    const k=key(m);
+    if(live.has(k))continue;
+    const el=build(m);
+    live.set(k,el);
+    feed.appendChild(el);
+    added++;
+  }
+  while(live.size>LIMIT){
+    const oldest=live.keys().next().value;
+    live.get(oldest).remove();
+    live.delete(oldest);
+  }
+  feed.scrollTop=feed.scrollHeight;
+  if(added)wake();
+  return added;
+}
+
+let sig="";
+async function load(){
+  try{
+    const r=await fetch("/overlay/api",{headers:{"X-Overlay-Token":TOKEN}});
+    if(!r.ok)return;
+    const d=await r.json();
+    const rows=(d.chat||[]).filter(okPlat).slice(-LIMIT);
+    const next=JSON.stringify(rows);
+    if(next===sig)return;
+    sig=next;
+    render(rows);
+  }catch(e){}
+}
+load();setInterval(load,3000);
+</script></body></html>
