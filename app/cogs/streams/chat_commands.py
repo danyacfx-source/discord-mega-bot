@@ -234,12 +234,17 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             return
         config = self.bot.config
         pause = 10
+        refresh_provider = config.twitch_bot_refresh_provider
         auth = TwitchBotAuth(
             login=config.twitch_bot_login,
-            client_id=config.twitch_client_id or "",
-            client_secret=config.twitch_client_secret or "",
+            client_id=(
+                config.twitch_bot_client_id if refresh_provider == "ttg"
+                else config.twitch_client_id or ""
+            ),
+            client_secret=(config.twitch_client_secret or "") if refresh_provider == "twitch" else "",
             refresh_token=config.twitch_bot_refresh_token,
             access_token=config.twitch_chat_token,
+            refresh_provider=refresh_provider,
         ) if config.twitch_bot_login else None
         while True:
             if not config.twitch_channels:
@@ -259,8 +264,18 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                 write_login=config.twitch_bot_login or config.twitch_channels[0],
             )
             self._irc = irc
+            renewed = False
             try:
-                await irc.run(self._on_message)
+                renew_after = auth.seconds_until_refresh() if auth is not None else None
+                if renew_after is not None:
+                    # A long-lived WebSocket might never disconnect on its own,
+                    # so reconnect proactively with the refreshed access token.
+                    await asyncio.wait_for(irc.run(self._on_message), timeout=renew_after)
+                else:
+                    await irc.run(self._on_message)
+            except TimeoutError:
+                renewed = True
+                logger.info("Twitch IRC: обновляем токен, переподключаем чат")
             except asyncio.CancelledError:
                 return
             except Exception:
@@ -269,7 +284,8 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                 self._irc = None
             if irc.auth_failed:
                 return
-            await asyncio.sleep(pause)
+            if not renewed:
+                await asyncio.sleep(pause)
 
     # --------------------------------------------------------- сессии зрителей
 
