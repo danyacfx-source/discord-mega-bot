@@ -184,5 +184,13 @@ class TwitchBotAuth:
         expires_in = int(payload.get("expires_in") or 0)
         if expires_in < 60:
             raise RuntimeError("Twitch OAuth: access token expiring; reauthorization may be needed")
+        # Persist validated expiry as well as the rotated pair, so a normal
+        # restart won't needlessly consume another generator refresh.
+        save_expiry = bool(self._refresh) and self._expires == 0.0
         self._expires = time.time() + expires_in
+        if save_expiry:
+            try:
+                self._save()
+            except OSError:
+                raise RuntimeError("Twitch OAuth: unable to persist token expiry") from None
         return self._access
