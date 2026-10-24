@@ -73,3 +73,16 @@ def test_bot_auth_does_not_load_cache_for_other_user(tmp_path) -> None:
         refresh_token="safe", cache_file=str(p),
     )
     assert auth._refresh == "safe"
+
+
+@pytest.mark.asyncio
+async def test_anonymous_chat_keeps_broadcaster_commands() -> None:
+    irc = TwitchIrc(nick="justinfan12345", token="", channels=("streamer",), write_login="streamer")
+    collected: list[ChatMessage] = []
+
+    async def on_message(m: ChatMessage) -> None:
+        collected.append(m)
+
+    line = ":streamer!streamer@streamer.tmi.twitch.tv PRIVMSG #streamer :!help"
+    assert not await irc._dispatch(line, SimpleNamespace(), on_message)
+    assert collected and collected[0].is_bot is False
