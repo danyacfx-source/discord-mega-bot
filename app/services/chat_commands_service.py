@@ -261,7 +261,8 @@ class ChatCommandsService:
     async def _cmd_help(self, msg: ChatMessage, rest: str) -> str:
         lines = [
             "📜 Команды чата:",
-            "!uptime — идёт ли эфир, !links — ссылки, !расписание — ближайшие стримы",
+            "!uptime — эфир, !links — ссылки, !расписание — стримы",
+            "!discord, !youtube, !игра, !сигналы, !награды, !позывной",
             "!баланс / !топ — монеты и лидерборд",
             "!слоты [ставка] / !монетка [ставка] [орёл|решка] — азарт",
             "!8ball [вопрос] — шар предсказаний",
@@ -309,6 +310,52 @@ class ChatCommandsService:
         if not lines:
             return "🔗 Ссылки ещё не настроены."
         return "🔗 Наши ссылки:\n" + "\n".join(lines)
+
+    async def _cmd_discord(self, msg: ChatMessage, rest: str) -> str:
+        url = self._config.socials_discord
+        return f"📡 Штаб в Discord: {url}" if url else "📡 Ссылка на Discord ещё не настроена."
+
+    async def _cmd_youtube(self, msg: ChatMessage, rest: str) -> str:
+        url = self._config.socials_youtube or "https://www.youtube.com/@Dendosich"
+        return f"▶️ Архив операций на YouTube: {url}"
+
+    async def _cmd_game(self, msg: ChatMessage, rest: str) -> str:
+        platform = self._platforms.get(msg.platform)
+        if platform is None or platform.live is None:
+            return "🎮 Информация об игре сейчас недоступна."
+        try:
+            stream = await platform.live()
+        except Exception:
+            logger.debug("ChatCommands: статус игры недоступен", exc_info=True)
+            return "🎮 Не удалось получить категорию стрима."
+        if not stream:
+            return "📡 Сейчас вне эфира."
+        category = str(stream.get("category") or "").strip()
+        return f"🎮 Сейчас в эфире: {category}" if category and category != "—" else "🎮 Игра пока не указана."
+
+    async def _cmd_signals(self, msg: ChatMessage, rest: str) -> str:
+        return (
+            "📡 СИГНАЛЫ — бесплатные баллы канала Twitch. Копи за просмотр и "
+            "трать через значок баллов под чатом. Это НЕ монеты нашего бота. "
+            "Список наград: !награды"
+        )
+
+    async def _cmd_rewards(self, msg: ChatMessage, rest: str) -> str:
+        return (
+            "🎖 СИГНАЛЫ: 📻 Проверка связи 100 | 🔭 Разведданные 250 | "
+            "🎙 Перехват эфира 500 | 🎧 Позывной 800 | 🗺 План 1500 | "
+            "🔀 Отмена плана 2500 | 🚩 Операция зрителей 5000. "
+            "Награды открываются через баллы канала Twitch."
+        )
+
+    async def _cmd_callsign(self, msg: ChatMessage, rest: str) -> str:
+        import random
+
+        names = (
+            "Гроза", "Барс", "Шторм", "Маяк", "Ворон", "Рысь",
+            "Скат", "Филин", "Бастион", "Радиус", "Призрак", "Кедр",
+        )
+        return f"📻 {msg.display_name or msg.username}, твой позывной: {random.choice(names)}. Приём!"
 
     async def _cmd_schedule(self, msg: ChatMessage, rest: str) -> str:
         platform = self._platforms.get(msg.platform)
@@ -460,6 +507,12 @@ def _parse_stake(text: str, *, default: int) -> int:
 
 
 _ALIASES: dict[str, str] = {
+    "discord": "discord", "дискорд": "discord",
+    "youtube": "youtube", "ютуб": "youtube",
+    "game": "game", "игра": "game",
+    "signals": "signals", "сигналы": "signals",
+    "rewards": "rewards", "награды": "rewards",
+    "callsign": "callsign", "позывной": "callsign",
     "ping": "ping", "пинг": "ping",
     "uptime": "uptime", "аптайм": "uptime", "эфир": "uptime", "live": "uptime",
     "links": "links", "ссылки": "links", "discord": "links", "ссылка": "links",
@@ -475,6 +528,12 @@ _ALIASES: dict[str, str] = {
 }
 
 _COMMANDS: dict[str, Callable[..., Awaitable[str | None]]] = {
+    "discord": ChatCommandsService._cmd_discord,
+    "youtube": ChatCommandsService._cmd_youtube,
+    "game": ChatCommandsService._cmd_game,
+    "signals": ChatCommandsService._cmd_signals,
+    "rewards": ChatCommandsService._cmd_rewards,
+    "callsign": ChatCommandsService._cmd_callsign,
     "ping": ChatCommandsService._cmd_ping,
     "help": ChatCommandsService._cmd_help,
     "uptime": ChatCommandsService._cmd_uptime,
