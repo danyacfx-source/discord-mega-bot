@@ -11,6 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate Compose without optional PostgreSQL credentials
+        run: |
+          env -u POSTGRES_PASSWORD docker compose config --quiet
+          POSTGRES_PASSWORD=ci-placeholder docker compose --profile postgres config --quiet
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
