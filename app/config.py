@@ -154,6 +154,8 @@ class StreamConfig:
     twitch_ping_role_id: int | None = None
     twitch_poll_seconds: float = 300.0
     twitch_chat_token: str = ""
+    twitch_bot_login: str = ""
+    twitch_bot_refresh_token: str = ""
     twitch_schedule_channel_id: int | None = None
 
     # Kick
@@ -430,6 +432,8 @@ _STREAM_FIELDS = {
     "twitch_ping_role_id": "twitch_ping_role_id",
     "twitch_poll_seconds": "twitch_poll_seconds",
     "twitch_chat_token": "twitch_chat_token",
+    "twitch_bot_login": "twitch_bot_login",
+    "twitch_bot_refresh_token": "twitch_bot_refresh_token",
     "twitch_schedule_channel_id": "twitch_schedule_channel_id",
     "kick_channel_slug": "kick_channel_slug",
     "kick_notify_channel_id": "kick_notify_channel_id",
@@ -802,6 +806,8 @@ class Config:
                 twitch_ping_role_id=_single_int(os.getenv("TWITCH_PING_ROLE_ID")),
                 twitch_poll_seconds=float(os.getenv("TWITCH_POLL_SECONDS", "300")),
                 twitch_chat_token=os.getenv("TWITCH_CHAT_TOKEN", ""),
+                twitch_bot_login=os.getenv("TWITCH_BOT_LOGIN", "").strip().lower(),
+                twitch_bot_refresh_token=os.getenv("TWITCH_BOT_REFRESH_TOKEN", "").strip(),
                 twitch_schedule_channel_id=_single_int(os.getenv("TWITCH_SCHEDULE_CHANNEL_ID")),
                 kick_channel_slug=os.getenv("KICK_CHANNEL_SLUG"),
                 kick_notify_channel_id=_single_int(os.getenv("KICK_NOTIFY_CHANNEL_ID")),
