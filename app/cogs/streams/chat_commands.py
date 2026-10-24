@@ -17,6 +17,7 @@ from discord.ext import tasks
 
 from app.core.base import MegaCog, wait_ready_or_stop
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
+from app.services.twitch_bot_auth import TwitchBotAuth
 from app.services.twitch_service import TwitchService
 
 if TYPE_CHECKING:
@@ -148,7 +149,7 @@ class TwitchIrc:
                     display_name=privmsg.display_name,
                     content=privmsg.text,
                     is_mod=privmsg.is_mod,
-                    is_bot=privmsg.is_bot,
+                    is_bot=privmsg.is_bot or (bool(self._token) and privmsg.login == self._write_login.lower()),
                     reply_to=privmsg.channel,
                 )
             )
@@ -163,7 +164,10 @@ class TwitchIrc:
             wait = _SEND_INTERVAL - (asyncio.get_running_loop().time() - self._last_send)
             if wait > 0:
                 await asyncio.sleep(wait)
-            await self._ws.send_str(f"PRIVMSG #{channel} :{text[:450]}")  # type: ignore[union-attr]
+            safe_text = " ".join(text.split())[:450]  # Never allow CR/LF injection into IRC.
+            if not safe_text:
+                return False
+            await self._ws.send_str(f"PRIVMSG #{channel} :{safe_text}")  # type: ignore[union-attr]
             self._last_send = asyncio.get_running_loop().time()
         return True
 
@@ -230,14 +234,29 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             return
         config = self.bot.config
         pause = 10
+        auth = TwitchBotAuth(
+            login=config.twitch_bot_login,
+            client_id=config.twitch_client_id or "",
+            client_secret=config.twitch_client_secret or "",
+            refresh_token=config.twitch_bot_refresh_token,
+            access_token=config.twitch_chat_token,
+        ) if config.twitch_bot_login else None
         while True:
             if not config.twitch_channels:
                 return
+            token = config.twitch_chat_token
+            if auth is not None:
+                try:
+                    token = await auth.token()
+                except Exception:
+                    logger.warning("Twitch: не удалось авторизовать отдельный бот-аккаунт; повтор через %d сек", pause)
+                    await asyncio.sleep(pause)
+                    continue
             irc = TwitchIrc(
                 nick=f"justinfan{random.randint(10000, 99999)}",
-                token=config.twitch_chat_token,
+                token=token,
                 channels=config.twitch_channels,
-                write_login=config.twitch_channels[0],
+                write_login=config.twitch_bot_login or config.twitch_channels[0],
             )
             self._irc = irc
             try:
@@ -289,7 +308,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         if irc is None or not reply_to:
             return
         sent = await irc.send(reply_to, text)
-        if not sent and not self.bot.config.twitch_chat_token:
+        if not sent and not irc._token:
             logger.debug("Twitch IRC: ответ пропущен (нет TWITCH_CHAT_TOKEN, read-only режим)")
 
     async def _live(self) -> dict[str, Any] | None:
