@@ -18,6 +18,60 @@ for reading and Helix for sending; IRC remains a compatibility transport here.
    For authorization-code flow guidance:
    https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/
 
+## Automatic TwitchTokenGenerator refresh (3 values, no Client Secret)
+
+If you obtained the three values from TwitchTokenGenerator.com **Bot Chat Token**
+using its default/shared app, you can activate **automatic token rotation** on
+the existing Discord Mega Bot. This does **not** require your own Twitch
+Developer Client Secret.
+
+In the PRIVATE server `.env`:
+
+```dotenv
+TWITCH_CHANNELS=YOUR_MAIN_STREAMER_LOGIN
+TWITCH_BOT_LOGIN=YOUR_SEPARATE_BOT_LOGIN
+TWITCH_CHAT_TOKEN=ACCESS_TOKEN_FROM_GENERATOR
+TWITCH_BOT_REFRESH_TOKEN=REFRESH_TOKEN_FROM_GENERATOR
+TWITCH_BOT_CLIENT_ID=CLIENT_ID_FROM_GENERATOR
+TWITCH_BOT_REFRESH_PROVIDER=ttg
+CHAT_COMMANDS_ENABLED=1
+```
+
+**Do not replace** existing `TWITCH_CLIENT_ID` or `TWITCH_CLIENT_SECRET`
+used by streamer live-status/Helix integrations. The independent
+`TWITCH_BOT_CLIENT_ID` above is for the chatbot's OAuth authorization.
+
+Once deployed and restarted, the bot:
+
+1. Validates the token is for `TWITCH_BOT_LOGIN`, has `chat:read` and
+   `chat:edit` scopes, and was issued for `TWITCH_BOT_CLIENT_ID`.
+2. Renews its access/refresh tokens through TwitchTokenGenerator's HTTPS
+   endpoint, before token expiry; safely reconnects IRC with the new token.
+3. Atomically persists rotated credentials to
+   `data/twitch_bot_oauth.json` (0600 mode on Unix). **The data directory
+   must be writable and persistent across updates/restarts.** Don't erase
+   this file or overwrite it with an old refresh token; its saved values take
+   precedence over the initial `.env` pair.
+
+**Third-party privacy/trust warning:** This is **not** Twitch's official
+refresh endpoint. The generator's documented API sends the refresh token in
+an HTTPS **URL path** (`/api/refresh/...`), so the generator and its
+infrastructure may log this credential. Use only if you trust that service,
+never paste the real URL or token into logs, GitHub, screenshots or chats.
+For the most private long-term setup, authorize using **your own**
+Confidential Twitch app and keep the Client Secret on the server instead.
+
+This approach depends on the third-party service continuing to support its
+API and the original token having been issued via the generator's **own**
+OAuth app. It has not been tested against your real credentials. If a refresh
+fails, the bot will retry safely without printing tokens, but invalidated or
+revoked refresh tokens require renewed Twitch consent. If you generated your
+tokens using **your own app credentials** on TwitchTokenGenerator, the TTG
+refresh endpoint is **not** a valid substitute for your own app's secret.
+
+Generator documentation: https://github.com/swiftyspiffy/twitch-token-generator
+Twitch refresh rules: https://dev.twitch.tv/docs/authentication/refresh-tokens/
+
 ## Quick chat-only setup without Client Secret (temporary option)
 
 If you already have a valid Twitch IRC chat **user access token** for your
@@ -45,7 +99,7 @@ need this token's Client ID to match the Twitch API app configured for the
 broadcaster's stream tracking. Keep existing stream API Client ID/Secret
 separate and unchanged.
 
-**Limitation:** This manually supplied access token expires. Without a
+**Limitation:** Without configuring the generator's refresh provider above, this manually supplied access token expires. Without a
 bot refresh token and its associated app credentials, the bot cannot
 renew it automatically. Repeat token authorization and update the server
 secret when needed. For unattended long-term use, use the private local

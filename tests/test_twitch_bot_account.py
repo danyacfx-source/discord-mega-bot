@@ -1,6 +1,7 @@
 """Twitch bot-account wiring and RADIO SILENCE chat commands."""
 from __future__ import annotations
 
+import json
 import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -143,3 +144,134 @@ async def test_managed_refresh_token_still_checks_app_client_id(monkeypatch, tmp
     auth._expires = time.time() + 3600
     with pytest.raises(RuntimeError, match="client_id mismatch"):
         await auth.token()
+
+
+
+@pytest.mark.asyncio
+async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, tmp_path) -> None:
+    from app.services import twitch_bot_auth as auth_module
+
+    client_id = "generator_application"
+    session = MagicMock()
+    session.__aenter__.return_value = session
+    urls: list[str] = []
+
+    def fake_get(url: str, **kwargs):
+        urls.append(url)
+        cm = MagicMock()
+        response = MagicMock(status=200)
+        if url.startswith("https://twitchtokengenerator.com/api/refresh/"):
+            assert kwargs["allow_redirects"] is False
+            response.json = AsyncMock(return_value={
+                "success": True,
+                "client_id": client_id,
+                "token": "new_access",
+                "refresh": "new_refresh",
+            })
+        else:
+            assert url == "https://id.twitch.tv/oauth2/validate"
+            response.json = AsyncMock(return_value={
+                "login": "radiobot",
+                "client_id": client_id,
+                "scopes": ["chat:read", "chat:edit"],
+                "expires_in": 14400,
+            })
+        cm.__aenter__.return_value = response
+        return cm
+
+    session.get.side_effect = fake_get
+    monkeypatch.setattr(auth_module.aiohttp, "ClientSession", lambda: session)
+    cache = tmp_path / "ttg_secrets.json"
+    auth = TwitchBotAuth(
+        login="radiobot", client_id=client_id, client_secret="",
+        refresh_token="old_refresh", access_token="old_access",
+        refresh_provider="ttg", cache_file=str(cache),
+    )
+    assert await auth.token() == "new_access"
+    assert urls == [
+        "https://twitchtokengenerator.com/api/refresh/old_refresh",
+        "https://id.twitch.tv/oauth2/validate",
+    ]
+    saved = json.loads(cache.read_text())
+    assert saved["provider"] == "ttg"
+    assert saved["access_token"] == "new_access"
+    assert saved["refresh_token"] == "new_refresh"
+    assert auth.seconds_until_refresh() is not None
+    assert auth.seconds_until_refresh() > 10000
+
+    # Restart: prefer the rotated credentials in cache over stale environment.
+    second = TwitchBotAuth(
+        login="radiobot", client_id=client_id, client_secret="",
+        refresh_token="old_refresh", access_token="old_access",
+        refresh_provider="ttg", cache_file=str(cache),
+    )
+    assert second._refresh == "new_refresh"
+    assert second._access == "new_access"
+    urls.clear()
+    assert await second.token() == "new_access"
+    assert urls == ["https://id.twitch.tv/oauth2/validate"]
+
+
+@pytest.mark.asyncio
+async def test_ttg_refuses_wrong_generator_client_id(monkeypatch, tmp_path) -> None:
+    from app.services import twitch_bot_auth as auth_module
+
+    session = MagicMock()
+    session.__aenter__.return_value = session
+    cm = MagicMock()
+    response = MagicMock(status=200)
+    response.json = AsyncMock(return_value={
+        "success": True, "client_id": "someone_elses_app",
+        "token": "new_access", "refresh": "new_refresh",
+    })
+    cm.__aenter__.return_value = response
+    session.get.return_value = cm
+    monkeypatch.setattr(auth_module.aiohttp, "ClientSession", lambda: session)
+
+    cache = tmp_path / "oauth.json"
+    auth = TwitchBotAuth(
+        login="radiobot", client_id="expected_app", client_secret="",
+        refresh_token="old_refresh", access_token="old_access",
+        refresh_provider="ttg", cache_file=str(cache),
+    )
+    with pytest.raises(RuntimeError, match="client ID mismatch"):
+        await auth.token()
+    assert not cache.exists()
+
+
+@pytest.mark.asyncio
+async def test_ttg_does_not_follow_redirects_or_log_tokens(monkeypatch, tmp_path) -> None:
+    from app.services import twitch_bot_auth as auth_module
+
+    session = MagicMock()
+    session.__aenter__.return_value = session
+    cm = MagicMock()
+    response = MagicMock(status=302)
+    cm.__aenter__.return_value = response
+    session.get.return_value = cm
+    monkeypatch.setattr(auth_module.aiohttp, "ClientSession", lambda: session)
+    auth = TwitchBotAuth(
+        login="radiobot", client_id="app", client_secret="",
+        refresh_token="sensitive/token?&=", access_token="access",
+        refresh_provider="ttg", cache_file=str(tmp_path / "oauth.json"),
+    )
+    with pytest.raises(RuntimeError) as exc:
+        await auth.token()
+    assert "sensitive" not in str(exc.value)
+    args, kwargs = session.get.call_args
+    assert kwargs["allow_redirects"] is False
+    assert args[0].endswith("sensitive%2Ftoken%3F%26%3D")
+
+
+def test_ttg_cache_isolated_from_other_oauth_providers(tmp_path) -> None:
+    cache = tmp_path / "oauth.json"
+    cache.write_text(json.dumps({
+        "login": "radiobot", "client_id": "app",
+        "provider": "twitch", "refresh_token": "old_app_refresh",
+    }))
+    auth = TwitchBotAuth(
+        login="radiobot", client_id="app", client_secret="",
+        refresh_token="ttg_refresh", refresh_provider="ttg",
+        cache_file=str(cache),
+    )
+    assert auth._refresh == "ttg_refresh"
