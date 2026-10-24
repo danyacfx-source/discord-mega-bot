@@ -76,6 +76,38 @@ docker compose up -d --build
 docker compose logs -f --tail=100
 ```
 
+### Если Docker-бот не обновляется и логов нет
+
+Логи приложения отсутствуют, если ошибка возникла ещё при чтении Compose
+или сборке Docker-образа. Выполняй команды **из папки именно этого проекта**
+(где лежит `docker-compose.yml`) и не трогай контейнеры других ботов:
+
+```bash
+pwd
+docker compose version
+docker compose config --quiet              # проверяет Compose, не выводит .env
+docker compose --progress plain build bot  # покажет ошибку npm / apt / pip / curl
+docker compose up -d --no-build bot        # только после успешной сборки
+docker compose ps -a
+docker compose logs --tail=100 bot
+```
+
+При необходимости сохрани вывод сборки локально на VPS:
+`docker compose --progress plain build bot > ~/dendich-build.log 2>&1`.
+Перед отправкой посторонним проверь лог на приватные URL или ключи.
+
+Частые причины: `docker compose config` останавливается из-за незаданной
+переменной; внешний архив недоступен; исчерпано место Docker
+(`df -h`); сервер ARM64 пытается запустить amd64-бинарник; код обновили,
+но образ не пересобрали. Для необязательного сервиса postgres
+`POSTGRES_PASSWORD` нужен **только когда включён профиль postgres**.
+`Dockerfile` теперь выбирает sing-box для amd64/arm64 автоматически.
+
+Если контейнер уже работает, но не становится здоровым, проверь
+`docker compose ps -a` и `docker compose logs --tail=100 bot`.
+Не запускай `docker compose down -v` и `docker system prune --volumes`:
+это может удалить важные данные.
+
 - Без `--build` изменения `app/`, `requirements.txt`, `requirements.lock` и `Dockerfile` игнорируются.
 - Откат: `git checkout <commit> && docker compose up -d --build`.
 - Токены и `.env` живут вне образа (volume), при пересборке не теряются.

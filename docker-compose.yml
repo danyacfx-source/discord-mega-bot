@@ -92,7 +92,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-megabot}
       POSTGRES_USER: ${POSTGRES_USER:-megabot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      # Do not require this variable while the optional postgres profile is off.
+      # The postgres image itself rejects empty passwords if the profile is enabled.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
