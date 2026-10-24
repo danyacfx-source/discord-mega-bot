@@ -10,8 +10,8 @@ import json
 import logging
 import os
 import time
-from urllib.parse import quote
 from pathlib import Path
+from urllib.parse import quote
 
 import aiohttp
 
