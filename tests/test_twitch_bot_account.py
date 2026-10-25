@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams.chat_commands import TwitchIrc
+from app.cogs.streams.chat_commands import TwitchIrc, _safe_auth_reason
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.twitch_bot_auth import TwitchBotAuth
 
