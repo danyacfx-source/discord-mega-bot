@@ -353,7 +353,7 @@ export default function OverlaySection() {
         </div>
         <div class="card">
           <h3 class="sec">Лента чата для OBS</h3>
-          <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick / Discord. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
+          <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
           <div class="row-inline">
             <label class="small muted">Сообщений <input class="input ovl-size" type="number" min="1" max="80" value={chatLimit} onInput={(e) => setChatLimit(clamp(Number(e.target.value) || 1, 1, 80))} /></label>
             <label class="small muted">Размер <input class="input ovl-size" type="number" min="11" max="44" value={chatSize} onInput={(e) => setChatSize(clamp(Number(e.target.value) || 11, 11, 44))} /></label>
