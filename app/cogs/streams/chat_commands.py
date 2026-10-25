@@ -218,16 +218,18 @@ class StreamChatCog(MegaCog, name="StreamChat"):
 
     async def cog_load(self) -> None:
         config = self.bot.config
-        if not config.chat_commands_enabled:
-            return
-        self.tick_loop.start()
+        # Chat overlay ingestion must work even when interactive chat commands
+        # (and bot-account OAuth) are disabled.
+        if config.chat_commands_enabled:
+            self.tick_loop.start()
         if config.twitch_channels:
-            self.chat.register_platform(
-                "twitch",
-                reply=self._reply,
-                live=self._live,
-                schedule=self._schedule,
-            )
+            if config.chat_commands_enabled:
+                self.chat.register_platform(
+                    "twitch",
+                    reply=self._reply,
+                    live=self._live,
+                    schedule=self._schedule,
+                )
             self._irc_task = self.bot.loop.create_task(self._irc_runner())
 
     async def cog_unload(self) -> None:
@@ -273,21 +275,29 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             refresh_token=config.twitch_bot_refresh_token,
             access_token=config.twitch_chat_token,
             refresh_provider=refresh_provider,
-        ) if config.twitch_bot_login else None
+        ) if config.chat_commands_enabled and config.twitch_bot_login else None
+        # Authentication must never block read-only chat displayed in OBS.
+        # After a failed auth attempt, use anonymous Twitch IRC for this run.
+        read_only = not config.chat_commands_enabled
         while True:
             if not config.twitch_channels:
                 return
-            token = config.twitch_chat_token
-            if auth is not None:
+            token = "" if read_only else config.twitch_chat_token
+            if auth is not None and not read_only:
                 try:
                     token = await auth.token()
                 except Exception as exc:
                     logger.warning(
-                        "Twitch: авторизация отдельного бот-аккаунта не прошла (%s); повтор через %d сек",
-                        _safe_auth_reason(exc), pause,
+                        "Twitch: OAuth чатбота не прошёл (%s); продолжаем читать чат для OBS без авторизации",
+                        _safe_auth_reason(exc),
                     )
-                    await asyncio.sleep(pause)
-                    continue
+                    read_only = True
+                    token = ""
+            logger.info(
+                "Twitch IRC: подключаемся к чату (%s; %s)",
+                ", ".join(config.twitch_channels),
+                "только чтение" if not token else "авторизованный режим",
+            )
             irc = TwitchIrc(
                 nick=f"justinfan{random.randint(10000, 99999)}",
                 token=token,
@@ -314,6 +324,13 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             finally:
                 self._irc = None
             if irc.auth_failed:
+                if token:
+                    logger.warning(
+                        "Twitch IRC: Twitch отклонил авторизацию; переключаем OBS-чат на чтение без бот-аккаунта"
+                    )
+                    read_only = True
+                    continue
+                logger.error("Twitch IRC: анонимный вход отклонён; чтение чата недоступно")
                 return
             if not renewed:
                 await asyncio.sleep(pause)
