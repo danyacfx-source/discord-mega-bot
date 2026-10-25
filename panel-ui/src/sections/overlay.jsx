@@ -126,26 +126,136 @@ function widgetPreview(w) {
   );
 }
 
+
+const DEFAULT_CHAT_SETTINGS = {
+  size: 17, limit: 15, idle: 10, gap: 6, padding: 12, opacity: 82,
+  theme: "minimal", font: "system", text_color: "#f7f5ee",
+  accent_color: "#b9a47a", show_platform: false,
+};
+
+function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
+  const mono = settings.font === "mono";
+  const previewText = settings.text_color;
+  const alpha = settings.opacity / 100;
+  const previewCard = settings.theme === "radio"
+    ? { background: "rgba(17,23,19," + alpha + ")", borderLeft: "2px solid " + settings.accent_color, borderRadius: "5px 12px 12px 5px" }
+    : settings.theme === "glass"
+      ? { background: "rgba(26,31,42," + alpha + ")", border: "1px solid #5c6268", borderRadius: 13 }
+      : { background: "transparent" };
+  const setNum = (key, min, max) => (e) => change(key, clamp(Number(e.target.value) || 0, min, max));
+  const font = mono ? "Consolas, monospace" : "Inter, 'Segoe UI', system-ui, sans-serif";
+  return (
+    <div class="stack">
+      <div class="row-inline" style={{ gap: 14, flexWrap: "wrap" }}>
+        <label class="ovl-field" style={{ minWidth: 150, flex: "1 1 160px" }}>Оформление
+          <select class="input" value={settings.theme} onChange={(e) => change("theme", e.target.value)}>
+            <option value="minimal">Классический · прозрачный</option>
+            <option value="radio">RADIO SILENCE · тактический</option>
+            <option value="glass">Стекло · мягкие карточки</option>
+          </select>
+        </label>
+        <label class="ovl-field" style={{ minWidth: 130, flex: "1 1 130px" }}>Шрифт
+          <select class="input" value={settings.font} onChange={(e) => change("font", e.target.value)}>
+            <option value="system">Современный</option>
+            <option value="mono">Радиотерминал</option>
+          </select>
+        </label>
+      </div>
+      <div class="row-inline" style={{ gap: 14, flexWrap: "wrap" }}>
+        <label class="ovl-field" style={{ flex: "1 1 160px" }}>Размер текста — {settings.size}px
+          <input class="range" type="range" min="11" max="44" value={settings.size} onInput={setNum("size", 11, 44)} />
+        </label>
+        <label class="ovl-field" style={{ flex: "1 1 160px" }}>Сообщений — {settings.limit}
+          <input class="range" type="range" min="1" max="80" value={settings.limit} onInput={setNum("limit", 1, 80)} />
+        </label>
+        <label class="ovl-field" style={{ flex: "1 1 160px" }}>Прозрачность карточек — {100 - settings.opacity}%
+          <input class="range" type="range" min="0" max="100" value={settings.opacity} onInput={setNum("opacity", 0, 100)} />
+        </label>
+      </div>
+      <div class="row-inline" style={{ gap: 14, flexWrap: "wrap" }}>
+        <label class="small muted">Скрывать после тишины, сек (0 — никогда)
+          <input class="input ovl-size" type="number" min="0" max="600" value={settings.idle} onInput={setNum("idle", 0, 600)} />
+        </label>
+        <label class="small muted">Интервал, px
+          <input class="input ovl-size" type="number" min="0" max="20" value={settings.gap} onInput={setNum("gap", 0, 20)} />
+        </label>
+        <label class="small muted">Отступ, px
+          <input class="input ovl-size" type="number" min="0" max="32" value={settings.padding} onInput={setNum("padding", 0, 32)} />
+        </label>
+        <label class="small muted">Цвет текста
+          <input type="color" value={settings.text_color} onInput={(e) => change("text_color", e.target.value)} />
+        </label>
+        <label class="small muted">Акцент
+          <input type="color" value={settings.accent_color} onInput={(e) => change("accent_color", e.target.value)} />
+        </label>
+        <label class="ovl-check"><input type="checkbox" checked={settings.show_platform} onChange={(e) => change("show_platform", e.currentTarget.checked)} /> Метки платформ</label>
+      </div>
+      <div style={{ border: "1px solid #38443c", borderRadius: 12, background: "#0e1516", padding: 12 }}>
+        <div class="muted small" style={{ marginBottom: 10 }}>ПРЕДПРОСМОТР · RADIO SILENCE</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: settings.gap, padding: settings.padding, minHeight: 110 }}>
+          {[
+            { platform: "TWITCH", nick: "Зритель", color: "#9146ff", message: "📡 Связь есть, как слышно?" },
+            { platform: "KICK", nick: "Оператор", color: "#53fc18", message: "Принял! Импровизацию никто не отменял." },
+          ].map((msg) => (
+            <div key={msg.platform} style={{ ...previewCard, display: "flex", alignItems: "baseline", gap: 7, padding: settings.theme === "minimal" ? 0 : "7px 10px", fontFamily: font, fontSize: settings.size, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+              {settings.show_platform && <span style={{ fontSize: ".59em", fontWeight: 800, color: "#a9b4ad", letterSpacing: ".1em" }}>{msg.platform}</span>}
+              <b style={{ color: msg.color, flexShrink: 0 }}>{msg.nick}:</b>
+              <span style={{ color: previewText }}>{msg.message}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div class="row-inline">
+        <button class="btn success" type="button" onClick={save} disabled={saving || (!dirty && saved)}>
+          {saving ? "Сохраняем…" : "Сохранить оформление"}
+        </button>
+        <span class="muted small">{dirty ? "Есть несохранённые изменения" : saved ? "Сохранено в базе · применяется в OBS автоматически" : "Пока используются параметры из ссылки OBS"}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function OverlaySection() {
   const [meta, setMeta] = useState({ enabled: false, host: "", port: null, token: "", layouts: [], canvas_presets: [], widget_types: [] });
   const [layout, setLayout] = useState(EMPTY_LAYOUT);
   const [selected, setSelected] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [chatLimit, setChatLimit] = useState(15);
-  const [chatSize, setChatSize] = useState(17);
-  const [chatIdle, setChatIdle] = useState(10);
+  const [chatSettings, setChatSettings] = useState(DEFAULT_CHAT_SETTINGS);
+  const [chatDirty, setChatDirty] = useState(false);
+  const [chatSaved, setChatSaved] = useState(false);
+  const [chatSaving, setChatSaving] = useState(false);
   const canvasRef = useRef(null);
 
   async function loadMeta() {
     const r = await api("/api/overlay");
     if (r.status !== 200) return toast(errToast(r), false);
     setMeta(r.data);
+    setChatSettings(r.data.chat_settings || DEFAULT_CHAT_SETTINGS);
+    setChatSaved(Boolean(r.data.chat_settings_saved));
+    setChatDirty(false);
   }
 
   useEffect(() => {
     loadMeta();
   }, []);
+
+  function changeChatSetting(key, value) {
+    setChatSettings((previous) => ({ ...previous, [key]: value }));
+    setChatDirty(true);
+  }
+
+  async function saveChatStyle() {
+    setChatSaving(true);
+    const r = await api("/api/overlay/chat/settings", { settings: chatSettings });
+    setChatSaving(false);
+    if (r.status === 200 && r.data.ok) {
+      setChatSettings(r.data.settings);
+      setChatSaved(true);
+      setChatDirty(false);
+      toast("Оформление чата сохранено — OBS обновится автоматически", true);
+    } else toast(errToast(r), false);
+  }
 
   function scale() {
     if (!canvasRef.current || !layout) return 1;
@@ -294,8 +404,7 @@ export default function OverlaySection() {
       : "";
   const chatUrl =
     meta.enabled && meta.token
-      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}` +
-        `&limit=${clamp(chatLimit, 1, 80)}&size=${clamp(chatSize, 11, 44)}&idle=${clamp(chatIdle, 0, 600)}`
+      ? `${meta.url_base || `${location.protocol}//${obsHost}:${meta.port}`}/overlay/chat?token=${meta.token}`
       : "";
 
   async function copyUrl() {
@@ -354,14 +463,13 @@ export default function OverlaySection() {
         <div class="card">
           <h3 class="sec">Лента чата для OBS</h3>
           <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
+          <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
           <div class="row-inline">
-            <label class="small muted">Сообщений <input class="input ovl-size" type="number" min="1" max="80" value={chatLimit} onInput={(e) => setChatLimit(clamp(Number(e.target.value) || 1, 1, 80))} /></label>
-            <label class="small muted">Размер <input class="input ovl-size" type="number" min="11" max="44" value={chatSize} onInput={(e) => setChatSize(clamp(Number(e.target.value) || 11, 11, 44))} /></label>
-            <label class="small muted">Скрывать через, с (0 — никогда) <input class="input ovl-size" type="number" min="0" max="600" value={chatIdle} onInput={(e) => setChatIdle(clamp(Number(e.target.value) || 0, 0, 600))} /></label>
-            <button class="btn success" type="button" onClick={copyChatUrl} disabled={!meta.enabled || !meta.token}>Скопировать ссылку на чат</button>
+            <button class="btn" type="button" onClick={copyChatUrl} disabled={!meta.enabled || !meta.token || meta.token_redacted}>Скопировать постоянную ссылку для OBS</button>
+            <span class="muted small">Старая ссылка остаётся рабочей — менять Browser Source не нужно.</span>
           </div>
           {!meta.enabled && <div class="muted small">Сначала задайте OVERLAY_PORT и перезапустите бот.</div>}
-          <p class="muted small" style={{ marginTop: 8 }}>После 10 секунд тишины по умолчанию чат становится прозрачным; установите 0 для постоянного отображения.</p>
+          <p class="muted small" style={{ marginTop: 8 }}>Настройки хранятся в базе и подтягиваются действующим OBS-источником примерно раз в 3 секунды. Сохранённое оформление имеет приоритет над параметрами старой ссылки.</p>
         </div>
       </div>
     );
@@ -410,40 +518,9 @@ export default function OverlaySection() {
             <button class="btn" type="button" onClick={copyUrl}>Ссылка для OBS
             </button>
           ) : null}
-          {meta.enabled && meta.token ? (
-            <>
-              <span class="muted small">чат:</span>
-              <input
-                class="input ovl-size"
-                type="number"
-                min="1"
-                max="80"
-                title="Сообщений в ленте (1–80)"
-                value={chatLimit}
-                onInput={(e) => setChatLimit(clamp(Number(e.target.value) || 1, 1, 80))}
-              />
-              <input
-                class="input ovl-size"
-                type="number"
-                min="11"
-                max="44"
-                title="Кегль сообщений (11–44)"
-                value={chatSize}
-                onInput={(e) => setChatSize(clamp(Number(e.target.value) || 11, 11, 44))}
-              />
-              <input
-                class="input ovl-size"
-                type="number"
-                min="0"
-                max="600"
-                title="Прятать ленту после N секунд тишины (0 — всегда показывать)"
-                value={chatIdle}
-                onInput={(e) => setChatIdle(clamp(Number(e.target.value) || 0, 0, 600))}
-              />
-              <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS
-              </button>
-            </>
-          ) : null}
+          {meta.enabled && meta.token && !meta.token_redacted && (
+            <button class="btn" type="button" onClick={copyChatUrl}>Лента чата для OBS</button>
+          )}
           <button class="btn danger" type="button" onClick={deleteLayout}>
             Удалить
           </button>
@@ -679,6 +756,11 @@ export default function OverlaySection() {
             )}
           </div>
         </div>
+      </div>
+      <div class="card">
+        <h3 class="sec">Оформление отдельного чата OBS</h3>
+        <p class="muted small">Сохраняется независимо от раскладки. Старую ссылку менять не нужно.</p>
+        <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
       </div>
     </div>
   );
