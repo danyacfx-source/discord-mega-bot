@@ -29,6 +29,34 @@ _IRC_URL = "wss://irc-ws.chat.twitch.tv:443"
 #: Twitch rate limit записи — 20 сообщений / 30 секунд
 _SEND_INTERVAL = 1.7
 
+# Never emit raw OAuth exceptions: TTG request URLs may contain refresh tokens.
+# Map only fixed messages raised by our own authentication service.
+_SAFE_AUTH_REASONS = {
+    "Twitch bot: TWITCH_BOT_CLIENT_ID is required for TTG": "не задан TWITCH_BOT_CLIENT_ID",
+    "Twitch TTG token refresh failed (HTTP status)": "TTG отклонил обновление токена",
+    "Twitch TTG token refresh failed or client ID mismatch": "неверный Client ID или ответ TTG",
+    "Twitch OAuth: TWITCH_CLIENT_ID/SECRET are required": "не настроено OAuth-приложение Twitch",
+    "Twitch OAuth: refresh failed": "Twitch отклонил обновление токена",
+    "Twitch OAuth: refresh response missing access/refresh token": "OAuth не прислал необходимые токены",
+    "Twitch OAuth: unable to save rotated token": "не удалось сохранить обновлённый токен",
+    "Twitch OAuth: access token validation failed": "Twitch отклонил Access Token",
+    "Twitch OAuth: token belongs to a different user than TWITCH_BOT_LOGIN": "токен выдан другому Twitch-аккаунту",
+    "Twitch OAuth: missing chat:read / chat:edit scopes": "не хватает прав chat:read / chat:edit",
+    "Twitch OAuth: token client_id mismatch": "Client ID токена не совпадает с настройками",
+    "Twitch OAuth: access token expiring; reauthorization may be needed": "токен истекает, нужна повторная авторизация",
+    "Twitch OAuth: unable to persist token expiry": "не удалось сохранить срок действия токена",
+}
+
+
+def _safe_auth_reason(exc: Exception) -> str:
+    """Useful failure category without leaking credentials or request URLs."""
+    if isinstance(exc, RuntimeError):
+        return _SAFE_AUTH_REASONS.get(str(exc), "ошибка OAuth (детали скрыты)")
+    if isinstance(exc, (aiohttp.ClientError, TimeoutError, OSError)):
+        return "сетевая ошибка OAuth"
+    return "неизвестная ошибка авторизации"
+
+
 
 @dataclass(slots=True)
 class IrcPrivmsg:
@@ -253,8 +281,11 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             if auth is not None:
                 try:
                     token = await auth.token()
-                except Exception:
-                    logger.warning("Twitch: не удалось авторизовать отдельный бот-аккаунт; повтор через %d сек", pause)
+                except Exception as exc:
+                    logger.warning(
+                        "Twitch: авторизация отдельного бот-аккаунта не прошла (%s); повтор через %d сек",
+                        _safe_auth_reason(exc), pause,
+                    )
                     await asyncio.sleep(pause)
                     continue
             irc = TwitchIrc(
