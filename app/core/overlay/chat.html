@@ -3,27 +3,32 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
-body{background:var(--bg,transparent);font-family:Inter,'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden;display:flex;flex-direction:column;padding:12px}
-#feed{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;opacity:1;transition:opacity .35s ease;scrollbar-width:none;-ms-overflow-style:none}
+body{background:var(--bg,transparent);font-family:var(--font,Inter,'Segoe UI',system-ui,sans-serif);color:var(--text-color,#fff);overflow:hidden;display:flex;flex-direction:column;padding:var(--pad,12px)}
+#feed{flex:1;min-height:0;display:flex;flex-direction:column;gap:var(--gap,6px);overflow-y:auto;opacity:1;transition:opacity .35s ease;scrollbar-width:none;-ms-overflow-style:none}
 #feed::before{content:"";margin-top:auto}
 #feed::-webkit-scrollbar{width:0;height:0}
 body.idle #feed{opacity:0}
-.m{flex:none;display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.4;word-break:break-word;animation:m-in .22s ease-out both}
+.m{flex:none;display:flex;align-items:baseline;gap:7px;font-size:var(--fs,16px);line-height:1.45;word-break:break-word;animation:m-in .22s ease-out both}
 @keyframes m-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes m-out{to{opacity:0;transform:translateY(-6px)}}
 .m.out{animation:m-out .18s ease-in both}
 .name{font-weight:700;color:var(--c,#c084fc);text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 6px rgba(0,0,0,.7),0 0 16px rgba(0,0,0,.4)}
 .name::after{content:": "}
 .name.mod{font-weight:800}
-.text{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45)}
+.text{color:var(--text-color,#fff);text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 5px rgba(0,0,0,.75),0 0 16px rgba(0,0,0,.45)}
+.platform-tag{display:var(--platform-display,none);font-size:.59em;letter-spacing:.1em;font-weight:800;opacity:.8;padding-top:2px;flex:none}
+body[data-theme="radio"] .m{background:rgba(17,23,19,var(--alpha,.82));border-left:2px solid var(--accent,#b9a47a);border-radius:5px 12px 12px 5px;padding:7px 10px;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+body[data-theme="glass"] .m{background:rgba(26,31,42,var(--alpha,.82));border:1px solid rgba(235,228,215,.15);border-radius:13px;padding:8px 11px;box-shadow:0 5px 18px rgba(0,0,0,.22);backdrop-filter:blur(9px)}
+body[data-theme="radio"] .name{font-weight:850}
+body[data-theme="glass"] .name{font-weight:800}
 @media (prefers-reduced-motion:reduce){.m{animation:none}}
 </style></head><body class="idle"><div id="feed"></div>
 <script>
 const TOKEN="__TOKEN__";
 const Q=new URLSearchParams(location.search);
 const num=(key,lo,hi,dflt)=>{const v=Number(Q.get(key));return Number.isFinite(v)&&v?Math.min(hi,Math.max(lo,v)):dflt};
-const LIMIT=Math.round(num("limit",1,80,20));
-const IDLE=(()=>{const raw=Q.get("idle");if(raw===null)return 10;const v=Number(raw);return Number.isFinite(v)?Math.max(0,v):10})();
+let LIMIT=Math.round(num("limit",1,80,20));
+let IDLE=(()=>{const raw=Q.get("idle");if(raw===null)return 10;const v=Number(raw);return Number.isFinite(v)?Math.max(0,v):10})();
 const PLAT=(Q.get("platform")||"").toLowerCase().split(",").map(s=>s.trim()).filter(Boolean);
 const okPlat=m=>!PLAT.length||PLAT.includes(String(m.platform||"").toLowerCase());
 document.documentElement.style.setProperty("--fs",num("size",11,44,16)+"px");
@@ -40,6 +45,24 @@ const live=new Map();
 const key=m=>[m.ts,m.platform,m.name,m.text].join("|");
 
 let idleTimer=null;
+let styleSig="";
+function applySettings(settings){
+  if(!settings)return; // Unsaved: preserve existing query-driven OBS links.
+  LIMIT=Math.round(Math.min(80,Math.max(1,Number(settings.limit)||15)));
+  IDLE=Math.min(600,Math.max(0,Number(settings.idle)||0));
+  const root=document.documentElement.style;
+  root.setProperty("--fs",settings.size+"px");
+  root.setProperty("--gap",settings.gap+"px");
+  root.setProperty("--pad",settings.padding+"px");
+  root.setProperty("--text-color",settings.text_color);
+  root.setProperty("--accent",settings.accent_color);
+  root.setProperty("--alpha",String(settings.opacity/100));
+  root.setProperty("--font",settings.font==="mono"?"'Consolas','Liberation Mono',monospace":"Inter,'Segoe UI',system-ui,sans-serif");
+  root.setProperty("--platform-display",settings.show_platform?"inline":"none");
+  document.body.dataset.theme=settings.theme;
+  clearTimeout(idleTimer);
+  if(!document.body.classList.contains("idle"))wake();
+}
 function wake(){
   document.body.classList.remove("idle");
   clearTimeout(idleTimer);
@@ -53,6 +76,11 @@ function build(m){
   name.className="name"+(m.mod?" mod":"");
   name.style.setProperty("--c",nickColor(m.platform));
   name.textContent=m.name||"?";
+  const platform=document.createElement("span");
+  platform.className="platform-tag";
+  const known={twitch:"TWITCH",kick:"KICK",youtube:"YOUTUBE"};
+  platform.textContent=known[String(m.platform||"").toLowerCase()]||"CHAT";
+  row.appendChild(platform);
   row.appendChild(name);
   const text=document.createElement("span");
   text.className="text";
@@ -94,6 +122,8 @@ async function load(){
     const r=await fetch("/overlay/api",{headers:{"X-Overlay-Token":TOKEN}});
     if(!r.ok)return;
     const d=await r.json();
+    const nextStyle=JSON.stringify(d.chat_settings||null);
+    if(nextStyle!==styleSig){styleSig=nextStyle;applySettings(d.chat_settings);}
     const rows=(d.chat||[]).filter(okPlat).slice(-LIMIT);
     const next=JSON.stringify(rows);
     if(next===sig)return;
