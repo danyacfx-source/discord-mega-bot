@@ -228,6 +228,7 @@ async def test_chat_overlay_page(tmp_path) -> None:
     overlay = Overlay(bot)
     try:
         bot.services.chat_feed.push("kick", "Алиса", "привет эфиру")  # type: ignore[union-attr]
+        bot.services.chat_feed.push("discord", "Посторонний", "не в OBS")  # type: ignore[union-attr]
         async with TestServer(overlay._create_app()) as server:
             async with TestClient(server) as client:
                 headers = {"X-Overlay-Token": "overlay-secret-token-32chars"}
@@ -250,5 +251,6 @@ async def test_chat_overlay_page(tmp_path) -> None:
                 data = await (await client.get("/overlay/api", headers=headers)).json()
                 assert data["chat"][0]["name"] == "Алиса"
                 assert data["chat"][0]["text"] == "привет эфиру"
+                assert len(data["chat"]) == 1, "сообщения Discord не должны попадать в OBS"
     finally:
         await bot.close()

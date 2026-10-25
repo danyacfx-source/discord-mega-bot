@@ -7,7 +7,7 @@ import pytest
 
 from app.cogs.streams.youtube import YouTubeCog
 from app.services.youtube_data_api import YouTubeDataAPI, video_live_status
-from app.services.youtube_live import parse_youtube_live
+from app.services.youtube_live import parse_youtube_live, probe_youtube_live
 
 VIDEO_ID = "Abc_123-xYz"
 CHANNEL_ID = "UC012345678901234567890"
@@ -47,6 +47,27 @@ def test_ytdlp_live_requires_true_status():
     assert parse_youtube_live(info)["id"] == VIDEO_ID
     assert parse_youtube_live({**info, "live_status": "is_upcoming", "is_live": False}) is None
     assert parse_youtube_live({**info, "live_status": "was_live", "is_live": False}) is None
+
+
+def test_ytdlp_offline_is_not_a_failure(monkeypatch):
+    from yt_dlp.utils import DownloadError
+
+    downloader = MagicMock()
+    downloader.__enter__.return_value.extract_info.side_effect = DownloadError(
+        "ERROR: [youtube:tab] @Dendosich: The channel is not currently live"
+    )
+    monkeypatch.setattr("yt_dlp.YoutubeDL", lambda options: downloader)
+    assert probe_youtube_live("https://www.youtube.com/@Dendosich") is None
+
+
+def test_ytdlp_real_errors_are_not_masked(monkeypatch):
+    from yt_dlp.utils import DownloadError
+
+    downloader = MagicMock()
+    downloader.__enter__.return_value.extract_info.side_effect = DownloadError("HTTP Error 429: Too Many Requests")
+    monkeypatch.setattr("yt_dlp.YoutubeDL", lambda options: downloader)
+    with pytest.raises(DownloadError, match="429"):
+        probe_youtube_live("https://www.youtube.com/@Dendosich")
 
 
 @pytest.mark.asyncio

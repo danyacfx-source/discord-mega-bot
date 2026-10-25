@@ -8,9 +8,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams.chat_commands import TwitchIrc
+from app.cogs.streams.chat_commands import TwitchIrc, _safe_auth_reason
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.twitch_bot_auth import TwitchBotAuth
+
+
+def test_oauth_diagnostic_does_not_expose_private_error_messages() -> None:
+    assert "chat:read" in _safe_auth_reason(RuntimeError("Twitch OAuth: missing chat:read / chat:edit scopes"))
+    assert "другому" in _safe_auth_reason(
+        RuntimeError("Twitch OAuth: token belongs to a different user than TWITCH_BOT_LOGIN")
+    )
+    assert "secret-value" not in _safe_auth_reason(RuntimeError("https://service/private/secret-value"))
+    assert "сетевая" in _safe_auth_reason(TimeoutError("https://private/token/secret-value"))
 
 
 def _msg(command: str) -> ChatMessage:

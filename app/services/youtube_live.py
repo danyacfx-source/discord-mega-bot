@@ -52,10 +52,24 @@ def parse_youtube_live(info: dict[str, Any] | None) -> dict[str, Any] | None:
 def probe_youtube_live(channel_url: str) -> dict[str, Any] | None:
     """Blocking yt-dlp metadata extraction; errors bubble up (not 'offline')."""
     from yt_dlp import YoutubeDL
+    from yt_dlp.utils import DownloadError
+
+    class _QuietLogger:
+        """yt-dlp logs offline states as ERROR; the caller handles real failures."""
+
+        def debug(self, _message: str) -> None:
+            pass
+
+        def warning(self, _message: str) -> None:
+            pass
+
+        def error(self, _message: str) -> None:
+            pass
 
     live_url = channel_url.rstrip("/") + "/live"
     options = {
         "quiet": True,
+        "logger": _QuietLogger(),
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
@@ -67,5 +81,12 @@ def probe_youtube_live(channel_url: str) -> dict[str, Any] | None:
     with YoutubeDL(options) as ydl:
         # Resolve /live redirects to the actual video so live_status is available.
         # This extracts metadata only; no video is downloaded.
-        info = ydl.extract_info(live_url, download=False)
+        try:
+            info = ydl.extract_info(live_url, download=False)
+        except DownloadError as exc:
+            # YouTube's /live returns a normal offline state as an yt-dlp exception.
+            # Do not mask unrelated failures (network, 429, access restrictions).
+            if "channel is not currently live" in str(exc).lower():
+                return None
+            raise
     return parse_youtube_live(info)

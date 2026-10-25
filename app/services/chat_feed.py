@@ -13,6 +13,9 @@ class ChatFeed:
         self._items: deque[dict[str, Any]] = deque(maxlen=maxlen)
 
     def push(self, platform: str, name: str, text: str, *, is_mod: bool = False) -> None:
+        # Only live-stream chats belong in the OBS feed, never Discord guild chat.
+        if platform not in {"twitch", "kick", "youtube"}:
+            return
         self._items.append(
             {
                 "platform": str(platform)[:16],
