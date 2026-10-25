@@ -13,6 +13,11 @@ import aiohttp
 import discord
 from aiohttp import web
 
+from app.core.overlay.chat_settings import (
+    DEFAULT_CHAT_SETTINGS,
+    load_chat_settings,
+    save_chat_settings,
+)
 from app.core.overlay.layout import (
     CANVAS_PRESETS,
     WIDGET_TYPES,
@@ -91,9 +96,12 @@ class _ToolsApiMixin(_BaseApi):
             token_field = f"{raw_token[:4]}…{raw_token[-4:]}"
         else:
             token_field = ""
+        current_chat = await load_chat_settings(self.services.kv)
         return self._json(
             {
                 "ok": True,
+                "chat_settings": current_chat or DEFAULT_CHAT_SETTINGS,
+                "chat_settings_saved": current_chat is not None,
                 "enabled": bool(config.overlay_port),
                 "host": config.overlay_host,
                 "port": config.overlay_port,
@@ -105,6 +113,12 @@ class _ToolsApiMixin(_BaseApi):
                 "widget_types": list(WIDGET_TYPES),
             }
         )
+
+    async def _api_overlay_chat_settings_save(self, request: web.Request) -> web.Response:
+        """Store presentation preferences without changing the OBS source URL."""
+        payload = await self._read_json(request)
+        settings = await save_chat_settings(self.services.kv, payload.get("settings"))
+        return self._json({"ok": True, "settings": settings})
 
     async def _api_overlay_layouts_create(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
