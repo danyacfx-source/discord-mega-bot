@@ -38,6 +38,14 @@ def test_feed_keeps_tail_and_limits() -> None:
     assert feed.recent(limit=-5) == []
 
 
+def test_feed_ignores_discord_messages() -> None:
+    feed = ChatFeed()
+    feed.push("discord", "Guild user", "Это не чат стрима")
+    feed.push("kick", "Streamer", "Привет!")
+    feed.push("twitch", "Viewer", "Хай")
+    assert [message["platform"] for message in feed.recent()] == ["kick", "twitch"]
+
+
 def test_feed_clamps_long_fields() -> None:
     feed = ChatFeed()
     feed.push("twitch", "n" * 100, "т" * 700)
