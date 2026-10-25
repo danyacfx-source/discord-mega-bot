@@ -58,7 +58,9 @@ class KickCog(MegaCog, name="Kick"):
         if self.bot.config.kick_channel_slug:
             self.poll_loop.change_interval(seconds=self.bot.config.kick_poll_seconds)
             self.poll_loop.start()
-        if self.bot.config.kick_access_token and self.bot.config.kick_channel_slug:
+        # Public Kick Pusher chat is read-only without OAuth; do not gate
+        # OBS chat ingestion on credentials needed only for writes/moderation.
+        if self.bot.config.kick_channel_slug:
             if self.bot.config.kick_mod_channel_id:
                 logger.warning(
                     "KICK_MOD_CHANNEL_ID больше не используется — chatroom определяется из KICK_CHANNEL_SLUG через API"
