@@ -120,6 +120,28 @@ class _ToolsApiMixin(_BaseApi):
         settings = await save_chat_settings(self.services.kv, payload.get("settings"))
         return self._json({"ok": True, "settings": settings})
 
+    async def _api_overlay_chat_test(self, request: web.Request) -> web.Response:
+        """Inject one clearly labelled test message into OBS only.
+
+        No external Twitch/Kick requests, chatbot commands, chat coins or
+        stream notifications. The caller must have panel admin permissions.
+        """
+        if not self.bot.config.overlay_port:
+            return self._json({"ok": False, "error": "OBS-оверлей выключен"}, status=503)
+        payload = await self._read_json(request)
+        platform = str(payload.get("platform") or "").strip().lower()
+        if platform not in {"twitch", "kick"}:
+            return self._json({"ok": False, "error": "Неизвестная платформа"}, status=400)
+        raw_text = payload.get("text")
+        text = raw_text.strip() if isinstance(raw_text, str) else ""
+        text = " ".join(text.split())[:200] or "Связь есть. Плана нет. 📻"
+        # Do not route a test through ChatCommandsService: it would affect
+        # analytics/economy or accidentally send a message to a platform.
+        self.services.chat_feed.push(
+            platform, "ТЕСТ OBS", f"🧪 ТЕСТ ОВЕРЛЕЯ · {text}"
+        )
+        return self._json({"ok": True, "platform": platform})
+
     async def _api_overlay_layouts_create(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
         kv = self.services.kv
