@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, toast, errToast } from "../lib/exports.js";
+import LiveVotePanel from "./live-vote.jsx";
 
 const EMPTY_LAYOUT = null;
 
@@ -607,6 +608,7 @@ export default function OverlaySection() {
             ))}
           </div>
         </div>
+        <LiveVotePanel meta={meta} />
         <div class="card">
           <h3 class="sec">Лента чата для OBS</h3>
           <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
@@ -909,6 +911,7 @@ export default function OverlaySection() {
           </div>
         </div>
       </div>
+      <LiveVotePanel meta={meta} />
       <div class="card">
         <h3 class="sec">Оформление отдельного чата OBS</h3>
         <p class="muted small">Сохраняется независимо от раскладки. Старую ссылку менять не нужно.</p>
