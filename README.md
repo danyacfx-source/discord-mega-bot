@@ -101,7 +101,6 @@ docker compose logs --tail=100 bot
 (`df -h`); сервер ARM64 пытается запустить amd64-бинарник; код обновили,
 но образ не пересобрали. Для необязательного сервиса postgres
 `POSTGRES_PASSWORD` нужен **только когда включён профиль postgres**.
-`Dockerfile` теперь выбирает sing-box для amd64/arm64 автоматически.
 
 Если контейнер уже работает, но не становится здоровым, проверь
 `docker compose ps -a` и `docker compose logs --tail=100 bot`.

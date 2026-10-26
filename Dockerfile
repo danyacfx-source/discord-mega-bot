@@ -13,29 +13,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # ffmpeg и libopus — обязательны для музыки и голосовых каналов (py-nacl, discordsrv)
-# curl + ca-certificates — для загрузки sing-box
+# curl + ca-certificates — диагностика на VPS (healthcheck, проверка API)
 # postgresql-client — pg_dump для периодических backup-ов PostgreSQL
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libopus0 libopus-dev curl ca-certificates gosu postgresql-client fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
-
-# sing-box — опциональный прокси только для Gemini (если хост в EEA/NL, где API недоступен).
-# Запускается entrypoint'ом при заданном SINGBOX_CONFIG_B64 (см. .env.example).
-ARG SINGBOX_VERSION=1.14.1
-# BuildKit supplies TARGETARCH for the VPS architecture; old builds always
-# fetched amd64 and failed with "exec format error" on ARM64 servers.
-ARG TARGETARCH
-RUN set -eu; \
-    arch="${TARGETARCH:-amd64}"; \
-    case "$arch" in amd64|arm64) ;; *) echo "Unsupported sing-box architecture: $arch" >&2; exit 1 ;; esac; \
-    archive="sing-box-${SINGBOX_VERSION}-linux-${arch}-musl"; \
-    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${archive}.tar.gz" -o /tmp/sb.tgz; \
-    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-checksums.txt" -o /tmp/sb.sum; \
-    grep " ${archive}\.tar\.gz\$" /tmp/sb.sum | sha256sum -c -; \
-    tar -xzf /tmp/sb.tgz -C /tmp; \
-    install -m 0755 "/tmp/${archive}/sing-box" /usr/local/bin/sing-box; \
-    rm -rf /tmp/sb.tgz /tmp/sb.sum "/tmp/${archive}"; \
-    sing-box version
 
 WORKDIR /app
 
