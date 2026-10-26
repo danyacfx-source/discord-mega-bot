@@ -60,6 +60,7 @@ def assemble(
     from app.services.kick_service import KickService
     from app.services.kv_service import KvService
     from app.services.logging_service import LoggingService
+    from app.services.live_vote_service import LiveVoteService
     from app.services.moderation_case_service import ModerationCaseService
     from app.services.moderation_service import ModerationService
     from app.services.music_service import MusicService
@@ -110,7 +111,8 @@ def assemble(
     vk_video = override_or(overrides, "vk_video", VkVideoService, kv_repo, config)
     chat_coins = override_or(overrides, "chat_coins", ChatCoinsService, ChatCoinsRepository(db))
     chat_feed = override_or(overrides, "chat_feed", ChatFeed)
-    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv, chat_feed)
+    live_vote = override_or(overrides, "live_vote", LiveVoteService, kv)
+    chat_commands = override_or(overrides, "chat_commands", ChatCommandsService, config, chat_coins, kv, chat_feed, live_vote)
     guard = override_or(overrides, "guard", CommandGuardService, config, kv)
     events = override_or(overrides, "events", EventBus)
 
@@ -137,6 +139,7 @@ def assemble(
         chat_coins=chat_coins,
         chat_commands=chat_commands,
         chat_feed=chat_feed,
+        live_vote=live_vote,
         guard=guard,
         events=events,
     )
