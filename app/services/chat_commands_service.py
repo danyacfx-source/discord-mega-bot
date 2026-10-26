@@ -78,7 +78,14 @@ class _Poll:
 class ChatCommandsService:
     """Диспетчер команд чата: единая логика для всех платформ."""
 
-    def __init__(self, config: Config, coins: ChatCoinsService, kv: KvService, feed: ChatFeed | None = None, live_vote: LiveVoteService | None = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        coins: ChatCoinsService,
+        kv: KvService,
+        feed: ChatFeed | None = None,
+        live_vote: LiveVoteService | None = None,
+    ) -> None:
         self._config = config
         self._coins = coins
         self._kv = kv
