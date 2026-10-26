@@ -132,6 +132,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/api/overlay", viewer(panel._api_overlay_get))
     router.add_post("/api/overlay/chat/settings", viewer(panel._api_overlay_chat_settings_save, "admin"))
     router.add_post("/api/overlay/chat/test", viewer(panel._api_overlay_chat_test, "admin"))
+    router.add_get("/api/overlay/chat/control", viewer(panel._api_overlay_chat_control_get))
+    router.add_post("/api/overlay/chat/control", viewer(panel._api_overlay_chat_control_post, "admin"))
     router.add_post("/api/overlay/layouts", viewer(panel._api_overlay_layouts_create, "admin"))
     router.add_post("/api/overlay/layout", viewer(panel._api_overlay_layout_save, "admin"))
     router.add_get("/api/overlay/layout", viewer(panel._api_overlay_layout_load))
