@@ -215,6 +215,33 @@ function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
   );
 }
 
+
+function ChatTestControls({ text, setText, send, sending, enabled }) {
+  return (
+    <div class="stack">
+      <label class="ovl-field">Текст проверочного сообщения
+        <input
+          class="input"
+          type="text"
+          maxLength="200"
+          value={text}
+          placeholder="Связь есть. Плана нет. 📻"
+          onInput={(e) => setText(e.target.value)}
+        />
+      </label>
+      <div class="row-inline">
+        <button class="btn" type="button" disabled={!enabled || Boolean(sending)} onClick={() => send("twitch")}>
+          {sending === "twitch" ? "Отправляем…" : "🟣 Тест Twitch"}
+        </button>
+        <button class="btn" type="button" disabled={!enabled || Boolean(sending)} onClick={() => send("kick")}>
+          {sending === "kick" ? "Отправляем…" : "🟢 Тест Kick"}
+        </button>
+      </div>
+      <p class="muted small">Сообщение с пометкой «ТЕСТ OBS» появится только в оверлее. В Twitch и Kick оно не отправляется, чатбот и экономика не вызываются. Это проверка отображения, а не соединения с чат-платформой.</p>
+    </div>
+  );
+}
+
 export default function OverlaySection() {
   const [meta, setMeta] = useState({ enabled: false, host: "", port: null, token: "", layouts: [], canvas_presets: [], widget_types: [] });
   const [layout, setLayout] = useState(EMPTY_LAYOUT);
@@ -225,6 +252,8 @@ export default function OverlaySection() {
   const [chatDirty, setChatDirty] = useState(false);
   const [chatSaved, setChatSaved] = useState(false);
   const [chatSaving, setChatSaving] = useState(false);
+  const [chatTestText, setChatTestText] = useState("Связь есть. Плана нет. 📻");
+  const [chatTestSending, setChatTestSending] = useState("");
   const canvasRef = useRef(null);
 
   async function loadMeta() {
@@ -254,6 +283,15 @@ export default function OverlaySection() {
       setChatSaved(true);
       setChatDirty(false);
       toast("Оформление чата сохранено — OBS обновится автоматически", true);
+    } else toast(errToast(r), false);
+  }
+
+  async function sendChatTest(platform) {
+    setChatTestSending(platform);
+    const r = await api("/api/overlay/chat/test", { platform, text: chatTestText });
+    setChatTestSending("");
+    if (r.status === 200 && r.data.ok) {
+      toast("Тестовое сообщение появится в OBS через несколько секунд", true);
     } else toast(errToast(r), false);
   }
 
@@ -464,6 +502,10 @@ export default function OverlaySection() {
           <h3 class="sec">Лента чата для OBS</h3>
           <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
           <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+          <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
+            <h4>Проверить живой оверлей</h4>
+            <ChatTestControls text={chatTestText} setText={setChatTestText} send={sendChatTest} sending={chatTestSending} enabled={meta.enabled && !meta.token_redacted} />
+          </div>
           <div class="row-inline">
             <button class="btn" type="button" onClick={copyChatUrl} disabled={!meta.enabled || !meta.token || meta.token_redacted}>Скопировать постоянную ссылку для OBS</button>
             <span class="muted small">Старая ссылка остаётся рабочей — менять Browser Source не нужно.</span>
@@ -761,6 +803,10 @@ export default function OverlaySection() {
         <h3 class="sec">Оформление отдельного чата OBS</h3>
         <p class="muted small">Сохраняется независимо от раскладки. Старую ссылку менять не нужно.</p>
         <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+        <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
+          <h4>Проверить живой оверлей</h4>
+          <ChatTestControls text={chatTestText} setText={setChatTestText} send={sendChatTest} sending={chatTestSending} enabled={meta.enabled && !meta.token_redacted} />
+        </div>
       </div>
     </div>
   );
