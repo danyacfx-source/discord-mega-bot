@@ -54,7 +54,7 @@ def _color(value: Any, fallback: str) -> str:
 def _terms(value: Any, *, max_len: int) -> list[str]:
     """Normalize small literal blocklists; never interpret as patterns."""
     if isinstance(value, str):
-        items = re.split(r"[,;\\n]", value)
+        items = value.replace("\n", ",").replace(";", ",").split(",")
     elif isinstance(value, list):
         items = value
     else:
