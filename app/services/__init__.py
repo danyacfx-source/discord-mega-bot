@@ -20,8 +20,8 @@ from app.services.event_bus import EventBus
 from app.services.giveaway_service import GiveawayService
 from app.services.kick_service import KickService
 from app.services.kv_service import KvService
-from app.services.logging_service import LoggingService
 from app.services.live_vote_service import LiveVoteService
+from app.services.logging_service import LoggingService
 from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import ModerationService
 from app.services.music_service import MusicService
