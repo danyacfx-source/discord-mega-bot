@@ -20,7 +20,6 @@ from app.core.overlay.chat_settings import (
     save_chat_settings,
     set_chat_paused,
 )
-from app.services.live_vote_service import VoteError
 from app.core.overlay.layout import (
     CANVAS_PRESETS,
     WIDGET_TYPES,
@@ -42,6 +41,7 @@ from app.core.webpanel.payload import (
     overlay_url_base,
 )
 from app.db.admin_audit_repository import AdminAuditRepository
+from app.services.live_vote_service import VoteError
 
 logger = logging.getLogger("bot.webpanel")
 
