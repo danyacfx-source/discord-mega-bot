@@ -24,6 +24,7 @@ logger = logging.getLogger("bot.overlay")
 _PAGE_FILE = Path(__file__).resolve().parent / "page.html"
 _LAYOUT_PAGE_FILE = Path(__file__).resolve().parent / "layout.html"
 _CHAT_PAGE_FILE = Path(__file__).resolve().parent / "chat.html"
+_VOTE_PAGE_FILE = Path(__file__).resolve().parent / "vote.html"
 
 #: OBS опрашивает оверлей каждые 5 с — статус стрима кэшируем, чтобы не
 #: долбить Twitch/Kick API на каждый запрос страницы.
@@ -56,6 +57,7 @@ class Overlay:
         self._page = _read_page().replace("__TOKEN__", self._token)
         self._layout_page = _LAYOUT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
         self._chat_page = _CHAT_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
+        self._vote_page = _VOTE_PAGE_FILE.read_text(encoding="utf-8").replace("__TOKEN__", self._token)
 
     @property
     def token(self) -> str:
@@ -161,6 +163,8 @@ class Overlay:
         app.router.add_get("/overlay/api", self._api_handler)
         app.router.add_get("/overlay/health", self._health_handler)
         app.router.add_get("/overlay/chat", self._chat_page_handler)
+        app.router.add_get("/overlay/vote", self._vote_page_handler)
+        app.router.add_get("/overlay/vote/api", self._vote_api_handler)
         app.router.add_get("/overlay/api/{layout_id}", self._layout_api_handler)
         app.router.add_get("/overlay/{layout_id}", self._layout_page_handler)
         return app
@@ -188,6 +192,19 @@ class Overlay:
         if not self._valid_auth(request):
             return self._unauthorized()
         return web.Response(text=self._chat_page, content_type="text/html", charset="utf-8")
+
+    async def _vote_page_handler(self, request: web.Request) -> web.Response:
+        if not self._valid_auth(request):
+            return self._unauthorized()
+        return web.Response(text=self._vote_page, content_type="text/html", charset="utf-8")
+
+    async def _vote_api_handler(self, request: web.Request) -> web.Response:
+        if not self._valid_api_auth(request):
+            return self._unauthorized()
+        services = self.bot.services
+        return web.json_response({
+            "poll": await services.live_vote.status() if services is not None else None
+        }, headers={"Cache-Control": "no-store"})
 
     async def _health_handler(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True})

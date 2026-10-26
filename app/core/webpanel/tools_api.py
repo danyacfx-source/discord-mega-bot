@@ -41,6 +41,7 @@ from app.core.webpanel.payload import (
     overlay_url_base,
 )
 from app.db.admin_audit_repository import AdminAuditRepository
+from app.services.live_vote_service import VoteError
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -182,6 +183,28 @@ class _ToolsApiMixin(_BaseApi):
             platform, "ТЕСТ OBS", f"🧪 ТЕСТ ОВЕРЛЕЯ · {text}"
         )
         return self._json({"ok": True, "platform": platform})
+
+    async def _api_live_vote_get(self, request: web.Request) -> web.Response:
+        return self._json({"ok": True, "poll": await self.services.live_vote.status()})
+
+    async def _api_live_vote_post(self, request: web.Request) -> web.Response:
+        """Control the single Twitch + Kick audience poll from the admin panel."""
+        data = await self._read_json(request)
+        action = str(data.get("action") or "")
+        service = self.services.live_vote
+        try:
+            if action == "start":
+                poll = await service.start(data.get("question"), data.get("options"), data.get("seconds"))
+            elif action == "finish":
+                poll = await service.finish()
+            elif action == "clear":
+                await service.clear()
+                poll = None
+            else:
+                return self._json({"ok": False, "error": "Неизвестное действие"}, status=400)
+        except VoteError as exc:
+            return self._json({"ok": False, "error": str(exc)}, status=400)
+        return self._json({"ok": True, "poll": poll})
 
     async def _api_overlay_layouts_create(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)

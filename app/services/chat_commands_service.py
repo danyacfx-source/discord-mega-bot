@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_feed import ChatFeed
     from app.services.kv_service import KvService
+    from app.services.live_vote_service import LiveVoteService
 
 logger = logging.getLogger("bot.services")
 
@@ -77,11 +78,19 @@ class _Poll:
 class ChatCommandsService:
     """Диспетчер команд чата: единая логика для всех платформ."""
 
-    def __init__(self, config: Config, coins: ChatCoinsService, kv: KvService, feed: ChatFeed | None = None) -> None:
+    def __init__(
+        self,
+        config: Config,
+        coins: ChatCoinsService,
+        kv: KvService,
+        feed: ChatFeed | None = None,
+        live_vote: LiveVoteService | None = None,
+    ) -> None:
         self._config = config
         self._coins = coins
         self._kv = kv
         self._feed = feed
+        self._live_vote = live_vote
         self._platforms: dict[str, ChatPlatform] = {}
         self._polls: dict[str, _Poll] = {}
         self._cmd_ready: dict[tuple[str, str], float] = {}
@@ -120,6 +129,14 @@ class ChatCommandsService:
         text = msg.content.strip()
         if text and not msg.is_bot and self._feed is not None:
             self._feed.push(msg.platform, msg.display_name or msg.username, text, is_mod=msg.is_mod)
+        # Cross-platform votes work on anonymous/read-only Twitch/Kick listeners,
+        # even when ordinary reply-capable chat commands are disabled.
+        if text and not msg.is_bot and self._live_vote is not None:
+            try:
+                if await self._live_vote.register_message(msg.platform, msg.username, text):
+                    return
+            except Exception:
+                logger.exception("LiveVote: не удалось засчитать голос")
         if not self._config.chat_commands_enabled or msg.is_bot:
             return
         content = text
