@@ -127,8 +127,6 @@ class ChatCommandsService:
     async def handle(self, msg: ChatMessage) -> None:
         """Единый вход: лента оверлея, пассивные монеты, голосование, команды."""
         text = msg.content.strip()
-        if text and not msg.is_bot and self._feed is not None:
-            self._feed.push(msg.platform, msg.display_name or msg.username, text, is_mod=msg.is_mod)
         # Cross-platform votes work on anonymous/read-only Twitch/Kick listeners,
         # even when ordinary reply-capable chat commands are disabled.
         if text and not msg.is_bot and self._live_vote is not None:
@@ -137,6 +135,9 @@ class ChatCommandsService:
                     return
             except Exception:
                 logger.exception("LiveVote: не удалось засчитать голос")
+        # Accepted vote commands should not flood the ordinary OBS chat feed.
+        if text and not msg.is_bot and self._feed is not None:
+            self._feed.push(msg.platform, msg.display_name or msg.username, text, is_mod=msg.is_mod)
         if not self._config.chat_commands_enabled or msg.is_bot:
             return
         content = text
