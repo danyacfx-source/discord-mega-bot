@@ -20,7 +20,7 @@ jobs:
           env -u POSTGRES_PASSWORD docker compose config --quiet
           POSTGRES_PASSWORD=ci-placeholder docker compose --profile postgres config --quiet
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
