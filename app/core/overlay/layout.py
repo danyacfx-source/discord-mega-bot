@@ -23,6 +23,8 @@ MAX_WIDGETS = 30
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _SAFE_ID = re.compile(r"^[a-z0-9_-]{1,32}$")
+#: Кавычки и управляющие символы в URL ломают атрибутную разметку — отсекаем.
+_UNSAFE_URL_CHARS = re.compile(r"[\"'\\\x00-\x1f\x7f]")
 _ALIGNS = ("left", "center", "right")
 
 _DEFAULT_TITLES = {
@@ -78,7 +80,11 @@ def _props(widget_type: str, raw: object) -> dict[str, Any]:
         }
     if widget_type == "image":
         url = data.get("url")
-        if not isinstance(url, str) or not url.startswith(("http://", "https://", "/uploads/", "/overlay")):
+        if (
+            not isinstance(url, str)
+            or not url.startswith(("http://", "https://", "/uploads/", "/overlay"))
+            or _UNSAFE_URL_CHARS.search(url)
+        ):
             url = ""
         return {**base, "url": url[:500]}
     if widget_type == "countdown":

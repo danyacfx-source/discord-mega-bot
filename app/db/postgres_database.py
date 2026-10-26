@@ -78,6 +78,9 @@ class PostgresDatabase:
         self.url = url
         self.pool: asyncpg.Pool | None = None
         self._tx_connection: asyncpg.Connection | None = None
+        #: Владелец открытой транзакции — задача asyncio; чужие запросы не
+        #: должны попадать в чужое соединение (иначе теряются/откатываются).
+        self._tx_task: asyncio.Task[Any] | None = None
 
     async def connect(self) -> None:
         self.pool = await asyncpg.create_pool(
@@ -125,7 +128,7 @@ class PostgresDatabase:
     @asynccontextmanager
     async def _acquire(self) -> AsyncIterator[asyncpg.Connection]:
         """Соединение для запроса: внутри транзакции — её собственное."""
-        if self._tx_connection is not None:
+        if self._tx_connection is not None and self._tx_task is asyncio.current_task():
             yield self._tx_connection
             return
         async with self._require_pool().acquire() as connection:
@@ -137,10 +140,12 @@ class PostgresDatabase:
         async with self._require_pool().acquire() as connection:
             async with connection.transaction():
                 self._tx_connection = connection
+                self._tx_task = asyncio.current_task()
                 try:
                     yield
                 finally:
                     self._tx_connection = None
+                    self._tx_task = None
 
     async def execute(self, sql: str, params: tuple[Any, ...] = ()) -> PostgresCursor:
         query, generated_key = _translate_sql(sql)

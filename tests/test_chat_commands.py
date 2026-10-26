@@ -189,7 +189,7 @@ async def test_command_cooldown(kick) -> None:
 async def test_slots_jackpot(kick, monkeypatch) -> None:
     service, recorder = kick
     await service._coins.add("kick", "viewer", "Viewer", 100)
-    monkeypatch.setattr("app.services.chat_commands_service.random.choice", lambda seq: "7️⃣")
+    monkeypatch.setattr("app.services.chat_commands_service.secrets.choice", lambda seq: "7️⃣")
     await service.handle(_msg("!слоты 10"))
     assert "ВЫИГРЫШ" in recorder.last
     row = await service._coins.get("kick", "viewer")
@@ -211,7 +211,7 @@ async def test_flip_win(kick, monkeypatch) -> None:
     service, recorder = kick
     await service._coins.add("kick", "viewer", "Viewer", 100)
     answers = iter(("heads", "heads"))  # ставка выбрана орлом, выпал орёл
-    monkeypatch.setattr("app.services.chat_commands_service.random.choice", lambda seq: next(answers))
+    monkeypatch.setattr("app.services.chat_commands_service.secrets.choice", lambda seq: next(answers))
     await service.handle(_msg("!монетка 20 орёл"))
     assert "выигрыш" in recorder.last.lower()
     row = await service._coins.get("kick", "viewer")

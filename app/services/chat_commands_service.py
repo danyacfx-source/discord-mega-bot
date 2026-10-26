@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+import secrets
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -430,7 +431,7 @@ class ChatCommandsService:
             row = await self._coins.get(msg.platform, msg.username)
             balance = row["coins"] if row else 0
             return f"💸 Ставка {stake} больше твоего баланса ({balance} 💰)."
-        reels = [random.choice(_SLOT_ROWS) for _ in range(3)]
+        reels = [secrets.choice(_SLOT_ROWS) for _ in range(3)]
         if reels[0] == reels[1] == reels[2]:
             win = stake * _SLOT_MULT[reels[0]]
         elif reels[0] == reels[1] or reels[1] == reels[2] or reels[0] == reels[2]:
@@ -469,13 +470,13 @@ class ChatCommandsService:
                 call = "tails"
                 break
         if not call:
-            call = random.choice(("heads", "tails"))
+            call = secrets.choice(("heads", "tails"))
         ok = await self._coins.spend(msg.platform, msg.username, msg.display_name, stake)
         if ok is None:
             row = await self._coins.get(msg.platform, msg.username)
             balance = row["coins"] if row else 0
             return f"💸 Ставка {stake} больше твоего баланса ({balance} 💰)."
-        toss = random.choice(("heads", "tails"))
+        toss = secrets.choice(("heads", "tails"))
         if toss == call:
             win = stake * 2
             balance = await self._coins.add(msg.platform, msg.username, msg.display_name, win)

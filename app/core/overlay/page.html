@@ -32,6 +32,6 @@ if(d.counters&&d.counters.length){h+='<div class="card"><h3>СЧЁТЧИКИ</h3
 if(d.donation_goal&&d.donation_goal.enabled){const p=Math.max(0,Math.min(100,Number(d.donation_goal.current)/Math.max(1,Number(d.donation_goal.target))*100));h+='<div class="card"><h3>'+esc(d.donation_goal.label)+'</h3><div class="value">'+esc(d.donation_goal.current)+' / '+esc(d.donation_goal.target)+' '+esc(d.donation_goal.currency)+'</div><div class="progress"><i style="width:'+p+'%"></i></div></div>'}
 document.getElementById('root').innerHTML=h;}catch(e){}}
 function fmtDur(started){if(!started)return'';const ms=Date.now()-Date.parse(started);if(isNaN(ms)||ms<0)return'';const s=Math.floor(ms/1000);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+' ч '+m+' мин':m+' мин'}
-function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 load();setInterval(load,5000);
 </script></body></html>

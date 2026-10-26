@@ -202,7 +202,9 @@ async def run_migrations(conn: Any) -> None:
         # пользователь пере-установит дату командой /birthday set.
         await conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS birthdays_new (
+            BEGIN IMMEDIATE;
+            DROP TABLE IF EXISTS birthdays_new;
+            CREATE TABLE birthdays_new (
                 user_id  INTEGER NOT NULL,
                 guild_id INTEGER NOT NULL,
                 month    INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
@@ -214,6 +216,7 @@ async def run_migrations(conn: Any) -> None:
             DROP TABLE birthdays;
             ALTER TABLE birthdays_new RENAME TO birthdays;
             CREATE INDEX IF NOT EXISTS idx_birthdays_date ON birthdays(month, day);
+            COMMIT;
             """
         )
         await conn.execute(

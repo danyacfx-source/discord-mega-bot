@@ -32,7 +32,7 @@ body{background:transparent;font-family:Inter,'Segoe UI',system-ui,sans-serif;co
 <script>
 const TOKEN = "__TOKEN__";
 const LID = decodeURIComponent(location.pathname.split("/").filter(Boolean).pop() || "");
-function esc(s){const d=document.createElement("div");d.textContent=s==null?"":String(s);return d.innerHTML}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function num(n){try{return Number(n).toLocaleString("ru-RU")}catch(e){return String(n)}}
 function h3(t){return t?"<h3>"+esc(t)+"</h3>":""}
 function content(w,d){

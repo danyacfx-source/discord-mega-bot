@@ -444,6 +444,19 @@ class ModerationCog(MegaCog, name="Moderation"):
                 ephemeral=True,
             )
             return
+        if (
+            isinstance(invoker, discord.Member)
+            and interaction.guild.owner_id not in (None, invoker.id)
+            and member.top_role >= invoker.top_role
+        ):
+            await interaction.response.send_message(
+                embed=embeds.error(
+                    "Ошибка",
+                    "Роль этого участника выше или равна вашей — менять его роли нельзя.",
+                ),
+                ephemeral=True,
+            )
+            return
         try:
             if action == "give":
                 await member.add_roles(role, reason=moderation_reason(interaction.user))

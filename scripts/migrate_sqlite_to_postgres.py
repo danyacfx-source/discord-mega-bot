@@ -46,6 +46,8 @@ _TABLES = (
     "music_queue",
     "activity_hourly",
     "music_history",
+    "chat_coins",
+    "media_files",
 )
 _SEQUENCES = {
     "warns": "id",

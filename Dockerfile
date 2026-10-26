@@ -30,9 +30,11 @@ RUN set -eu; \
     case "$arch" in amd64|arm64) ;; *) echo "Unsupported sing-box architecture: $arch" >&2; exit 1 ;; esac; \
     archive="sing-box-${SINGBOX_VERSION}-linux-${arch}-musl"; \
     curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${archive}.tar.gz" -o /tmp/sb.tgz; \
+    curl -fsSL "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-checksums.txt" -o /tmp/sb.sum; \
+    grep " ${archive}\.tar\.gz\$" /tmp/sb.sum | sha256sum -c -; \
     tar -xzf /tmp/sb.tgz -C /tmp; \
     install -m 0755 "/tmp/${archive}/sing-box" /usr/local/bin/sing-box; \
-    rm -rf /tmp/sb.tgz "/tmp/${archive}"; \
+    rm -rf /tmp/sb.tgz /tmp/sb.sum "/tmp/${archive}"; \
     sing-box version
 
 WORKDIR /app

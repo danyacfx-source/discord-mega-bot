@@ -151,13 +151,14 @@ class ChatAICog(MegaCog, name="ChatAI"):
             raise RuntimeError("GEMINI_API_KEY не задан (укажи в .env)")
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{config.ai_model}:generateContent?key={key}"
+            f"{config.ai_model}:generateContent"
         )
         try:
             _, data, _ = await self._api_client().json(
                 "POST",
                 url,
                 attempts=3,
+                headers={"x-goog-api-key": key},
                 json=self._payload(messages),
             )
         except ApiRequestError as exc:
@@ -223,9 +224,9 @@ class ChatAICog(MegaCog, name="ChatAI"):
             return
         chunks = [text[i:i + 1900] for i in range(0, len(text), 1900)] or [text]
         try:
-            await message.reply(chunks[0])
+            await message.reply(chunks[0], allowed_mentions=discord.AllowedMentions.none())
             for part in chunks[1:]:
-                await channel.send(part)
+                await channel.send(part, allowed_mentions=discord.AllowedMentions.none())
         except discord.HTTPException:
             logger.debug("Gemini: не удалось отправить ответ", exc_info=True)
             return

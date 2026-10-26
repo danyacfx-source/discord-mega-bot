@@ -27,10 +27,16 @@ if [ ! -f "$APP_DIR/main.py" ]; then
     cp -r "$REPO_DIR/scripts" "$APP_DIR/"
     cp -r "$REPO_DIR/tests" "$APP_DIR/"
     cp "$REPO_DIR/main.py" "$REPO_DIR/requirements.txt" "$REPO_DIR/requirements.lock" "$REPO_DIR/requirements-dev.txt" "$REPO_DIR/pyproject.toml" "$REPO_DIR/.env.example" "$APP_DIR/"
-    chown -R discord:discord "$APP_DIR"
+    # Код и конфиг — read-only от root: скомпрометированный процесс бота не
+    # должен переписывать main.py/.venv/.env ради персистентности.
+    chown -R root:root "$APP_DIR"
 else
     echo "    проект уже на месте, пропускаю копирование"
 fi
+
+# Рабочие каталоги (БД, бэкапы, загрузки, логи, runtime-токены) — writable ботом.
+mkdir -p "$APP_DIR/data" "$APP_DIR/logs"
+chown discord:discord "$APP_DIR/data" "$APP_DIR/logs"
 
 echo "==> Виртуальное окружение"
 cd "$APP_DIR"

@@ -36,4 +36,8 @@ def restore_backup(source: str | Path, target: str | Path, keep_backup: bool = T
     shutil.copy2(source_path, temporary)
     validate_backup(temporary)
     temporary.replace(target_path)
+    # Убираем stale WAL/SHM от предыдущей (упавшей) базы: иначе SQLite
+    # проиграет их кадры поверх нового файла при следующем открытии.
+    for suffix in ("-wal", "-shm"):
+        target_path.with_name(target_path.name + suffix).unlink(missing_ok=True)
     return old_backup

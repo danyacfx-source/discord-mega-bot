@@ -201,6 +201,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
             logger.debug("Twitch: не удалось сменить присутствие", exc_info=True)
 
     @app_commands.command(name="twitch_clip", description="Создать клип с текущего Twitch-стрима")
+    @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(title="Название клипа (по умолчанию — заголовок стрима)")
     @app_commands.guild_only()
     async def twitch_clip(self, interaction: discord.Interaction, title: str | None = None) -> None:
