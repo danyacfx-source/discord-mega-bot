@@ -131,6 +131,8 @@ const DEFAULT_CHAT_SETTINGS = {
   size: 17, limit: 15, idle: 10, gap: 6, padding: 12, opacity: 82,
   theme: "minimal", font: "system", text_color: "#f7f5ee",
   accent_color: "#b9a47a", show_platform: false,
+  enabled_platforms: ["twitch", "kick", "youtube"],
+  hidden_users: [], blocked_words: [],
 };
 
 function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
@@ -190,6 +192,51 @@ function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
         </label>
         <label class="ovl-check"><input type="checkbox" checked={settings.show_platform} onChange={(e) => change("show_platform", e.currentTarget.checked)} /> Метки платформ</label>
       </div>
+      <div class="stack" style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
+        <b>Фильтры только для OBS</b>
+        <div class="row-inline" style={{ gap: 12, flexWrap: "wrap" }}>
+          {[
+            ["twitch", "Twitch"],
+            ["kick", "Kick"],
+            ["youtube", "YouTube"],
+          ].map(([key, name]) => (
+            <label class="ovl-check" key={key}>
+              <input
+                type="checkbox"
+                checked={(settings.enabled_platforms || []).includes(key)}
+                onChange={(e) => {
+                  const current = settings.enabled_platforms || [];
+                  change("enabled_platforms", e.currentTarget.checked
+                    ? [...current, key]
+                    : current.filter((platform) => platform !== key));
+                }}
+              />
+              Показывать {name}
+            </label>
+          ))}
+        </div>
+        <label class="ovl-field">Скрывать никнеймы (через запятую)
+          <input
+            class="input"
+            type="text"
+            maxLength="500"
+            placeholder="spam_bot, unwanted_user"
+            value={Array.isArray(settings.hidden_users) ? settings.hidden_users.join(", ") : settings.hidden_users || ""}
+            onInput={(e) => change("hidden_users", e.target.value)}
+          />
+        </label>
+        <label class="ovl-field">Не показывать сообщения со словами (через запятую)
+          <input
+            class="input"
+            type="text"
+            maxLength="500"
+            placeholder="спойлер, запрещённая фраза"
+            value={Array.isArray(settings.blocked_words) ? settings.blocked_words.join(", ") : settings.blocked_words || ""}
+            onInput={(e) => change("blocked_words", e.target.value)}
+          />
+        </label>
+        <p class="muted small">Фильтры работают только с сообщениями на экране. В Twitch/Kick ничего не удаляется и никто не блокируется.</p>
+      </div>
       <div style={{ border: "1px solid #38443c", borderRadius: 12, background: "#0e1516", padding: 12 }}>
         <div class="muted small" style={{ marginBottom: 10 }}>ПРЕДПРОСМОТР · RADIO SILENCE</div>
         <div style={{ display: "flex", flexDirection: "column", gap: settings.gap, padding: settings.padding, minHeight: 110 }}>
@@ -242,6 +289,46 @@ function ChatTestControls({ text, setText, send, sending, enabled }) {
   );
 }
 
+function ChatOpsControls({ control, action, busy, enabled }) {
+  const platforms = [
+    ["twitch", "Twitch"],
+    ["kick", "Kick"],
+    ["youtube", "YouTube"],
+  ];
+  function lastSeen(ts) {
+    if (!ts) return "пока нет сообщений";
+    const age = Math.max(0, Math.floor(Date.now() / 1000 - Number(ts)));
+    if (age < 60) return "только что";
+    if (age < 3600) return Math.floor(age / 60) + " мин назад";
+    return new Date(ts * 1000).toLocaleString("ru-RU");
+  }
+  return (
+    <div class="stack" style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
+      <div class="row-inline" style={{ gap: 12, flexWrap: "wrap" }}>
+        <b>Пульт эфира</b>
+        <span class="chip">{control.paused ? "Скрыт в OBS" : "Чат отображается"}</span>
+      </div>
+      <div class="row-inline" style={{ gap: 8, flexWrap: "wrap" }}>
+        <button class={"btn " + (control.paused ? "success" : "danger")} type="button" onClick={() => action(control.paused ? "resume" : "pause")} disabled={!enabled || Boolean(busy)}>
+          {control.paused ? "▶ Показать чат" : "⏸ Скрыть чат"}
+        </button>
+        <button class="btn" type="button" onClick={() => action("clear")} disabled={!enabled || Boolean(busy)}>
+          🧹 Очистить сообщения
+        </button>
+      </div>
+      <div class="row-inline" style={{ gap: 12, flexWrap: "wrap" }}>
+        {platforms.map(([key, name]) => (
+          <span class="muted small" key={key}>
+            <b>{name}</b>: {lastSeen(control.activity?.[key]?.last_ts)}
+            {control.activity?.[key]?.buffered ? " · в буфере " + control.activity[key].buffered : ""}
+          </span>
+        ))}
+      </div>
+      <p class="muted small">Скрытие переживает редеплой. При скрытии и возвращении чат очищается, старые сообщения не всплывают. Время последнего сообщения показывает активность, но не подтверждает подключение IRC/Pusher.</p>
+    </div>
+  );
+}
+
 export default function OverlaySection() {
   const [meta, setMeta] = useState({ enabled: false, host: "", port: null, token: "", layouts: [], canvas_presets: [], widget_types: [] });
   const [layout, setLayout] = useState(EMPTY_LAYOUT);
@@ -254,6 +341,8 @@ export default function OverlaySection() {
   const [chatSaving, setChatSaving] = useState(false);
   const [chatTestText, setChatTestText] = useState("Связь есть. Плана нет. 📻");
   const [chatTestSending, setChatTestSending] = useState("");
+  const [chatControl, setChatControl] = useState({ paused: false, activity: {} });
+  const [chatControlBusy, setChatControlBusy] = useState("");
   const canvasRef = useRef(null);
 
   async function loadMeta() {
@@ -267,6 +356,16 @@ export default function OverlaySection() {
 
   useEffect(() => {
     loadMeta();
+    let active = true;
+    async function pollControl() {
+      const r = await api("/api/overlay/chat/control");
+      if (active && r.status === 200 && r.data.ok) {
+        setChatControl({ paused: Boolean(r.data.paused), activity: r.data.activity || {} });
+      }
+    }
+    pollControl();
+    const timer = setInterval(pollControl, 10000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
 
   function changeChatSetting(key, value) {
@@ -283,6 +382,16 @@ export default function OverlaySection() {
       setChatSaved(true);
       setChatDirty(false);
       toast("Оформление чата сохранено — OBS обновится автоматически", true);
+    } else toast(errToast(r), false);
+  }
+
+  async function chatControlAction(action) {
+    setChatControlBusy(action);
+    const r = await api("/api/overlay/chat/control", { action });
+    setChatControlBusy("");
+    if (r.status === 200 && r.data.ok) {
+      setChatControl({ paused: Boolean(r.data.paused), activity: r.data.activity || {} });
+      toast(action === "clear" ? "Чат OBS очищен" : r.data.paused ? "Чат скрыт в OBS" : "Чат снова показывается", true);
     } else toast(errToast(r), false);
   }
 
@@ -502,6 +611,7 @@ export default function OverlaySection() {
           <h3 class="sec">Лента чата для OBS</h3>
           <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
           <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+          <ChatOpsControls control={chatControl} action={chatControlAction} busy={chatControlBusy} enabled={meta.enabled && !meta.token_redacted} />
           <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
             <h4>Проверить живой оверлей</h4>
             <ChatTestControls text={chatTestText} setText={setChatTestText} send={sendChatTest} sending={chatTestSending} enabled={meta.enabled && !meta.token_redacted} />
@@ -803,6 +913,7 @@ export default function OverlaySection() {
         <h3 class="sec">Оформление отдельного чата OBS</h3>
         <p class="muted small">Сохраняется независимо от раскладки. Старую ссылку менять не нужно.</p>
         <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+        <ChatOpsControls control={chatControl} action={chatControlAction} busy={chatControlBusy} enabled={meta.enabled && !meta.token_redacted} />
         <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
           <h4>Проверить живой оверлей</h4>
           <ChatTestControls text={chatTestText} setText={setChatTestText} send={sendChatTest} sending={chatTestSending} enabled={meta.enabled && !meta.token_redacted} />
