@@ -10,6 +10,31 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 
+#: Захват due-напоминания одним statement'ом (UPDATE ... RETURNING).
+#:
+#: Предикат аренды продублирован на внешнем уровне WHERE. На PostgreSQL
+#: результат некоррелированного подзапроса с LIMIT кэшируется в InitPlan, и
+#: EPQ-recheck после коммита конкурента пере-проверяет только внешний qual
+#: (`id = <кэш>`) — предикат внутри подзапроса не перепроверяется. Без
+#: дубликата второй инстанс перехватывал бы уже занятую строку и отдавал
+#: напоминание дважды. Для SQLite дубликат безвреден: строка, выбранная
+#: подзапросом, тут же проходит внешнюю проверку с тем же значением now.
+_CLAIM_DUE_SQL = """
+    UPDATE reminders
+    SET processing_until = ?
+    WHERE id = (
+        SELECT id FROM reminders
+        WHERE active = 1
+          AND remind_at <= ?
+          AND (processing_until IS NULL OR processing_until <= ?)
+        ORDER BY remind_at, id
+        LIMIT 1
+    )
+      AND (processing_until IS NULL OR processing_until <= ?)
+    RETURNING id, user_id, guild_id, channel_id, message, remind_at
+"""
+
+
 class RemindersRepository(BaseRepository):
     async def add(self, user_id: int, guild_id: int | None, channel_id: int | None, message: str, remind_at: datetime) -> int:
         cursor = await self.db.execute(
@@ -48,20 +73,8 @@ class RemindersRepository(BaseRepository):
         now = datetime.now(UTC)
         lease_until = now + timedelta(seconds=max(10, lease_seconds))
         row = await self.db.execute_returning(
-            """
-            UPDATE reminders
-            SET processing_until = ?
-            WHERE id = (
-                SELECT id FROM reminders
-                WHERE active = 1
-                  AND remind_at <= ?
-                  AND (processing_until IS NULL OR processing_until <= ?)
-                ORDER BY remind_at, id
-                LIMIT 1
-            )
-            RETURNING id, user_id, guild_id, channel_id, message, remind_at
-            """,
-            (lease_until.isoformat(), moment.isoformat(), now.isoformat()),
+            _CLAIM_DUE_SQL,
+            (lease_until.isoformat(), moment.isoformat(), now.isoformat(), now.isoformat()),
         )
         return cast(ReminderRow, dict(row)) if row else None
 

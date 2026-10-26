@@ -40,20 +40,38 @@ class PostgresCursor:
 
 
 
+#: Conflict target для SQLite-`INSERT OR REPLACE`: у PostgreSQL такой записи
+#: нет, поэтому подставляется уникальный ключ конкретной таблицы. Таблица,
+#: которой здесь нет, — ошибка перевода, а не повод подставлять чужой ключ.
+_REPLACE_CONFLICTS = {
+    "poll_votes": "(poll_id, user_id) DO UPDATE SET option = EXCLUDED.option",
+}
+
+
 def _translate_sql(sql: str) -> tuple[str, str | None]:
     """Переводит небольшой SQLite-диалект репозиториев в PostgreSQL."""
     normalized = sql.replace("datetime('now')", "CURRENT_TIMESTAMP::text")
     insert_ignore = bool(re.search(r"\bINSERT\s+OR\s+IGNORE\b", normalized, re.IGNORECASE))
     normalized = re.sub(r"\bINSERT\s+OR\s+IGNORE\b", "INSERT", normalized, flags=re.IGNORECASE)
-    if insert_ignore and "ON CONFLICT" not in normalized.upper():
-        normalized = normalized.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
-    if re.search(r"\bINSERT\s+OR\s+REPLACE\b", normalized, re.IGNORECASE):
-        normalized = re.sub(r"\bINSERT\s+OR\s+REPLACE\b", "INSERT", normalized, flags=re.IGNORECASE)
-        normalized = normalized.rstrip().rstrip(";") + (
-            " ON CONFLICT (poll_id, user_id) DO UPDATE SET option = EXCLUDED.option"
-        )
+    insert_replace = bool(re.search(r"\bINSERT\s+OR\s+REPLACE\b", normalized, re.IGNORECASE))
+    normalized = re.sub(r"\bINSERT\s+OR\s+REPLACE\b", "INSERT", normalized, flags=re.IGNORECASE)
+
+    # Таблицу определяем до вставки ON CONFLICT: она нужна и для conflict
+    # target, и для RETURNING ниже.
     table_match = _TABLE_RE.search(normalized)
     table = table_match.group(1).lower() if table_match else None
+
+    if insert_ignore and "ON CONFLICT" not in normalized.upper():
+        normalized = normalized.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
+    if insert_replace and "ON CONFLICT" not in normalized.upper():
+        target = _REPLACE_CONFLICTS.get(table or "")
+        if target is None:
+            raise ValueError(
+                f"INSERT OR REPLACE для таблицы {table!r} не переведён в PostgreSQL: "
+                "добавьте её уникальный ключ в _REPLACE_CONFLICTS"
+            )
+        normalized = normalized.rstrip().rstrip(";") + f" ON CONFLICT {target}"
+
     primary_key = _INSERT_PRIMARY_KEYS.get(table or "")
     has_returning = "RETURNING" in normalized.upper()
     if primary_key and not has_returning:

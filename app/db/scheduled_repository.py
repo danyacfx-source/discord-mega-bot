@@ -10,6 +10,27 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 
+#: Захват due-сообщения одним statement'ом (UPDATE ... RETURNING).
+#:
+#: См. комментарий к ``reminders_repository._CLAIM_DUE_SQL``: предикат аренды
+#: обязан быть и на внешней строке, иначе EPQ-recheck на PostgreSQL не увидит
+#: чужую аренду и два инстанса отправят одно и то же сообщение.
+_CLAIM_DUE_SQL = """
+    UPDATE scheduled_messages
+    SET processing_until = ?
+    WHERE id = (
+        SELECT id FROM scheduled_messages
+        WHERE done = 0
+          AND send_at <= ?
+          AND (processing_until IS NULL OR processing_until <= ?)
+        ORDER BY send_at, id
+        LIMIT 1
+    )
+      AND (processing_until IS NULL OR processing_until <= ?)
+    RETURNING *
+"""
+
+
 class ScheduledRepository(BaseRepository):
     async def create(
         self, guild_id: int, channel_id: int, author_id: int, content: str, embed_json: str, send_at: datetime
@@ -39,20 +60,8 @@ class ScheduledRepository(BaseRepository):
         now = datetime.now(UTC)
         lease_until = now + timedelta(seconds=max(10, lease_seconds))
         row = await self.db.execute_returning(
-            """
-            UPDATE scheduled_messages
-            SET processing_until = ?
-            WHERE id = (
-                SELECT id FROM scheduled_messages
-                WHERE done = 0
-                  AND send_at <= ?
-                  AND (processing_until IS NULL OR processing_until <= ?)
-                ORDER BY send_at, id
-                LIMIT 1
-            )
-            RETURNING *
-            """,
-            (lease_until.isoformat(), moment.isoformat(), now.isoformat()),
+            _CLAIM_DUE_SQL,
+            (lease_until.isoformat(), moment.isoformat(), now.isoformat(), now.isoformat()),
         )
         return cast(ScheduledMessageRow, dict(row)) if row else None
 
