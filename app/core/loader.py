@@ -44,6 +44,7 @@ COG_PROVIDERS: dict[str, Callable[[MegaBot], object]] = {
     "reminders": lambda b: _services(b).reminders,
     "polls": lambda b: _services(b).polls,
     "giveaways": lambda b: _services(b).giveaways,
+    "idea_board": lambda b: _services(b).idea_board,
     "reaction_roles": lambda b: _services(b).reaction_roles,
     "scheduled": lambda b: _services(b).scheduled,
     "donations": lambda b: _services(b).donations,
