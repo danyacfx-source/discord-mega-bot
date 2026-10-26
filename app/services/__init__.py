@@ -18,6 +18,7 @@ from app.services.command_guard_service import CommandGuardService
 from app.services.donation_service import DonationService
 from app.services.event_bus import EventBus
 from app.services.giveaway_service import GiveawayService
+from app.services.idea_board_service import IdeaBoardService
 from app.services.kick_service import KickService
 from app.services.kv_service import KvService
 from app.services.live_vote_service import LiveVoteService
@@ -49,6 +50,7 @@ class Services:
     reminders: ReminderService
     polls: PollService
     giveaways: GiveawayService
+    idea_board: IdeaBoardService
     reaction_roles: ReactionRolesService
     donations: DonationService
     twitch: TwitchService
