@@ -26,6 +26,12 @@ class ChatFeed:
             }
         )
 
+    def clear(self) -> int:
+        """Forget cached OBS messages; does not affect external chats."""
+        count = len(self._items)
+        self._items.clear()
+        return count
+
     def recent(self, limit: int = 60) -> list[dict[str, Any]]:
         if limit <= 0:
             return []

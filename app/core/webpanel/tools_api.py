@@ -15,8 +15,10 @@ from aiohttp import web
 
 from app.core.overlay.chat_settings import (
     DEFAULT_CHAT_SETTINGS,
+    get_chat_paused,
     load_chat_settings,
     save_chat_settings,
+    set_chat_paused,
 )
 from app.core.overlay.layout import (
     CANVAS_PRESETS,
@@ -102,6 +104,7 @@ class _ToolsApiMixin(_BaseApi):
                 "ok": True,
                 "chat_settings": current_chat or DEFAULT_CHAT_SETTINGS,
                 "chat_settings_saved": current_chat is not None,
+                "chat_paused": await get_chat_paused(self.services.kv),
                 "enabled": bool(config.overlay_port),
                 "host": config.overlay_host,
                 "port": config.overlay_port,
@@ -119,6 +122,44 @@ class _ToolsApiMixin(_BaseApi):
         payload = await self._read_json(request)
         settings = await save_chat_settings(self.services.kv, payload.get("settings"))
         return self._json({"ok": True, "settings": settings})
+
+    def _obs_chat_activity(self) -> dict[str, dict[str, float | int | None]]:
+        """Buffered message activity, not a claim that IRC/Pusher is connected."""
+        status: dict[str, dict[str, float | int | None]] = {
+            p: {"buffered": 0, "last_ts": None} for p in ("twitch", "kick", "youtube")
+        }
+        for msg in self.services.chat_feed.recent(limit=300):
+            platform = str(msg.get("platform") or "")
+            if platform not in status or msg.get("name") == "ТЕСТ OBS":
+                continue
+            status[platform]["buffered"] = int(status[platform]["buffered"] or 0) + 1
+            status[platform]["last_ts"] = float(msg["ts"])
+        return status
+
+    async def _api_overlay_chat_control_get(self, request: web.Request) -> web.Response:
+        return self._json({
+            "ok": True,
+            "enabled": bool(self.bot.config.overlay_port),
+            "paused": await get_chat_paused(self.services.kv),
+            "activity": self._obs_chat_activity(),
+        })
+
+    async def _api_overlay_chat_control_post(self, request: web.Request) -> web.Response:
+        """Pause/resume OBS rendering or clear its buffer, never external chat."""
+        if not self.bot.config.overlay_port:
+            return self._json({"ok": False, "error": "OBS-оверлей выключен"}, status=503)
+        payload = await self._read_json(request)
+        action = payload.get("action")
+        if action not in {"pause", "resume", "clear"}:
+            return self._json({"ok": False, "error": "Неизвестное действие"}, status=400)
+        if action != "clear":
+            await set_chat_paused(self.services.kv, action == "pause")
+        # Clear on both transitions so paused messages never flood back on resume.
+        cleared = self.services.chat_feed.clear()
+        return self._json({
+            "ok": True, "paused": await get_chat_paused(self.services.kv),
+            "cleared": cleared, "activity": self._obs_chat_activity(),
+        })
 
     async def _api_overlay_chat_test(self, request: web.Request) -> web.Response:
         """Inject one clearly labelled test message into OBS only.

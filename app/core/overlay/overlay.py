@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
-from app.core.overlay.chat_settings import load_chat_settings
+from app.core.overlay.chat_settings import filter_chat_messages, get_chat_paused, load_chat_settings
 from app.core.overlay.layout import load_layout
 from app.core.shield import is_scanner_path, is_scanner_ua
 from app.utils.stream_history import sparkline, trend
@@ -218,7 +218,6 @@ class Overlay:
         data["last_slot"] = await self._kv_json("overlay:last_slot")
         data["last_poll"] = await self._kv_json("overlay:last_poll")
         data["chat_top"] = await self._chat_top()
-        data["chat"] = self._feed_recent()
         return web.json_response({"layout": layout, "data": data})
 
     async def _load_layout(self, layout_id: str) -> dict[str, Any] | None:
@@ -265,6 +264,16 @@ class Overlay:
             logger.warning("Overlay: настройки оформления чата временно недоступны", exc_info=True)
             return None
 
+    async def _chat_paused(self) -> bool:
+        services = self.bot.services
+        if services is None:
+            return False
+        try:
+            return await get_chat_paused(services.kv)
+        except Exception:
+            logger.warning("Overlay: не удалось прочитать состояние чата", exc_info=True)
+            return False
+
     async def _chat_top(self) -> list[dict[str, Any]]:
         services = self.bot.services
         config = self.bot.config
@@ -288,13 +297,16 @@ class Overlay:
         ]
 
     async def _payload(self) -> dict[str, Any]:
+        settings = await self._chat_style()
+        paused = await self._chat_paused()
         return {
             "stream": await self._stream_payload(),
             "channels": self._safe_channels(),
             "counters": [],
             "donation_goal": self._donation_goal(),
-            "chat": self._feed_recent(),
-            "chat_settings": await self._chat_style(),
+            "chat": filter_chat_messages(self._feed_recent(), settings, paused=paused),
+            "chat_settings": settings,
+            "chat_paused": paused,
         }
 
     def _safe_channels(self) -> dict[str, str]:
