@@ -57,6 +57,7 @@ def assemble(
     from app.services.donation_service import DonationService
     from app.services.event_bus import EventBus
     from app.services.giveaway_service import GiveawayService
+    from app.services.idea_board_service import IdeaBoardService
     from app.services.kick_service import KickService
     from app.services.kv_service import KvService
     from app.services.live_vote_service import LiveVoteService
@@ -85,6 +86,7 @@ def assemble(
     reminders = override_or(overrides, "reminders", ReminderService, RemindersRepository(db))
     polls = override_or(overrides, "polls", PollService, PollsRepository(db))
     giveaways = override_or(overrides, "giveaways", GiveawayService, GiveawaysRepository(db))
+    idea_board = override_or(overrides, "idea_board", IdeaBoardService, kv)
     reaction_roles = override_or(overrides, "reaction_roles", ReactionRolesService, ReactionRolesRepository(db))
     tempvoice = override_or(overrides, "tempvoice", TempVoiceService, TempVoicesRepository(db))
     birthdays = override_or(overrides, "birthdays", BirthdayService, BirthdaysRepository(db))
@@ -127,6 +129,7 @@ def assemble(
         reminders=reminders,
         polls=polls,
         giveaways=giveaways,
+        idea_board=idea_board,
         reaction_roles=reaction_roles,
         donations=donations,
         twitch=twitch,
