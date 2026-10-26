@@ -130,6 +130,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/welcome", viewer(panel._api_welcome_post, "admin"))
     router.add_post("/api/welcome/preview", viewer(panel._api_welcome_preview, "viewer"))
     router.add_get("/api/overlay", viewer(panel._api_overlay_get))
+    router.add_get("/api/live-vote", viewer(panel._api_live_vote_get))
+    router.add_post("/api/live-vote", viewer(panel._api_live_vote_post, "admin"))
     router.add_post("/api/overlay/chat/settings", viewer(panel._api_overlay_chat_settings_save, "admin"))
     router.add_post("/api/overlay/chat/test", viewer(panel._api_overlay_chat_test, "admin"))
     router.add_get("/api/overlay/chat/control", viewer(panel._api_overlay_chat_control_get))
