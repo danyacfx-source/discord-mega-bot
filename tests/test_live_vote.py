@@ -120,7 +120,12 @@ async def test_live_vote_panel_and_old_obs_links(tmp_path) -> None:
                 assert (await client.get("/overlay/vote?token=" + overlay_token)).status == 200
                 old = await client.get("/overlay/api", headers=obs)
                 assert old.status == 200
-                assert len((await old.json())["chat"]) == 2
+                assert (await old.json())["chat"] == [], "vote commands must not spam OBS chat"
+                await bot.services.chat_commands.handle(
+                    ChatMessage(platform="kick", username="charlie", display_name="Charlie", content="обычное сообщение")
+                )
+                old = await client.get("/overlay/api", headers=obs)
+                assert [m["text"] for m in (await old.json())["chat"]] == ["обычное сообщение"]
 
                 stopped = await client.post("/api/live-vote", json={"action": "finish"}, headers=admin)
                 assert stopped.status == 200 and (await stopped.json())["poll"]["status"] == "closed"
