@@ -122,10 +122,10 @@ class IdeasCog(MegaCog, name="CommunityIdeas"):
             )
             name = f"[#{item['id']}]({link})" if link else f"#{item['id']}"
             safe_text = discord.utils.escape_mentions(discord.utils.escape_markdown(item["text"][:140]))
-            lines.append(f"**{up - down:+d}** · {name} · {STATUS_LABELS[item['status']]}\\n{safe_text}")
+            lines.append(f"**{up - down:+d}** · {name} · {STATUS_LABELS[item['status']]}\n{safe_text}")
         embed = discord.Embed(
             title="🏆 Лучшие идеи" if is_top else "📨 Последние идеи",
-            description="\\n\\n".join(lines)[:4000],
+            description="\n\n".join(lines)[:4000],
             color=discord.Color.blurple(),
         )
         await interaction.response.send_message(embed=embed, allowed_mentions=_NO_MENTIONS)
