@@ -1,0 +1,39 @@
+name: Build one-off licensed horror audio pack
+
+on:
+  push:
+    branches: [media/oneoff-real-screamer-sfx-20261027]
+    paths: [.github/workflows/oneoff-horror-sfx.yml]
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Inspect available CC-compatible public horror audio
+        run: |
+          python - <<'PY'
+          import requests,re
+          for page in ('monster','scream','terror','impact','glitch'):
+              u='https://mixkit.co/free-sound-effects/'+page+'/'
+              try:
+                  r=requests.get(u, timeout=40,headers={'User-Agent':'Mozilla/5.0'})
+                  txt=r.text
+                  print(page, r.status_code, len(txt), txt[:90].replace('\n',' '))
+                  for name in ('angry monster scream','giant monster roar','zombie monster growl','creepy demon heavy breathing','monster growl','glitch roar','horror impact','broken radio frequency signal'):
+                      i=txt.lower().find(name)
+                      if i>=0:
+                          print('  ',name,repr(txt[max(i-250,0):i+380])[:630])
+                  links=re.findall(r'https?[^"\' ]+?\.mp3',txt)
+                  print('sample assets',links[:8])
+              except Exception as e:print(page,type(e).__name__,str(e)[:100])
+          for url in (
+            'https://assets.mixkit.co/active_storage/sfx/1963/1963-preview.mp3',
+            'https://assets.mixkit.co/sfx/preview/mixkit-angry-monster-scream-1963.mp3',
+            'https://assets.mixkit.co/active_storage/sfx/1972/1972-preview.mp3',
+          ):
+              try:
+                  r=requests.get(url, timeout=30)
+                  print('ASSET',r.status_code,len(r.content),r.headers.get('Content-Type'),url)
+              except Exception as e:print('ASSET_ERR',e)
+          PY
