@@ -1,0 +1,37 @@
+name: One-off RADIO WAIFU free voice exports
+
+on:
+  push:
+    branches:
+      - media/radio-waifu-voice-assets-20261027
+    paths:
+      - .github/workflows/oneoff-waifu-tts.yml
+permissions:
+  contents: read
+jobs:
+  synthesize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install CPU audio models and libraries
+        run: |
+          python -m pip install --no-input --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1"
+          python -m pip install --no-input "numpy<2" omegaconf soundfile imageio-ffmpeg
+      - name: Generate RADIO WAIFU voices in Russian
+        env:
+          TORCH_HOME: /tmp/torch_hub_voice
+        run: python -u oneoff_waifu_tts.py
+      - name: Check output
+        run: |
+          test "$(find waifu_voice_out -maxdepth 1 -type f -name '*.mp3' | wc -l)" -eq 4
+          ls -lah waifu_voice_out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RADIO_WAIFU_RUSSIAN_VOICE_ALERTS
+          path: waifu_voice_out/
+          if-no-files-found: error
+          retention-days: 30
