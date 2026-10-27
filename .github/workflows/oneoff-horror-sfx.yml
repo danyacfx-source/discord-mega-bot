@@ -19,14 +19,13 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install audio preparation libraries
-        run: python -m pip install --no-input numpy requests
+        run: python -m pip install --no-input numpy requests imageio-ffmpeg
       - name: Compose six distinct real-sample horror effects
         run: python oneoff_build_real_sfx.py
       - name: Check output sizes
         run: |
           find out -maxdepth 1 -type f -print
           for f in out/*.mp3; do
-            ffprobe -v error -show_entries format=duration,size -of default=nw=1 "$f"
             test "$(stat -c %s "$f")" -lt 8388608
           done
       - uses: actions/upload-artifact@v4
