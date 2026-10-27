@@ -1,0 +1,36 @@
+name: Build free soft RADIO WAIFU alert voices
+on:
+  push:
+    branches:
+      - media/radio-waifu-soft-voices-20261027
+    paths:
+      - .github/workflows/oneoff-waifu-soft.yml
+permissions:
+  contents: read
+jobs:
+  synthesize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install CPU TTS and audio tools
+        run: |
+          python -m pip install --no-input --index-url https://download.pytorch.org/whl/cpu "torch==2.5.1"
+          python -m pip install --no-input "numpy<2" omegaconf soundfile imageio-ffmpeg
+      - name: Render five soft voice timbres for RADIO WAIFU
+        env:
+          TORCH_HOME: /tmp/torch_hub_soft_waifu
+        run: python -u oneoff_waifu_soft_tts.py
+      - name: Check every output
+        run: |
+          test "$(find waifu_soft_voice_out -maxdepth 1 -type f -name '*.mp3' | wc -l)" -eq 9
+          ls -lah waifu_soft_voice_out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RADIO_WAIFU_SOFT_FEMALE_VOICE_VARIANTS
+          path: waifu_soft_voice_out/
+          if-no-files-found: error
+          retention-days: 30
