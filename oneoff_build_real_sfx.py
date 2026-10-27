@@ -6,6 +6,9 @@ from pathlib import Path
 
 import numpy as np
 import requests
+import imageio_ffmpeg
+
+FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 SAMPLE_RATE = 48000
 OUTPUT = Path("out")
@@ -49,7 +52,7 @@ for title, page in wanted.items():
     if len(audio.content) < 2000:
         raise RuntimeError(f"Bad audio {title}: {len(audio.content)} bytes")
     cmd = [
-        "ffmpeg","-v","error","-i","pipe:0","-ar",str(SAMPLE_RATE),
+        FFMPEG,"-v","error","-i","pipe:0","-ar",str(SAMPLE_RATE),
         "-ac","2","-f","f32le","-acodec","pcm_f32le","pipe:1",
     ]
     proc = subprocess.run(cmd, input=audio.content, capture_output=True, check=True)
@@ -89,7 +92,7 @@ def add(mix, title, second, loudness, time, fadein, fadeout):
 
 def mp3(filename, waveform, bitrate="256k"):
     proc=subprocess.run([
-        "ffmpeg","-y","-v","error","-f","f32le","-ar",str(SAMPLE_RATE),
+        FFMPEG,"-y","-v","error","-f","f32le","-ar",str(SAMPLE_RATE),
         "-ac","2","-i","pipe:0","-codec:a","libmp3lame","-b:a",bitrate,str(filename)
     ],input=waveform.astype("<f4").tobytes(),capture_output=True)
     if proc.returncode:
