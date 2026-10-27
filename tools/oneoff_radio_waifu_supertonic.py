@@ -5,6 +5,7 @@ import os, sys, json, math, shutil, subprocess
 from pathlib import Path
 import numpy as np
 import soundfile as sf
+import imageio_ffmpeg
 from huggingface_hub import snapshot_download
 
 ROOT=Path.cwd()
@@ -45,7 +46,7 @@ def create(stem,voice,text,steps=12,speed=1.0):
  wav_file=OUT/(stem+".wav")
  sf.write(wav_file,x,rate,subtype="PCM_16")
  mp3_file=OUT/(stem+".mp3")
- cmd=["ffmpeg","-hide_banner","-loglevel","error","-y","-i",str(wav_file),"-ac","2","-codec:a","libmp3lame","-b:a","256k",str(mp3_file)]
+ cmd=[imageio_ffmpeg.get_ffmpeg_exe(),"-hide_banner","-loglevel","error","-y","-i",str(wav_file),"-ac","2","-codec:a","libmp3lame","-b:a","256k",str(mp3_file)]
  p=subprocess.run(cmd,capture_output=True)
  if p.returncode:raise RuntimeError(p.stderr.decode())
  assert mp3_file.stat().st_size>20000,stem
@@ -69,7 +70,7 @@ for i,t in enumerate(tracks[:3]):
  if i<2:preview.append(np.zeros(round(.65*rate),dtype=np.float32))
 a=np.concatenate(preview)
 sf.write(OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.wav",a,rate,subtype="PCM_16")
-p=subprocess.run(["ffmpeg","-hide_banner","-loglevel","error","-y","-i",str(OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.wav"),"-codec:a","libmp3lame","-b:a","192k",str(OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.mp3")],capture_output=True)
+p=subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(),"-hide_banner","-loglevel","error","-y","-i",str(OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.wav"),"-codec:a","libmp3lame","-b:a","192k",str(OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.mp3")],capture_output=True)
 if p.returncode:raise RuntimeError(p.stderr.decode())
 (OUT/"RADIO_WAIFU_THREE_VOICES_PREVIEW.wav").unlink()
 (OUT/"README_RU.txt").write_text(
