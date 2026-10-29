@@ -151,6 +151,8 @@ class StreamConfig:
     twitch_refresh_token: str | None = None
     twitch_channels: tuple[str, ...] = ()
     twitch_command_channel: str = ""
+    twitch_discord_url: str = ""
+    twitch_donate_url: str = ""
     twitch_notify_channel_id: int | None = None
     twitch_ping_role_id: int | None = None
     twitch_poll_seconds: float = 300.0
@@ -431,6 +433,9 @@ _STREAM_FIELDS = {
     "twitch_client_secret": "twitch_client_secret",
     "twitch_refresh_token": "twitch_refresh_token",
     "twitch_channels": "twitch_channels",
+    "twitch_command_channel": "twitch_command_channel",
+    "twitch_discord_url": "twitch_discord_url",
+    "twitch_donate_url": "twitch_donate_url",
     "twitch_notify_channel_id": "twitch_notify_channel_id",
     "twitch_ping_role_id": "twitch_ping_role_id",
     "twitch_poll_seconds": "twitch_poll_seconds",
@@ -807,6 +812,8 @@ class Config:
                 twitch_refresh_token=os.getenv("TWITCH_REFRESH_TOKEN"),
                 twitch_channels=_strs(os.getenv("TWITCH_CHANNELS") or os.getenv("TWITCH_CHANNEL", "dend1chlive")),
                 twitch_command_channel=(os.getenv("TWITCH_COMMAND_CHANNEL") or os.getenv("TWITCH_CHANNEL", "")).strip().lower(),
+                twitch_discord_url=os.getenv("TWITCH_DISCORD_URL", "").strip(),
+                twitch_donate_url=os.getenv("TWITCH_DONATE_URL", "").strip(),
                 twitch_notify_channel_id=_single_int(os.getenv("TWITCH_NOTIFY_CHANNEL_ID")),
                 twitch_ping_role_id=_single_int(os.getenv("TWITCH_PING_ROLE_ID")),
                 twitch_poll_seconds=float(os.getenv("TWITCH_POLL_SECONDS", "300")),

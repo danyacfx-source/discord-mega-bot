@@ -279,7 +279,8 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                 await self._reply(channel, promo)
 
     async def _promo_message(self) -> str:
-        default = f"{self.bot.config.socials_discord} проект спонсор данного стрима" if self.bot.config.socials_discord else ""
+        discord_url = self.bot.config.twitch_discord_url or self.bot.config.socials_discord
+        default = f"{discord_url} проект спонсор данного стрима" if discord_url else ""
         try:
             raw = await self.bot.services.kv.get("panel.twitch.promo", "{}")  # type: ignore[union-attr]
             stored = json.loads(raw or "{}")
