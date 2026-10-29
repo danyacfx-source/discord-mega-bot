@@ -52,14 +52,16 @@ class _StatusApiMixin(_BaseApi):
                 "last_error": db.last_error,
             }
         ready = self.bot.is_ready() and self.bot.user is not None
+        tasks_status = self.bot.background_task_status()
         payload = {
-            "ok": ready and db_ok,
+            "ok": ready and db_ok and not tasks_status["failed"],
             "discord": {"ready": ready, "guilds": len(self.bot.guilds)},
             "database": database,
             "backup": self.bot.db_backups.status() if self.bot.db_backups is not None else {"enabled": False},
             "latency_ms": round(self.bot.latency * 1000) if self.bot.latency >= 0 else None,
             "cogs": len(self.bot.cogs),
             "voice_clients": len(self.bot.voice_clients),
+            "background_tasks": tasks_status,
             "version": self.bot.config.version,
         }
         return self._json(payload, status=200 if payload["ok"] else 503)

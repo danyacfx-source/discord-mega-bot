@@ -1,6 +1,7 @@
 """Класс бота: инициализация БД, сервисов, когов и обработка ошибок команд."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from datetime import UTC, datetime, timedelta
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from app.config import Config
 from app.core import embeds
@@ -53,6 +54,8 @@ class MegaBot(commands.Bot):
         self.webpanel = None
         self.overlay = None
         self.db_backups = None
+        self._task_watchdog: asyncio.Task[None] | None = None
+        self._task_restart_attempts: dict[str, int] = {}
         self.start_time = datetime.now(UTC)
         self.tree.on_error = self.on_app_command_error
 
@@ -84,6 +87,7 @@ class MegaBot(commands.Bot):
         self.services = root.services
         await self._install_guards()
         loaded = await load_cogs(self)
+        self._task_watchdog = asyncio.create_task(self._watch_background_tasks())
         await register_persistent_views(self)
         if self.config.panel_port is not None:
             from app.core.webpanel import WebPanel
@@ -102,6 +106,54 @@ class MegaBot(commands.Bot):
         if self.db_backups is not None:
             self.db_backups.start()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
+
+    def background_task_status(self) -> dict[str, list[str]]:
+        """Срез фоновых ``tasks.Loop`` без исключений и внутренних объектов."""
+        running: list[str] = []
+        failed: list[str] = []
+        for cog_name, cog in self.cogs.items():
+            for attr_name, value in vars(cog).items():
+                if not isinstance(value, tasks.Loop):
+                    continue
+                name = f"{cog_name}.{attr_name}"
+                if value.failed():
+                    failed.append(name)
+                elif value.is_running():
+                    running.append(name)
+        return {"running": sorted(running), "failed": sorted(failed)}
+
+    async def _watch_background_tasks(self) -> None:
+        """Возвращает упавшие периодические задачи без рестарта всего бота.
+
+        Ошибки внешних API обычно ловятся в самих когах. Этот уровень нужен
+        для непредвиденных исключений, после которых discord.py останавливает
+        ``tasks.Loop`` навсегда. Повторные сбои получают возрастающую паузу.
+        """
+        while not self.is_closed():
+            await asyncio.sleep(30)
+            for cog_name, cog in list(self.cogs.items()):
+                for attr_name, value in vars(cog).items():
+                    if not isinstance(value, tasks.Loop) or not value.failed():
+                        continue
+                    name = f"{cog_name}.{attr_name}"
+                    attempts = self._task_restart_attempts.get(name, 0)
+                    delay = min(300, 30 * (2**attempts))
+                    last_key = f"{name}:last"
+                    last = getattr(self, "_task_watchdog_last", {}).get(last_key, 0.0)
+                    now = asyncio.get_running_loop().time()
+                    if now - last < delay:
+                        continue
+                    if not hasattr(self, "_task_watchdog_last"):
+                        self._task_watchdog_last: dict[str, float] = {}
+                    self._task_watchdog_last[last_key] = now
+                    try:
+                        value.start()
+                    except RuntimeError:
+                        logger.exception("Watchdog: не удалось перезапустить %s", name)
+                        self._task_restart_attempts[name] = attempts + 1
+                    else:
+                        logger.warning("Watchdog: перезапущена фоновая задача %s", name)
+                        self._task_restart_attempts[name] = attempts + 1
 
     # --- guard: глобальный rate-limit и kill-switch команд ---
 
@@ -255,6 +307,14 @@ class MegaBot(commands.Bot):
         logger.info("Синхронизировано команд: %d (%s)", total, ", ".join(names[:20]))
 
     async def close(self) -> None:
+        watchdog = self._task_watchdog
+        if watchdog is not None:
+            watchdog.cancel()
+            try:
+                await watchdog
+            except asyncio.CancelledError:
+                pass
+            self._task_watchdog = None
         services = getattr(self, "services", None)
         if services is not None:
             try:
