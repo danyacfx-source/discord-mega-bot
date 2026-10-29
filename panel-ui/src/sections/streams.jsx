@@ -15,6 +15,8 @@ export default function Streams() {
   const [data, setData] = useState(null);
   const [watch, setWatch] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [promo, setPromo] = useState({ enabled: true, text: "" });
+  const [savingPromo, setSavingPromo] = useState(false);
 
   async function load() {
     const r = await api("/api/streams");
@@ -30,6 +32,21 @@ export default function Streams() {
     if (r.status === 200) setWatch(r.data);
   }
 
+  async function loadPromo() {
+    const r = await api("/api/twitch/promo");
+    if (r.status === 200 && r.data.ok) setPromo(r.data.promo);
+  }
+
+  async function savePromo() {
+    setSavingPromo(true);
+    const r = await api("/api/twitch/promo", promo);
+    setSavingPromo(false);
+    if (r.status === 200 && r.data.ok) {
+      setPromo(r.data.promo);
+      toast("Автосообщение Twitch сохранено", true);
+    } else toast(r.data.error || "Не удалось сохранить", false);
+  }
+
   async function exportCsv() {
     setExporting(true);
     try {
@@ -43,6 +60,7 @@ export default function Streams() {
   useEffect(() => {
     load();
     loadWatch();
+    loadPromo();
     const t = setInterval(() => {
       load();
       loadWatch();
@@ -99,6 +117,21 @@ export default function Streams() {
               </ListRow>
             );
           })}
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="sec">Автосообщение Twitch</h3>
+        <p class="muted small">Отправляется каждые 30 минут только в каналы из TWITCH_CHANNELS, где идёт эфир.</p>
+        <div class="stack">
+          <label class="row-inline">
+            <input type="checkbox" checked={promo.enabled} onInput={(e) => setPromo({ ...promo, enabled: e.target.checked })} />
+            Включить автосообщение
+          </label>
+          <Field label="Текст сообщения" hint="До 450 символов; Twitch-ссылки лучше указывать полностью.">
+            <textarea class="input" rows="3" maxLength="450" value={promo.text} onInput={(e) => setPromo({ ...promo, text: e.target.value })} />
+          </Field>
+          <div><button class="btn success" type="button" onClick={savePromo} disabled={savingPromo}>{savingPromo ? "Сохраняем…" : "Сохранить"}</button></div>
         </div>
       </div>
 

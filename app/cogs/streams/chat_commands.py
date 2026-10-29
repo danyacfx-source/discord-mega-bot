@@ -7,6 +7,7 @@ Twitch: анонимное чтение работает без токена (к
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import random
 from dataclasses import dataclass
@@ -265,14 +266,29 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         config = self.bot.config
         if not config.twitch_channels:
             return
+        promo = await self._promo_message()
+        if not promo:
+            return
         for channel in config.twitch_channels:
             try:
                 live = await self.twitch.channel_status(channel)
             except Exception:
                 logger.warning("Twitch: не удалось проверить статус эфира для %s", channel, exc_info=True)
                 continue
-            if live and config.socials_discord:
-                await self._reply(channel, f"{config.socials_discord} проект спонсор данного стрима")
+            if live:
+                await self._reply(channel, promo)
+
+    async def _promo_message(self) -> str:
+        default = f"{self.bot.config.socials_discord} проект спонсор данного стрима" if self.bot.config.socials_discord else ""
+        try:
+            raw = await self.bot.services.kv.get("panel.twitch.promo", "{}")  # type: ignore[union-attr]
+            stored = json.loads(raw or "{}")
+        except (TypeError, ValueError, AttributeError):
+            stored = {}
+        if isinstance(stored, dict) and stored.get("enabled") is False:
+            return ""
+        text = stored.get("text") if isinstance(stored, dict) else ""
+        return " ".join(str(text or default).split())[:450]
 
     @link_loop.before_loop
     async def _before_links(self) -> None:

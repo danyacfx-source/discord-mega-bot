@@ -24,6 +24,9 @@ from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, rende
 
 logger = logging.getLogger("bot.webpanel")
 
+_TWITCH_PROMO_KEY = "panel.twitch.promo"
+_TWITCH_PROMO_MAX_LENGTH = 450
+
 class _ProfilesApiMixin(_BaseApi):
     """Стримы, дни рождения, temp-voice, AI, карточки и приветствия."""
 
@@ -52,6 +55,30 @@ class _ProfilesApiMixin(_BaseApi):
             poll_seconds=poll_seconds,
             sticky_seconds=self.bot.config.stream_sticky_poll_seconds,
         )
+
+    async def _twitch_promo_settings(self) -> dict[str, Any]:
+        default = ""
+        if self.bot.config.socials_discord:
+            default = f"{self.bot.config.socials_discord} проект спонсор данного стрима"
+        raw = await self.services.kv.get(_TWITCH_PROMO_KEY, "{}")
+        try:
+            stored = json.loads(raw or "{}")
+        except (TypeError, ValueError):
+            stored = {}
+        if not isinstance(stored, dict):
+            stored = {}
+        text = stored.get("text") if isinstance(stored.get("text"), str) else default
+        return {"enabled": stored.get("enabled", True) is not False, "text": " ".join(text.split())[:_TWITCH_PROMO_MAX_LENGTH]}
+
+    async def _api_twitch_promo_get(self, request: web.Request) -> web.Response:
+        return self._json({"ok": True, "promo": await self._twitch_promo_settings()})
+
+    async def _api_twitch_promo_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        text = " ".join(str(payload.get("text") or "").split())[:_TWITCH_PROMO_MAX_LENGTH]
+        settings = {"enabled": bool(payload.get("enabled")), "text": text}
+        await self.services.kv.set(_TWITCH_PROMO_KEY, json.dumps(settings, ensure_ascii=False))
+        return self._json({"ok": True, "promo": settings})
 
     async def _api_streams_get(self, request: web.Request) -> web.Response:
         """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.
