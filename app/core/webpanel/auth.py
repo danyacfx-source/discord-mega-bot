@@ -108,6 +108,17 @@ class _AuthMixin(_BaseApi):
             return "admin"
         return "moderator"
 
+    @staticmethod
+    def _access_denied_page() -> web.Response:
+        body = """<!doctype html><html lang="ru"><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Доступ запрещён</title><style>
+        body{margin:0;min-height:100vh;display:grid;place-items:center;background:#10170f;color:#e6eee1;font:16px system-ui,sans-serif}
+        main{max-width:460px;margin:24px;padding:38px;border:1px solid #6d8b5b;border-radius:18px;background:#1b2619;text-align:center}
+        h1{margin:0 0 12px;font-size:28px}p{margin:0;color:#b8c5b1;line-height:1.5}
+        </style><main><h1>Доступ запрещён</h1><p>У вас недостаточно прав для входа в веб-админку.</p></main>"""
+        return web.Response(text=body, content_type="text/html", charset="utf-8", status=403)
+
     async def _record_admin_audit(self, request: web.Request, role: str, response: web.Response) -> None:
         if request.method == "GET" or response.status >= 400 or self.bot.db is None:
             return
@@ -265,7 +276,7 @@ class _AuthMixin(_BaseApi):
             None,
         )
         if member_guild is None:
-            raise web.HTTPForbidden(text="У Discord-пользователя нет доступа к серверу бота")
+            return self._access_denied_page()
 
         try:
             permissions = int(str(member_guild.get("permissions") or 0))
@@ -289,10 +300,8 @@ class _AuthMixin(_BaseApi):
         elif has_admin_role or permissions & (1 << 3):
             # Доверенные роли из PANEL_ADMIN_ROLE_IDS или Discord Administrator.
             role = "admin"
-        elif permissions & (1 << 13) or permissions & (1 << 5):
-            role = "moderator"
         else:
-            role = "viewer"
+            return self._access_denied_page()
 
         session_token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
@@ -349,6 +358,8 @@ class _AuthMixin(_BaseApi):
         if role is None:
             attempts.append(now)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
+        if self._role_rank(role) < self._role_rank("admin"):
+            return self._json({"ok": False, "error": "Доступ запрещён. У вас недостаточно прав"}, status=403)
         # Успех сбрасывает счётчик: старые опечатки не должны блокировать вход.
         self._login_attempts.pop(ip, None)
         token = secrets.token_urlsafe(32)
