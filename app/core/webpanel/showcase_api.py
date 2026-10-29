@@ -180,7 +180,11 @@ class _ShowcaseApiMixin(_BaseApi):
             row["viewers"] = int(session.get("viewers") or 0)
             row["thumbnail"] = str(session.get("thumbnail") or "")
 
-        for login in config.twitch_channels or []:
+        # Дополнительные каналы нужны чат-боту для промо, но не являются
+        # публичными площадками сообщества. В витрине показываем основной.
+        twitch_login = config.twitch_command_channel or (config.twitch_channels[0] if config.twitch_channels else "")
+        if twitch_login:
+            login = twitch_login
             row = entry("twitch", f"Twitch · {login}", f"https://www.twitch.tv/{login}")
             session = await self.services.twitch.session_store(login).load()
             row["live"] = self._stream_is_live(session, config.twitch_poll_seconds)
