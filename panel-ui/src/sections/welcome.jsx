@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api, toast, errToast } from "../lib/exports.js";
 import { token, csrf } from "../api.js";
-import { Field, Loading } from "../components/ui.jsx";
+import { ColorControl, Field, Loading } from "../components/ui.jsx";
 
 const DEFAULTS = {
   bg_top: "#1e2444",
@@ -138,12 +138,7 @@ export default function WelcomeSection() {
               {COLOR_ROWS.map((row, i) => (
                 <div class="two" key={i}>
                   {row.map(([key, label]) => (
-                    <Field key={key} label={label}>
-                      <span class="color-row">
-                        <input type="color" value={preset[key]} onInput={(e) => set(key, e.target.value)} aria-label={label} />
-                        <code class="muted small">{preset[key]}</code>
-                      </span>
-                    </Field>
+                    <ColorControl key={key} label={label} value={preset[key]} onChange={(value) => set(key, value)} />
                   ))}
                 </div>
               ))}

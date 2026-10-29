@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, toast, errToast } from "../lib/exports.js";
+import { ColorControl } from "../components/ui.jsx";
 
 const PLATFORMS = [
   { id: "twitch", label: "Twitch" },
@@ -199,13 +200,8 @@ export default function StreamCardsSection() {
             </label>
 
             <div class="field">
-              <span class="field-label">Цвет акцента</span>
+              <ColorControl label="Цвет акцента" value={sec.colors[platform] || DEFAULTS[tab].colors[platform]} onChange={(value) => patch({ colors: { ...sec.colors, [platform]: value } })} />
               <span class="color-row">
-                <input
-                  type="color"
-                  value={sec.colors[platform] || DEFAULTS[tab].colors[platform]}
-                  onInput={(e) => patch({ colors: { ...sec.colors, [platform]: e.target.value } })}
-                />
                 <button
                   class="btn mini"
                   type="button"

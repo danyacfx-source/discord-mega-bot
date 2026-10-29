@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, toast, errToast, uploadFile } from "../lib/exports.js";
 import { Icon } from "../components/icons.jsx";
+import { ColorControl } from "../components/ui.jsx";
 
 const COLORS = {
   blurple: 0x5865f2,
@@ -200,18 +201,12 @@ function EmbedEditor({ embed, index, total, onChange, onDup, onDelete }) {
         <textarea class="input" rows="4" maxlength="4000" placeholder="Описание" value={embed.desc} onInput={(e) => set("desc", e.target.value)} />
       </label>
 
-      <label class="field"><span class="field-label">Цвет полоски</span>
+      <div class="field"><span class="field-label">Цвет полоски</span>
         <div class="row-inline">
           <input class="input" type="text" placeholder="например #5865f2 или blurple" value={embed.color} onInput={(e) => set("color", e.target.value)} />
-          <input
-            type="color"
-            class="color-picker"
-            value={colorHex(embed.color)}
-            onInput={(e) => set("color", e.target.value)}
-          />
-          <span class="color-swatch" style={{ background: colorHex(embed.color) }} />
+          <ColorControl value={colorHex(embed.color)} onChange={(value) => set("color", value)} />
         </div>
-      </label>
+      </div>
 
       <label class="field"><span class="field-label">Автор — имя</span>
         <input class="input" type="text" maxlength="256" value={embed.author_name} onInput={(e) => set("author_name", e.target.value)} />
