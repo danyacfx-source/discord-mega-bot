@@ -15,8 +15,9 @@ export default function Streams() {
   const [data, setData] = useState(null);
   const [watch, setWatch] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const [promo, setPromo] = useState({ enabled: true, text: "" });
+  const [promo, setPromo] = useState({ enabled: true, text: "", interval_minutes: 30 });
   const [savingPromo, setSavingPromo] = useState(false);
+  const [sendingPromo, setSendingPromo] = useState(false);
 
   async function load() {
     const r = await api("/api/streams");
@@ -45,6 +46,19 @@ export default function Streams() {
       setPromo(r.data.promo);
       toast("Автосообщение Twitch сохранено", true);
     } else toast(r.data.error || "Не удалось сохранить", false);
+  }
+
+  async function sendPromoNow() {
+    setSendingPromo(true);
+    const r = await api("/api/twitch/promo/send", { text: promo.text });
+    setSendingPromo(false);
+    if (r.status === 200 && r.data.ok) {
+      if (r.data.sent.length) {
+        toast(`Отправлено в: ${r.data.sent.join(", ")}`, true);
+      } else {
+        toast("Сейчас ни один настроенный Twitch-канал не в эфире", false);
+      }
+    } else toast(r.data.error || "Не удалось отправить сообщение", false);
   }
 
   async function exportCsv() {
@@ -122,7 +136,7 @@ export default function Streams() {
 
       <div class="card">
         <h3 class="sec">Автосообщение Twitch</h3>
-        <p class="muted small">Отправляется каждые 30 минут только в каналы из TWITCH_CHANNELS, где идёт эфир.</p>
+        <p class="muted small">Отправляется с заданным интервалом только в каналы из TWITCH_CHANNELS, где идёт эфир.</p>
         <div class="stack">
           <label class="row-inline">
             <input type="checkbox" checked={promo.enabled} onInput={(e) => setPromo({ ...promo, enabled: e.target.checked })} />
@@ -131,7 +145,14 @@ export default function Streams() {
           <Field label="Текст сообщения" hint="До 450 символов; Twitch-ссылки лучше указывать полностью.">
             <textarea class="input" rows="3" maxLength="450" value={promo.text} onInput={(e) => setPromo({ ...promo, text: e.target.value })} />
           </Field>
-          <div><button class="btn success" type="button" onClick={savePromo} disabled={savingPromo}>{savingPromo ? "Сохраняем…" : "Сохранить"}</button></div>
+          <Field label="Интервал автосообщения" hint="От 5 до 180 минут. Применяется сразу после сохранения.">
+            <input class="input" type="number" min="5" max="180" step="1" value={promo.interval_minutes} onInput={(e) => setPromo({ ...promo, interval_minutes: Number(e.target.value) })} />
+          </Field>
+          <div class="row-inline">
+            <button class="btn success" type="button" onClick={savePromo} disabled={savingPromo}>{savingPromo ? "Сохраняем…" : "Сохранить"}</button>
+            <button class="btn" type="button" onClick={sendPromoNow} disabled={sendingPromo}>{sendingPromo ? "Отправляем…" : "Отправить сейчас"}</button>
+          </div>
+          <p class="muted small">Ручная отправка использует текст из поля и работает независимо от переключателя автосообщения. В офлайн-каналы сообщение не уходит.</p>
         </div>
       </div>
 

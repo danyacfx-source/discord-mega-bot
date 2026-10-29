@@ -18,14 +18,17 @@ from app.core.webpanel.payload import (
 )
 from app.services.stream_rsvp import resolve_rsvp_role
 from app.services.stream_session import session_is_live
+from app.services.twitch_promo import (
+    TWITCH_PROMO_KEY,
+    clean_promo_text,
+    load_twitch_promo_settings,
+    normalize_promo_interval,
+)
 from app.services.viewer_sessions import ViewerSessionStore
 from app.utils.stream_history import trend
 from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
 logger = logging.getLogger("bot.webpanel")
-
-_TWITCH_PROMO_KEY = "panel.twitch.promo"
-_TWITCH_PROMO_MAX_LENGTH = 450
 
 class _ProfilesApiMixin(_BaseApi):
     """Стримы, дни рождения, temp-voice, AI, карточки и приветствия."""
@@ -57,28 +60,39 @@ class _ProfilesApiMixin(_BaseApi):
         )
 
     async def _twitch_promo_settings(self) -> dict[str, Any]:
-        default = ""
-        if self.bot.config.socials_discord:
-            default = f"{self.bot.config.socials_discord} проект спонсор данного стрима"
-        raw = await self.services.kv.get(_TWITCH_PROMO_KEY, "{}")
-        try:
-            stored = json.loads(raw or "{}")
-        except (TypeError, ValueError):
-            stored = {}
-        if not isinstance(stored, dict):
-            stored = {}
-        text = stored.get("text") if isinstance(stored.get("text"), str) else default
-        return {"enabled": stored.get("enabled", True) is not False, "text": " ".join(text.split())[:_TWITCH_PROMO_MAX_LENGTH]}
+        return await load_twitch_promo_settings(self.services.kv, self.bot.config)
 
     async def _api_twitch_promo_get(self, request: web.Request) -> web.Response:
         return self._json({"ok": True, "promo": await self._twitch_promo_settings()})
 
     async def _api_twitch_promo_post(self, request: web.Request) -> web.Response:
         payload = await self._read_json(request)
-        text = " ".join(str(payload.get("text") or "").split())[:_TWITCH_PROMO_MAX_LENGTH]
-        settings = {"enabled": bool(payload.get("enabled")), "text": text}
-        await self.services.kv.set(_TWITCH_PROMO_KEY, json.dumps(settings, ensure_ascii=False))
+        settings = {
+            "enabled": bool(payload.get("enabled")),
+            "text": clean_promo_text(payload.get("text")),
+            "interval_minutes": normalize_promo_interval(payload.get("interval_minutes")),
+        }
+        await self.services.kv.set(TWITCH_PROMO_KEY, json.dumps(settings, ensure_ascii=False))
+        cog = self.bot.get_cog("StreamChat")
+        if cog is not None and hasattr(cog, "set_promo_interval"):
+            cog.set_promo_interval(settings["interval_minutes"])
         return self._json({"ok": True, "promo": settings})
+
+    async def _api_twitch_promo_send(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        cog = self.bot.get_cog("StreamChat")
+        if cog is None or not hasattr(cog, "send_promo_now"):
+            return self._json(
+                {"ok": False, "error": "Twitch-бот ещё не запущен"},
+                status=503,
+            )
+        result = await cog.send_promo_now(clean_promo_text(payload.get("text")))
+        if not result["irc_ready"]:
+            return self._json(
+                {"ok": False, "error": "Twitch-бот пока не подключён к чату"},
+                status=503,
+            )
+        return self._json({"ok": True, **result})
 
     async def _api_streams_get(self, request: web.Request) -> web.Response:
         """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.

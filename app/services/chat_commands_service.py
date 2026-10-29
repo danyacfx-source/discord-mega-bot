@@ -333,11 +333,11 @@ class ChatCommandsService:
         return "🔗 Наши ссылки:\n" + "\n".join(lines)
 
     async def _cmd_discord(self, msg: ChatMessage, rest: str) -> str:
-        url = self._config.twitch_discord_url or self._config.socials_discord
+        url = getattr(self._config, "twitch_discord_url", "") or self._config.socials_discord
         return f"📡 Штаб в Discord: {url}" if url else "📡 Ссылка на Discord ещё не настроена."
 
     async def _cmd_donate(self, msg: ChatMessage, rest: str) -> str:
-        url = self._config.twitch_donate_url or self._config.socials_donate
+        url = getattr(self._config, "twitch_donate_url", "") or self._config.socials_donate
         return f"💰 Поддержать стрим: {url}" if url else "💰 Ссылка на донат ещё не настроена."
 
     async def _cmd_youtube(self, msg: ChatMessage, rest: str) -> str:

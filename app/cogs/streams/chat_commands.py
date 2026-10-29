@@ -7,7 +7,6 @@ Twitch: анонимное чтение работает без токена (к
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import random
 from dataclasses import dataclass
@@ -19,6 +18,11 @@ from discord.ext import tasks
 from app.core.base import MegaCog, wait_ready_or_stop
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.twitch_bot_auth import TwitchBotAuth
+from app.services.twitch_promo import (
+    clean_promo_text,
+    load_twitch_promo_settings,
+    normalize_promo_interval,
+)
 from app.services.twitch_service import TwitchService
 
 if TYPE_CHECKING:
@@ -216,6 +220,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         self._stream_key: str | None = None
         self._stream_key_at = 0.0
         self._sweep_tick = 0
+        self._promo_send_lock = asyncio.Lock()
 
     async def cog_load(self) -> None:
         config = self.bot.config
@@ -223,6 +228,8 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         # (and bot-account OAuth) are disabled.
         if config.chat_commands_enabled:
             self.tick_loop.start()
+            settings = await self._promo_settings()
+            self.set_promo_interval(settings["interval_minutes"])
             self.link_loop.start()
         if config.twitch_channels:
             if config.chat_commands_enabled:
@@ -263,33 +270,63 @@ class StreamChatCog(MegaCog, name="StreamChat"):
 
     @tasks.loop(minutes=30)
     async def link_loop(self) -> None:
-        config = self.bot.config
-        if not config.twitch_channels:
-            return
-        promo = await self._promo_message()
-        if not promo:
-            return
-        for channel in config.twitch_channels:
-            try:
-                live = await self.twitch.channel_status(channel)
-            except Exception:
-                logger.warning("Twitch: не удалось проверить статус эфира для %s", channel, exc_info=True)
-                continue
-            if live:
-                await self._reply(channel, promo)
+        settings = await self._promo_settings()
+        self.set_promo_interval(settings["interval_minutes"])
+        await self.send_promo_now(respect_enabled=True, settings=settings)
 
-    async def _promo_message(self) -> str:
-        discord_url = self.bot.config.twitch_discord_url or self.bot.config.socials_discord
-        default = f"{discord_url} проект спонсор данного стрима" if discord_url else ""
-        try:
-            raw = await self.bot.services.kv.get("panel.twitch.promo", "{}")  # type: ignore[union-attr]
-            stored = json.loads(raw or "{}")
-        except (TypeError, ValueError, AttributeError):
-            stored = {}
-        if isinstance(stored, dict) and stored.get("enabled") is False:
-            return ""
-        text = stored.get("text") if isinstance(stored, dict) else ""
-        return " ".join(str(text or default).split())[:450]
+    async def _promo_settings(self) -> dict[str, Any]:
+        return await load_twitch_promo_settings(
+            self.bot.services.kv,  # type: ignore[union-attr]
+            self.bot.config,
+        )
+
+    def set_promo_interval(self, minutes: Any) -> int:
+        interval = normalize_promo_interval(minutes)
+        self.link_loop.change_interval(minutes=interval)
+        return interval
+
+    async def send_promo_now(
+        self,
+        text: str | None = None,
+        *,
+        respect_enabled: bool = False,
+        settings: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Отправляет промо в настроенные каналы, где сейчас идёт эфир."""
+        settings = settings or await self._promo_settings()
+        if respect_enabled and not settings["enabled"]:
+            return {"sent": [], "offline": [], "failed": [], "disabled": True, "irc_ready": True}
+        message = clean_promo_text(text) or settings["text"]
+        channels = self.bot.config.twitch_channels
+        irc_ready = self._irc is not None and self._irc.can_write
+        result: dict[str, Any] = {
+            "sent": [],
+            "offline": [],
+            "failed": [],
+            "disabled": False,
+            "irc_ready": irc_ready,
+        }
+        if not message or not channels or not irc_ready:
+            return result
+        async with self._promo_send_lock:
+            for channel in channels:
+                try:
+                    live = await self.twitch.channel_status(channel)
+                    if not live:
+                        result["offline"].append(channel)
+                        continue
+                    if await self._reply(channel, message):
+                        result["sent"].append(channel)
+                    else:
+                        result["failed"].append(channel)
+                except Exception:
+                    result["failed"].append(channel)
+                    logger.warning(
+                        "Twitch: не удалось отправить промо в %s",
+                        channel,
+                        exc_info=True,
+                    )
+        return result
 
     @link_loop.before_loop
     async def _before_links(self) -> None:
@@ -427,13 +464,14 @@ class StreamChatCog(MegaCog, name="StreamChat"):
 
     # ------------------------------------------------------------- платформа
 
-    async def _reply(self, reply_to: str, text: str) -> None:
+    async def _reply(self, reply_to: str, text: str) -> bool:
         irc = self._irc
         if irc is None or not reply_to:
-            return
+            return False
         sent = await irc.send(reply_to, text)
         if not sent and not irc._token:
             logger.debug("Twitch IRC: ответ пропущен (нет TWITCH_CHAT_TOKEN, read-only режим)")
+        return sent
 
     async def _live(self) -> dict[str, Any] | None:
         channels = self.bot.config.twitch_channels
