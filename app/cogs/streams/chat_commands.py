@@ -382,8 +382,8 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             )
         except Exception:
             logger.debug("Twitch: не удалось обновить сессию зрителя", exc_info=True)
-        command_channel = self.bot.config.twitch_command_channel or self.bot.config.twitch_channels[0]
-        if message.reply_to.lower() != command_channel:
+        command_channel = getattr(self.bot.config, "twitch_command_channel", "") or self.bot.config.twitch_channels[0]
+        if message.reply_to and message.reply_to.lower() != command_channel:
             return
         if message.platform == "twitch" and message.content.strip().lower().startswith("!опрос"):
             await self._handle_twitch_poll(message)

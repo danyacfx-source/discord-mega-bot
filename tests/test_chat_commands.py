@@ -134,6 +134,23 @@ async def test_ping_and_unknown_command(kick) -> None:
 
 
 @pytest.mark.asyncio
+async def test_discord_and_donate_shortcuts(db, tmp_path, monkeypatch) -> None:
+    config = _config(
+        tmp_path,
+        monkeypatch,
+        TWITCH_DISCORD_URL="https://discord.gg/rubezh",
+        TWITCH_DONATE_URL="https://donate.example/test",
+    )
+    service = ChatCommandsService(config, ChatCoinsService(ChatCoinsRepository(db)), _kv())
+    recorder = _Recorder()
+    service.register_platform("kick", reply=recorder)
+    await service.handle(_msg("!ДС"))
+    assert "discord.gg/rubezh" in recorder.last
+    await service.handle(_msg("!донат"))
+    assert "donate.example/test" in recorder.last
+
+
+@pytest.mark.asyncio
 async def test_help_lists_commands(kick) -> None:
     service, recorder = kick
     await service.handle(_msg("!помощь"))

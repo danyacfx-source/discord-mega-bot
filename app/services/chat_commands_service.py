@@ -336,6 +336,10 @@ class ChatCommandsService:
         url = self._config.socials_discord
         return f"📡 Штаб в Discord: {url}" if url else "📡 Ссылка на Discord ещё не настроена."
 
+    async def _cmd_donate(self, msg: ChatMessage, rest: str) -> str:
+        url = self._config.socials_donate
+        return f"💰 Поддержать стрим: {url}" if url else "💰 Ссылка на донат ещё не настроена."
+
     async def _cmd_youtube(self, msg: ChatMessage, rest: str) -> str:
         url = self._config.socials_youtube or "https://www.youtube.com/@Dendosich"
         return f"▶️ Архив операций на YouTube: {url}"
@@ -528,7 +532,8 @@ def _parse_stake(text: str, *, default: int) -> int:
 
 
 _ALIASES: dict[str, str] = {
-    "discord": "discord", "дискорд": "discord",
+    "discord": "discord", "дискорд": "discord", "дс": "discord",
+    "donate": "donate", "донат": "donate",
     "youtube": "youtube", "ютуб": "youtube",
     "game": "game", "игра": "game",
     "signals": "signals", "сигналы": "signals",
@@ -550,6 +555,7 @@ _ALIASES: dict[str, str] = {
 
 _COMMANDS: dict[str, Callable[..., Awaitable[str | None]]] = {
     "discord": ChatCommandsService._cmd_discord,
+    "donate": ChatCommandsService._cmd_donate,
     "youtube": ChatCommandsService._cmd_youtube,
     "game": ChatCommandsService._cmd_game,
     "signals": ChatCommandsService._cmd_signals,
