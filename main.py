@@ -2,18 +2,13 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
-import tracemalloc
 
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, ValueError):
         pass
-
-if os.getenv("RAM_REPORT_TRACEMALLOC", "1").strip().lower() not in ("0", "false", "no", "off"):
-    tracemalloc.start()
 
 from app.config import Config  # noqa: E402
 from app.core.bot import MegaBot  # noqa: E402

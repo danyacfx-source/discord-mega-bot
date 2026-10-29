@@ -131,7 +131,6 @@ def test_config_new_options(tmp_path):
     assert config.overlay_donation_goal_label == "Планка"
     assert config.ram_report_channel_id == 4242
     assert config.ram_report_interval_minutes == 15
-    assert config.ram_report_tracemalloc is False
     assert config.logs_ignore_category_ids == (111, 222)
     assert config.birthday_channel_id == 31337
     assert config.birthday_announce_hour == 23  # «27» усекается до 23
@@ -361,23 +360,3 @@ async def test_ported_services_available_as_singletons(tmp_path):
             assert kick_cog.kick is services.kick
         finally:
             await bot.close()
-
-
-def test_tracemalloc_report():
-    import tracemalloc
-
-    from app.cogs.monitoring.ram_report import _fit_report, build_tracemalloc_report
-
-    assert build_tracemalloc_report() == ""
-    try:
-        tracemalloc.start()
-        blobs = [bytearray(1024) for _ in range(256)]
-        report = build_tracemalloc_report()
-        assert "Всего отслежено: **" in report
-        assert "Файл и строка" in report and "Кол-во блоков" in report
-        assert "MB**" in report
-        assert len(report) <= 1024, "Отчёт tracemalloc превышает лимит поля embed"
-        assert _fit_report(report) == report
-        del blobs
-    finally:
-        tracemalloc.stop()

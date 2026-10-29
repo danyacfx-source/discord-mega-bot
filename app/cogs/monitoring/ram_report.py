@@ -15,53 +15,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("bot.cogs")
 
-_TRACEMALLOC_ROWS = 9
-_TRACEMALLOC_COL = 60
-
-
-def build_tracemalloc_report() -> str:
-    """Отчёт трассировки аллокаций (tracemalloc) в стиле «Файл/строка | Память | Блоки»."""
-    import tracemalloc
-
-    if not tracemalloc.is_tracing():
-        return ""
-    snapshot = tracemalloc.take_snapshot()
-    by_site: dict[tuple[str, int | None], list[int]] = {}
-    for stat in snapshot.statistics("traceback"):
-        frame = stat.traceback[0] if stat.traceback else None
-        key = (frame.filename, frame.lineno) if frame is not None else ("<unknown>", None)
-        bucket = by_site.setdefault(key, [0, 0])
-        bucket[0] += stat.size
-        bucket[1] += stat.count
-    total = sum(bucket[0] for bucket in by_site.values())
-    lines = [
-        "Файл и строка" + " " * (_TRACEMALLOC_COL - 14) + "| " + "Память".rjust(13) + " | Кол-во блоков"
-    ]
-    for (file_name, line), (size, count) in sorted(
-        by_site.items(), key=lambda kv: kv[1][0], reverse=True
-    )[:_TRACEMALLOC_ROWS]:
-        location = f"{file_name}:{line}" if line is not None else file_name
-        if len(location) > _TRACEMALLOC_COL:
-            location = "..." + location[-_TRACEMALLOC_COL + 3 :]
-        mb = size / (1024 * 1024)
-        lines.append(f"{location:<{_TRACEMALLOC_COL}} | {mb:>9.2f} MB  | {count:>10}")
-    body = "\n".join(lines)
-    return f"Всего отслежено: **{total / (1024 * 1024):.2f} MB**\n```text\n{body}\n```"
-
-
-def _fit_report(report: str) -> str:
-    """Урезать body до 1024 символов (лимит значения поля embed)."""
-    if len(report) <= 1024:
-        return report
-    prefix, _, body = report.partition("```text\n")
-    if not _:
-        return report[:1024]
-    lines = body.splitlines()
-    while len(lines) > 2 and len("\n".join(lines)) > 1000:
-        lines.pop()
-    return prefix + "```text\n" + "\n".join(lines) + "```"
-
-
 class RamReportCog(MegaCog, name="RamReport"):
     def __init__(self, bot: MegaBot) -> None:
         super().__init__(bot)
@@ -94,10 +47,6 @@ class RamReportCog(MegaCog, name="RamReport"):
         embed.add_field(name="СЕЙЧАС", value=f"`{current:.1f} MB`", inline=True)
         embed.add_field(name="ПИК", value=f"`{peak:.1f} MB`", inline=True)
         embed.add_field(name="ИНТЕРВАЛ", value=f"`{self.bot.config.ram_report_interval_minutes} min`", inline=True)
-        if self.bot.config.ram_report_tracemalloc:
-            report = _fit_report(build_tracemalloc_report())
-            if report:
-                embed.add_field(name="📊 Отчёт о памяти (tracemalloc)", value=report, inline=False)
         try:
             await channel.send(embed=embed)
         except discord.HTTPException:

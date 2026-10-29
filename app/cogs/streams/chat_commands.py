@@ -222,6 +222,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         # (and bot-account OAuth) are disabled.
         if config.chat_commands_enabled:
             self.tick_loop.start()
+            self.link_loop.start()
         if config.twitch_channels:
             if config.chat_commands_enabled:
                 self.chat.register_platform(
@@ -234,6 +235,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
 
     async def cog_unload(self) -> None:
         self.tick_loop.cancel()
+        self.link_loop.cancel()
         if self._irc_task is not None:
             self._irc_task.cancel()
             self._irc_task = None
@@ -257,6 +259,24 @@ class StreamChatCog(MegaCog, name="StreamChat"):
     @tick_loop.before_loop
     async def _before_tick(self) -> None:
         await wait_ready_or_stop(self.bot, self.tick_loop)
+
+    @tasks.loop(minutes=30)
+    async def link_loop(self) -> None:
+        config = self.bot.config
+        if not config.twitch_channels:
+            return
+        for channel in config.twitch_channels:
+            try:
+                live = await self.twitch.channel_status(channel)
+            except Exception:
+                logger.warning("Twitch: не удалось проверить статус эфира для %s", channel, exc_info=True)
+                continue
+            if live and config.socials_discord:
+                await self._reply(channel, f"{config.socials_discord} проект спонсор данного стрима")
+
+    @link_loop.before_loop
+    async def _before_links(self) -> None:
+        await wait_ready_or_stop(self.bot, self.link_loop)
 
     async def _irc_runner(self) -> None:
         """Подключение к Twitch IRC с реконнектом; auth-ошибка — выход навсегда."""
@@ -346,7 +366,30 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             )
         except Exception:
             logger.debug("Twitch: не удалось обновить сессию зрителя", exc_info=True)
+        command_channel = self.bot.config.twitch_command_channel or self.bot.config.twitch_channels[0]
+        if message.reply_to.lower() != command_channel:
+            return
+        if message.platform == "twitch" and message.content.strip().lower().startswith("!опрос"):
+            await self._handle_twitch_poll(message)
+            return
         await self.chat.handle(message)
+
+    async def _handle_twitch_poll(self, message: ChatMessage) -> None:
+        if not message.is_mod:
+            return
+        raw = message.content.strip()[len("!опрос") :].strip()
+        parts = [item.strip() for item in raw.split("|") if item.strip()]
+        if len(parts) < 3 or len(parts) > 6:
+            await self._reply(message.reply_to, "Использование: !опрос Вопрос | Вариант 1 | Вариант 2 (до 5 вариантов)")
+            return
+        question, choices = parts[0], parts[1:]
+        try:
+            await self.twitch.create_poll(question, choices, duration=60)
+        except Exception:
+            logger.warning("Twitch Helix Poll: не удалось создать опрос", exc_info=True)
+            await self._reply(message.reply_to, "Не удалось создать Twitch Poll — проверьте OAuth и настройки.")
+            return
+        await self._reply(message.reply_to, f"📊 Опрос запущен на 60 секунд: {question}")
 
     async def _current_stream_key(self) -> str | None:
         """Ключ эфира (started_at сессии) для сброса топа говорящих.

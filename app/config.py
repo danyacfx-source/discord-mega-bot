@@ -150,10 +150,12 @@ class StreamConfig:
     twitch_client_secret: str | None = None
     twitch_refresh_token: str | None = None
     twitch_channels: tuple[str, ...] = ()
+    twitch_command_channel: str = ""
     twitch_notify_channel_id: int | None = None
     twitch_ping_role_id: int | None = None
     twitch_poll_seconds: float = 300.0
     twitch_chat_token: str = ""
+    twitch_polls_token: str = ""
     twitch_bot_login: str = ""
     twitch_bot_refresh_token: str = ""
     twitch_bot_client_id: str = ""
@@ -362,7 +364,6 @@ class FeaturesConfig:
     # Отчёт по ОЗУ
     ram_report_channel_id: int | None = None
     ram_report_interval_minutes: int = 30
-    ram_report_tracemalloc: bool = True
 
     # Соцсети
     socials_discord: str | None = None
@@ -563,7 +564,6 @@ _FEATURES_FIELDS = {
     "role_menu_max_values": "role_menu_max_values",
     "ram_report_channel_id": "ram_report_channel_id",
     "ram_report_interval_minutes": "ram_report_interval_minutes",
-    "ram_report_tracemalloc": "ram_report_tracemalloc",
     "socials_discord": "socials_discord",
     "socials_site": "socials_site",
     "socials_youtube": "socials_youtube",
@@ -805,11 +805,13 @@ class Config:
                 twitch_client_id=os.getenv("TWITCH_CLIENT_ID"),
                 twitch_client_secret=os.getenv("TWITCH_CLIENT_SECRET"),
                 twitch_refresh_token=os.getenv("TWITCH_REFRESH_TOKEN"),
-                twitch_channels=_strs(os.getenv("TWITCH_CHANNELS")),
+                twitch_channels=_strs(os.getenv("TWITCH_CHANNELS") or os.getenv("TWITCH_CHANNEL", "dend1chlive")),
+                twitch_command_channel=(os.getenv("TWITCH_COMMAND_CHANNEL") or os.getenv("TWITCH_CHANNEL", "")).strip().lower(),
                 twitch_notify_channel_id=_single_int(os.getenv("TWITCH_NOTIFY_CHANNEL_ID")),
                 twitch_ping_role_id=_single_int(os.getenv("TWITCH_PING_ROLE_ID")),
                 twitch_poll_seconds=float(os.getenv("TWITCH_POLL_SECONDS", "300")),
                 twitch_chat_token=os.getenv("TWITCH_CHAT_TOKEN", ""),
+                twitch_polls_token=os.getenv("TWITCH_POLLS_TOKEN", ""),
                 twitch_bot_login=os.getenv("TWITCH_BOT_LOGIN", "").strip().lower(),
                 twitch_bot_refresh_token=os.getenv("TWITCH_BOT_REFRESH_TOKEN", "").strip(),
                 twitch_bot_client_id=os.getenv("TWITCH_BOT_CLIENT_ID", "").strip(),
@@ -969,12 +971,11 @@ class Config:
                 role_menu_max_values=max(1, int(os.getenv("ROLE_MENU_MAX_VALUES", "10"))),
                 ram_report_channel_id=_single_int(os.getenv("RAM_REPORT_CHANNEL_ID")),
                 ram_report_interval_minutes=max(1, int(os.getenv("RAM_REPORT_INTERVAL_MINUTES", "30"))),
-                ram_report_tracemalloc=_bool(os.getenv("RAM_REPORT_TRACEMALLOC", "1")),
-                socials_discord=os.getenv("SOCIALS_DISCORD"),
+                socials_discord=os.getenv("TWITCH_DISCORD_URL") or os.getenv("SOCIALS_DISCORD"),
                 socials_site=os.getenv("SOCIALS_SITE"),
-                socials_youtube=os.getenv("SOCIALS_YOUTUBE"),
+                socials_youtube=os.getenv("TWITCH_YOUTUBE_URL") or os.getenv("SOCIALS_YOUTUBE"),
                 socials_twitch=os.getenv("SOCIALS_TWITCH"),
-                socials_donate=os.getenv("SOCIALS_DONATE"),
+                socials_donate=os.getenv("TWITCH_DONATE_URL") or os.getenv("SOCIALS_DONATE"),
                 wardogs_server_name=os.getenv("WARDOGS_SERVER_NAME", "Wardogs").strip() or "Wardogs",
                 wardogs_server_id=os.getenv("WARDOGS_SERVER_ID") or _DEFAULT_WARDOGS_SERVER_ID,
                 wardogs_join_url=os.getenv("WARDOGS_JOIN_URL") or None,

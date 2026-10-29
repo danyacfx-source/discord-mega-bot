@@ -17,6 +17,8 @@ logger = logging.getLogger("bot.services")
 
 _TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 _STREAMS_URL = "https://api.twitch.tv/helix/streams"
+_USERS_URL = "https://api.twitch.tv/helix/users"
+_POLLS_URL = "https://api.twitch.tv/helix/polls"
 _GQL_URL = "https://gql.twitch.tv/gql"
 _GQL_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 _GQL_STREAM_QUERY = """
@@ -89,6 +91,29 @@ class TwitchService(StreamPlatformService):
         except ApiRequestError:
             logger.warning("Twitch: GQL временно недоступен для %s", login, exc_info=True)
             return None
+
+    async def create_poll(self, question: str, choices: list[str], duration: int = 60) -> dict[str, Any]:
+        """Create a real Twitch Poll using the user token with channel:manage:polls."""
+        config = self._config
+        token = config.twitch_polls_token
+        if not config.twitch_client_id or not token:
+            raise RuntimeError("Twitch Poll: не настроены TWITCH_CLIENT_ID/TWITCH_POLLS_TOKEN")
+        duration = max(15, min(1800, int(duration)))
+        headers = {"Client-ID": config.twitch_client_id, "Authorization": f"Bearer {token}"}
+        status, body, _ = await self._http.json("GET", _USERS_URL, params={"login": config.twitch_channels[0]}, headers=headers)
+        users = body.get("data") or []
+        if status != 200 or not users:
+            raise RuntimeError("Twitch Poll: не найден канал")
+        payload = {
+            "broadcaster_id": users[0]["id"],
+            "title": question[:60],
+            "choices": [{"title": x[:25]} for x in choices[:5]],
+            "duration": duration,
+        }
+        status, body, _ = await self._http.json(
+            "POST", _POLLS_URL, headers=headers, json=payload, acceptable=(200, 202)
+        )
+        return body
 
     async def _helix_status(self, login: str) -> dict[str, Any] | None:
         config = self._config

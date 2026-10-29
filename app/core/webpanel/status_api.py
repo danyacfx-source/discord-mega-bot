@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import re
-import tracemalloc
 from datetime import UTC, datetime
 from typing import Any
 
@@ -133,12 +132,7 @@ class _StatusApiMixin(_BaseApi):
         data["uptime"] = self._human_uptime(seconds)
         latency = bot.latency
         data["latency_ms"] = round(latency * 1000) if latency and latency > 0 else 0
-        if tracemalloc.is_tracing():
-            current, peak = tracemalloc.get_traced_memory()
-            data["mem_mb"] = round(current / 1024 / 1024, 1)
-            data["mem_peak_mb"] = round(peak / 1024 / 1024, 1)
-        else:
-            data["mem_mb"] = round(psutil.Process().memory_info().rss / (1024 * 1024), 1)
+        data["mem_mb"] = round(psutil.Process().memory_info().rss / (1024 * 1024), 1)
         guild = self._primary_guild()
         if guild is not None:
             data["guild"] = {
