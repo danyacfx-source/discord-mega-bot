@@ -321,7 +321,12 @@ class Overlay:
             "channels": self._safe_channels(),
             "counters": [],
             "donation_goal": self._donation_goal(),
-            "chat": filter_chat_messages(self._feed_recent(), settings, paused=paused),
+            "chat": filter_chat_messages(
+                self._feed_recent(),
+                settings,
+                paused=paused,
+                primary_twitch_channel=(self.bot.config.twitch_channels or ("",))[0],
+            ),
             "chat_settings": settings,
             "chat_paused": paused,
         }

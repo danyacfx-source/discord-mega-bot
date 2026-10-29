@@ -105,6 +105,7 @@ class _ToolsApiMixin(_BaseApi):
                 "ok": True,
                 "chat_settings": current_chat or DEFAULT_CHAT_SETTINGS,
                 "chat_settings_saved": current_chat is not None,
+                "twitch_channels": [str(channel)[:64] for channel in config.twitch_channels],
                 "chat_paused": await get_chat_paused(self.services.kv),
                 "enabled": bool(config.overlay_port),
                 "host": config.overlay_host,

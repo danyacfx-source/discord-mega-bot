@@ -28,6 +28,9 @@ DEFAULT_CHAT_SETTINGS: dict[str, Any] = {
     "accent_color": "#b9a47a",
     "show_platform": False,
     "enabled_platforms": ["twitch", "kick", "youtube"],
+    # A symbolic primary keeps the default correct if the main Twitch login is
+    # changed in .env, while still letting the panel explicitly add side chats.
+    "enabled_twitch_channels": ["__primary__"],
     "hidden_users": [],
     "blocked_words": [],
 }
@@ -35,6 +38,7 @@ _HEX = re.compile(r"#[0-9a-fA-F]{6}\Z")
 _THEMES = frozenset({"minimal", "radio", "glass"})
 _FONTS = frozenset({"system", "mono"})
 _PLATFORMS = ("twitch", "kick", "youtube")
+_PRIMARY_TWITCH = "__primary__"
 
 
 def _number(value: Any, lo: int, hi: int, fallback: int) -> int:
@@ -77,11 +81,26 @@ def _enabled_platforms(value: Any) -> list[str]:
     return [platform for platform in _PLATFORMS if platform in value]
 
 
+def _enabled_twitch_channels(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return list(DEFAULT_CHAT_SETTINGS["enabled_twitch_channels"])
+    result: list[str] = []
+    for item in value[:12]:
+        if not isinstance(item, str):
+            continue
+        login = item.strip().lower()[:64]
+        if login == _PRIMARY_TWITCH or re.fullmatch(r"[a-z0-9_]{1,64}", login):
+            if login not in result:
+                result.append(login)
+    return result
+
+
 def filter_chat_messages(
     messages: Sequence[dict[str, Any]],
     settings: dict[str, Any] | None,
     *,
     paused: bool = False,
+    primary_twitch_channel: str = "",
 ) -> list[dict[str, Any]]:
     """Overlay-only safety filters; Twitch and Kick messages are untouched."""
     if paused:
@@ -89,12 +108,24 @@ def filter_chat_messages(
     if settings is None:
         return list(messages)
     enabled = set(settings.get("enabled_platforms", _PLATFORMS))
+    configured_twitch = set(settings.get("enabled_twitch_channels", [_PRIMARY_TWITCH]))
+    primary = primary_twitch_channel.strip().lower()
+    allowed_twitch = {
+        primary if channel == _PRIMARY_TWITCH else channel
+        for channel in configured_twitch
+        if channel != _PRIMARY_TWITCH or primary
+    }
     hidden = set(settings.get("hidden_users", []))
     blocked = settings.get("blocked_words", [])
     return [
         item
         for item in messages
         if item.get("platform") in enabled
+        and (
+            item.get("platform") != "twitch"
+            or not primary
+            or str(item.get("source") or "").strip().lower() in allowed_twitch
+        )
         and str(item.get("name") or "").casefold() not in hidden
         and not any(word in str(item.get("text") or "").casefold() for word in blocked)
     ]
@@ -127,6 +158,7 @@ def sanitize_chat_settings(raw: Any) -> dict[str, Any]:
         "accent_color": _color(data.get("accent_color"), defaults["accent_color"]),
         "show_platform": platform if isinstance(platform, bool) else defaults["show_platform"],
         "enabled_platforms": _enabled_platforms(data.get("enabled_platforms")),
+        "enabled_twitch_channels": _enabled_twitch_channels(data.get("enabled_twitch_channels")),
         "hidden_users": _terms(data.get("hidden_users"), max_len=32),
         "blocked_words": _terms(data.get("blocked_words"), max_len=40),
     }

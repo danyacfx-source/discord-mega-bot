@@ -133,10 +133,11 @@ const DEFAULT_CHAT_SETTINGS = {
   theme: "minimal", font: "system", text_color: "#f7f5ee",
   accent_color: "#b9a47a", show_platform: false,
   enabled_platforms: ["twitch", "kick", "youtube"],
+  enabled_twitch_channels: ["__primary__"],
   hidden_users: [], blocked_words: [],
 };
 
-function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
+function ChatStyleControls({ settings, change, save, saving, dirty, saved, twitchChannels = [] }) {
   const mono = settings.font === "mono";
   const previewText = settings.text_color;
   const alpha = settings.opacity / 100;
@@ -216,6 +217,30 @@ function ChatStyleControls({ settings, change, save, saving, dirty, saved }) {
             </label>
           ))}
         </div>
+        {twitchChannels.length > 0 && (
+          <div class="stack" style={{ gap: 7 }}>
+            <b class="small">Каналы Twitch в OBS</b>
+            <span class="muted small">Основной канал включён по умолчанию. Дополнительные чаты не появятся на экране, пока их не отметишь.</span>
+            <div class="row-inline" style={{ gap: 12, flexWrap: "wrap" }}>
+              {twitchChannels.map((channel, index) => {
+                const key = index === 0 ? "__primary__" : channel.toLowerCase();
+                const current = settings.enabled_twitch_channels || ["__primary__"];
+                return (
+                  <label class="ovl-check" key={key}>
+                    <input
+                      type="checkbox"
+                      checked={current.includes(key)}
+                      onChange={(e) => change("enabled_twitch_channels", e.currentTarget.checked
+                        ? [...current, key]
+                        : current.filter((entry) => entry !== key))}
+                    />
+                    {index === 0 ? `Основной · ${channel}` : channel}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <label class="ovl-field">Скрывать никнеймы (через запятую)
           <input
             class="input"
@@ -612,7 +637,7 @@ export default function OverlaySection() {
         <div class="card">
           <h3 class="sec">Лента чата для OBS</h3>
           <p class="muted small" style={{ marginBottom: 12 }}>Отдельный прозрачный чат Twitch / Kick. Без создания раскладки; вставьте ссылку в OBS как Browser Source.</p>
-          <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+          <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} twitchChannels={meta.twitch_channels || []} />
           <ChatOpsControls control={chatControl} action={chatControlAction} busy={chatControlBusy} enabled={meta.enabled && !meta.token_redacted} />
           <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
             <h4>Проверить живой оверлей</h4>
@@ -915,7 +940,7 @@ export default function OverlaySection() {
       <div class="card">
         <h3 class="sec">Оформление отдельного чата OBS</h3>
         <p class="muted small">Сохраняется независимо от раскладки. Старую ссылку менять не нужно.</p>
-        <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} />
+          <ChatStyleControls settings={chatSettings} change={changeChatSetting} save={saveChatStyle} saving={chatSaving} dirty={chatDirty} saved={chatSaved} twitchChannels={meta.twitch_channels || []} />
         <ChatOpsControls control={chatControl} action={chatControlAction} busy={chatControlBusy} enabled={meta.enabled && !meta.token_redacted} />
         <div style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
           <h4>Проверить живой оверлей</h4>

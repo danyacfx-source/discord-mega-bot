@@ -39,6 +39,17 @@ def test_filters_are_sanitized_and_never_act_on_real_chats() -> None:
     assert sanitize_chat_settings({})["enabled_platforms"] == DEFAULT_CHAT_SETTINGS["enabled_platforms"]
 
 
+def test_twitch_overlay_defaults_to_primary_channel_but_can_include_secondary() -> None:
+    settings = sanitize_chat_settings({})
+    rows = [
+        {"platform": "twitch", "source": "main", "name": "Алиса", "text": "основной"},
+        {"platform": "twitch", "source": "side", "name": "Борис", "text": "второй"},
+    ]
+    assert filter_chat_messages(rows, settings, primary_twitch_channel="main") == rows[:1]
+    settings["enabled_twitch_channels"] = ["__primary__", "side"]
+    assert filter_chat_messages(rows, settings, primary_twitch_channel="main") == rows
+
+
 @pytest.mark.asyncio
 async def test_panel_obs_controls_persist_and_old_url_works(tmp_path) -> None:
     token = "existing-overlay-token-32-characters"

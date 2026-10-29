@@ -148,7 +148,13 @@ class ChatCommandsService:
                 logger.exception("LiveVote: не удалось засчитать голос")
         # Accepted vote commands should not flood the ordinary OBS chat feed.
         if text and not msg.is_bot and self._feed is not None:
-            self._feed.push(msg.platform, msg.display_name or msg.username, text, is_mod=msg.is_mod)
+            self._feed.push(
+                msg.platform,
+                msg.display_name or msg.username,
+                text,
+                is_mod=msg.is_mod,
+                source=msg.reply_to,
+            )
         if not self._config.chat_commands_enabled or msg.is_bot:
             return
         content = text
