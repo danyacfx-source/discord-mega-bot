@@ -18,6 +18,10 @@ from app.core.webpanel.payload import (
 )
 from app.services.stream_rsvp import resolve_rsvp_role
 from app.services.stream_session import session_is_live
+from app.services.twitch_command_settings import (
+    command_settings_payload,
+    save_twitch_command_settings,
+)
 from app.services.twitch_promo import (
     TWITCH_PROMO_KEY,
     clean_promo_text,
@@ -93,6 +97,29 @@ class _ProfilesApiMixin(_BaseApi):
                 status=503,
             )
         return self._json({"ok": True, **result})
+
+    async def _api_twitch_commands_get(self, request: web.Request) -> web.Response:
+        settings = await self.services.chat_commands.twitch_command_settings()
+        return self._json(
+            {
+                "ok": True,
+                "commands": command_settings_payload(settings),
+                "placeholders": ["{default}", "{user}", "{args}", "{channel}"],
+            }
+        )
+
+    async def _api_twitch_commands_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        commands = payload.get("commands")
+        if not isinstance(commands, dict):
+            return self._json({"ok": False, "error": "Некорректный список команд"}, status=400)
+        settings, error = await save_twitch_command_settings(self.services.kv, commands)
+        if error is not None:
+            return self._json({"ok": False, "error": error}, status=400)
+        self.services.chat_commands.invalidate_twitch_command_settings()
+        return self._json(
+            {"ok": True, "commands": command_settings_payload(settings)}
+        )
 
     async def _api_streams_get(self, request: web.Request) -> web.Response:
         """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.

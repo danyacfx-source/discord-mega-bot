@@ -18,6 +18,8 @@ export default function Streams() {
   const [promo, setPromo] = useState({ enabled: true, text: "", interval_minutes: 30 });
   const [savingPromo, setSavingPromo] = useState(false);
   const [sendingPromo, setSendingPromo] = useState(false);
+  const [commands, setCommands] = useState(null);
+  const [savingCommands, setSavingCommands] = useState(false);
 
   async function load() {
     const r = await api("/api/streams");
@@ -61,6 +63,45 @@ export default function Streams() {
     } else toast(r.data.error || "Не удалось отправить сообщение", false);
   }
 
+  async function loadCommands() {
+    const r = await api("/api/twitch/commands");
+    if (r.status === 200 && r.data.ok) setCommands(r.data.commands);
+  }
+
+  function updateCommand(id, patch) {
+    setCommands((current) => current.map((command) => command.id === id ? { ...command, ...patch } : command));
+  }
+
+  async function saveCommands(nextCommands = commands) {
+    if (!nextCommands) return;
+    setSavingCommands(true);
+    const payload = Object.fromEntries(nextCommands.map((command) => [command.id, {
+      enabled: command.enabled,
+      aliases: command.aliases,
+      moderator_only: command.moderator_only,
+      response: command.response,
+    }]));
+    const r = await api("/api/twitch/commands", { commands: payload });
+    setSavingCommands(false);
+    if (r.status === 200 && r.data.ok) {
+      setCommands(r.data.commands);
+      toast("Команды Twitch сохранены", true);
+    } else toast(r.data.error || "Не удалось сохранить команды", false);
+  }
+
+  async function resetCommands() {
+    if (!commands || !confirm("Вернуть все команды Twitch к стандартным настройкам?")) return;
+    const reset = commands.map((command) => ({
+      ...command,
+      enabled: true,
+      aliases: command.default_aliases,
+      moderator_only: command.default_moderator_only,
+      response: "",
+    }));
+    setCommands(reset);
+    await saveCommands(reset);
+  }
+
   async function exportCsv() {
     setExporting(true);
     try {
@@ -75,6 +116,7 @@ export default function Streams() {
     load();
     loadWatch();
     loadPromo();
+    loadCommands();
     const t = setInterval(() => {
       load();
       loadWatch();
@@ -132,6 +174,50 @@ export default function Streams() {
             );
           })}
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3 class="sec">Команды Twitch</h3>
+            <p class="muted small">Настройки действуют только на основном Twitch-канале с командами. Kick и второй промо-канал не затрагиваются.</p>
+          </div>
+          <div class="row-inline">
+            <button class="btn" type="button" onClick={resetCommands} disabled={!commands || savingCommands}>Сбросить</button>
+            <button class="btn success" type="button" onClick={() => saveCommands()} disabled={!commands || savingCommands}>{savingCommands ? "Сохраняем…" : "Сохранить команды"}</button>
+          </div>
+        </div>
+        {!commands && <Loading />}
+        {commands && <div class="stack">
+          <div class="env-box muted small">Шаблоны ответа: <b>{"{default}"}</b> — стандартный динамический ответ, <b>{"{user}"}</b> — имя зрителя, <b>{"{args}"}</b> — текст после команды, <b>{"{channel}"}</b> — Twitch-канал. Пустое поле оставляет стандартный ответ.</div>
+          {commands.map((command) => (
+            <details class="env-box" key={command.id}>
+              <summary style={{ cursor: "pointer" }}>
+                <b>{command.label}</b>
+                <span class="muted small"> · {command.aliases.map((alias) => `!${alias}`).join(", ")} · {command.enabled ? "включена" : "выключена"}</span>
+              </summary>
+              <div class="stack" style={{ marginTop: 12 }}>
+                <div class="muted small">{command.description}</div>
+                <div class="row-inline">
+                  <label class="row-inline">
+                    <input type="checkbox" checked={command.enabled} onInput={(e) => updateCommand(command.id, { enabled: e.target.checked })} />
+                    Включить команду
+                  </label>
+                  <label class="row-inline">
+                    <input type="checkbox" checked={command.moderator_only} onInput={(e) => updateCommand(command.id, { moderator_only: e.target.checked })} />
+                    Только модераторы
+                  </label>
+                </div>
+                <Field label="Алиасы" hint="Через запятую, без восклицательного знака. Один алиас нельзя назначить двум командам.">
+                  <input class="input" type="text" value={command.aliases.join(", ")} onInput={(e) => updateCommand(command.id, { aliases: e.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} />
+                </Field>
+                <Field label="Шаблон ответа" hint="До 450 символов; пусто — стандартный ответ.">
+                  <textarea class="input" rows="2" maxLength="450" value={command.response} onInput={(e) => updateCommand(command.id, { response: e.target.value })} />
+                </Field>
+              </div>
+            </details>
+          ))}
+        </div>}
       </div>
 
       <div class="card">

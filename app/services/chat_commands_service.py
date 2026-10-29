@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from app.services.twitch_command_settings import (
+    load_twitch_command_settings,
+    twitch_command_alias_map,
+)
+
 if TYPE_CHECKING:
     from app.config import Config
     from app.services.chat_coins_service import ChatCoinsService
@@ -96,6 +101,8 @@ class ChatCommandsService:
         self._polls: dict[str, _Poll] = {}
         self._cmd_ready: dict[tuple[str, str], float] = {}
         self._passive_ready: dict[tuple[str, str], float] = {}
+        self._twitch_settings: dict[str, dict[str, Any]] | None = None
+        self._twitch_settings_at = 0.0
 
     async def _remember(self, key: str, payload: dict[str, Any]) -> None:
         """Персистентное событие для оверлея (последний выигрыш/опрос)."""
@@ -161,7 +168,21 @@ class ChatCommandsService:
         cmd = cmd.lower()
         if not self._allowed_now(msg, cmd):
             return
-        handler = _COMMANDS.get(_ALIASES.get(cmd, cmd))
+        command_id = _ALIASES.get(cmd, cmd)
+        twitch_command: dict[str, Any] | None = None
+        if msg.platform == "twitch":
+            settings = await self.twitch_command_settings()
+            command_id = twitch_command_alias_map(settings).get(cmd, "")
+            twitch_command = settings.get(command_id)
+            if (
+                twitch_command is None
+                or not twitch_command["enabled"]
+                or (twitch_command["moderator_only"] and not msg.is_mod)
+            ):
+                return
+        elif command_id in _MODERATOR_COMMANDS and not msg.is_mod:
+            return
+        handler = _COMMANDS.get(command_id)
         if handler is None:
             return
         try:
@@ -169,8 +190,78 @@ class ChatCommandsService:
         except Exception:
             logger.exception("ChatCommands: сбой команды !%s (%s)", cmd, msg.platform)
             return
+        if text and twitch_command is not None:
+            text = self._format_twitch_response(
+                twitch_command["response"],
+                text,
+                msg,
+                rest.strip(),
+            )
         if text:
             await self._send(msg, text[:450])
+
+    async def twitch_command_settings(
+        self, *, force: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        now = time.monotonic()
+        if force or self._twitch_settings is None or now - self._twitch_settings_at >= 5.0:
+            self._twitch_settings = await load_twitch_command_settings(self._kv)
+            self._twitch_settings_at = now
+        return self._twitch_settings
+
+    def invalidate_twitch_command_settings(self) -> None:
+        self._twitch_settings = None
+        self._twitch_settings_at = 0.0
+
+    async def match_twitch_command(
+        self, msg: ChatMessage
+    ) -> tuple[str, str, dict[str, Any]] | None:
+        """Разбирает Twitch-команду с учётом алиасов и прав из панели."""
+        prefix = self._config.chat_command_prefix
+        content = msg.content.strip()
+        if not content.startswith(prefix):
+            return None
+        raw = content[len(prefix) :].strip()
+        if not raw:
+            return None
+        alias, _, rest = raw.partition(" ")
+        settings = await self.twitch_command_settings()
+        command_id = twitch_command_alias_map(settings).get(alias.lower())
+        if command_id is None:
+            return None
+        command = settings[command_id]
+        if not command["enabled"] or (command["moderator_only"] and not msg.is_mod):
+            return None
+        return command_id, rest.strip(), command
+
+    async def format_twitch_response(
+        self,
+        command_id: str,
+        default: str,
+        msg: ChatMessage,
+        args: str = "",
+    ) -> str:
+        settings = await self.twitch_command_settings()
+        command = settings.get(command_id)
+        if command is None:
+            return default
+        return self._format_twitch_response(command["response"], default, msg, args)
+
+    @staticmethod
+    def _format_twitch_response(
+        template: str,
+        default: str,
+        msg: ChatMessage,
+        args: str,
+    ) -> str:
+        if not template:
+            return default
+        return (
+            template.replace("{default}", default)
+            .replace("{user}", msg.display_name or msg.username)
+            .replace("{args}", args)
+            .replace("{channel}", msg.reply_to)
+        )[:450]
 
     async def tick(self) -> None:
         """Завершает опросы, у которых вышло время (зовётся когом по таймеру)."""
@@ -280,6 +371,17 @@ class ChatCommandsService:
         return "🏓 pong! Команды: !help"
 
     async def _cmd_help(self, msg: ChatMessage, rest: str) -> str:
+        if msg.platform == "twitch":
+            settings = await self.twitch_command_settings()
+            prefix = self._config.chat_command_prefix
+            aliases = [
+                f"{prefix}{command['aliases'][0]}"
+                for command in settings.values()
+                if command["enabled"]
+                and command["aliases"]
+                and (not command["moderator_only"] or msg.is_mod)
+            ]
+            return "📜 Команды чата: " + ", ".join(aliases)
         lines = [
             "📜 Команды чата:",
             "!uptime — эфир, !links — ссылки, !расписание — стримы",
@@ -493,16 +595,12 @@ class ChatCommandsService:
         return f"🔮 {random.choice(_BALL_ANSWERS)}"
 
     async def _cmd_so(self, msg: ChatMessage, rest: str) -> str:
-        if not msg.is_mod:
-            return None  # type: ignore[return-value]
         nick = rest.strip().lstrip("@").split()[0] if rest.strip() else ""
         if not nick:
             return "Использование: !so ник"
         return f"👋 Шоуаут: @{nick} — заходи, спасибо что тут!"
 
     async def _cmd_poll(self, msg: ChatMessage, rest: str) -> str:
-        if not msg.is_mod:
-            return None  # type: ignore[return-value]
         if msg.platform in self._polls:
             return "⏳ Опрос уже идёт — дождитесь итогов."
         parts = [part.strip() for part in rest.split("|")]
@@ -574,3 +672,5 @@ _COMMANDS: dict[str, Callable[..., Awaitable[str | None]]] = {
     "so": ChatCommandsService._cmd_so,
     "poll": ChatCommandsService._cmd_poll,
 }
+
+_MODERATOR_COMMANDS = {"so", "poll"}

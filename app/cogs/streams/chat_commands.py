@@ -423,27 +423,44 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         command_channel = getattr(self.bot.config, "twitch_command_channel", "") or self.bot.config.twitch_channels[0]
         if message.reply_to and message.reply_to.lower() != command_channel:
             return
-        if message.platform == "twitch" and message.content.strip().lower().startswith("!опрос"):
-            await self._handle_twitch_poll(message)
+        match_command = getattr(self.chat, "match_twitch_command", None)
+        matched = await match_command(message) if match_command is not None else None
+        if matched is not None and matched[0] == "twitch_poll":
+            await self._handle_twitch_poll(message, matched[1])
             return
         await self.chat.handle(message)
 
-    async def _handle_twitch_poll(self, message: ChatMessage) -> None:
-        if not message.is_mod:
-            return
-        raw = message.content.strip()[len("!опрос") :].strip()
+    async def _handle_twitch_poll(self, message: ChatMessage, raw: str) -> None:
         parts = [item.strip() for item in raw.split("|") if item.strip()]
         if len(parts) < 3 or len(parts) > 6:
-            await self._reply(message.reply_to, "Использование: !опрос Вопрос | Вариант 1 | Вариант 2 (до 5 вариантов)")
+            reply = await self.chat.format_twitch_response(
+                "twitch_poll",
+                "Использование: !опрос Вопрос | Вариант 1 | Вариант 2 (до 5 вариантов)",
+                message,
+                raw,
+            )
+            await self._reply(message.reply_to, reply)
             return
         question, choices = parts[0], parts[1:]
         try:
             await self.twitch.create_poll(question, choices, duration=60)
         except Exception:
             logger.warning("Twitch Helix Poll: не удалось создать опрос", exc_info=True)
-            await self._reply(message.reply_to, "Не удалось создать Twitch Poll — проверьте OAuth и настройки.")
+            reply = await self.chat.format_twitch_response(
+                "twitch_poll",
+                "Не удалось создать Twitch Poll — проверьте OAuth и настройки.",
+                message,
+                raw,
+            )
+            await self._reply(message.reply_to, reply)
             return
-        await self._reply(message.reply_to, f"📊 Опрос запущен на 60 секунд: {question}")
+        reply = await self.chat.format_twitch_response(
+            "twitch_poll",
+            f"📊 Опрос запущен на 60 секунд: {question}",
+            message,
+            raw,
+        )
+        await self._reply(message.reply_to, reply)
 
     async def _current_stream_key(self) -> str | None:
         """Ключ эфира (started_at сессии) для сброса топа говорящих.
