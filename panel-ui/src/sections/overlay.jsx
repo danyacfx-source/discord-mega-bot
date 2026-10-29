@@ -137,6 +137,53 @@ const DEFAULT_CHAT_SETTINGS = {
   hidden_users: [], blocked_words: [],
 };
 
+const OVERLAY_COLORS = [
+  "#f7f5ee", "#b9a47a", "#e7c36c", "#92b188", "#78a9d1",
+  "#bc8acd", "#d37c6d", "#303b33",
+];
+
+function ColorControl({ value, onChange, label }) {
+  const fallback = "#b9a47a";
+  const color = /^#[0-9a-fA-F]{6}$/.test(value || "") ? value : fallback;
+  const [draft, setDraft] = useState(color);
+
+  useEffect(() => { setDraft(color); }, [color]);
+
+  function setColor(next) {
+    const normalized = String(next).trim();
+    setDraft(normalized);
+    if (/^#[0-9a-fA-F]{6}$/.test(normalized)) onChange(normalized.toLowerCase());
+  }
+
+  return (
+    <label class="color-control">
+      {label && <span>{label}</span>}
+      <span class="color-control-row">
+        <span class="color-swatches" aria-label={label || "Выбор цвета"}>
+          {OVERLAY_COLORS.map((swatch) => (
+            <button
+              class={"color-swatch" + (color.toLowerCase() === swatch ? " selected" : "")}
+              type="button"
+              title={swatch}
+              style={{ "--swatch": swatch }}
+              onClick={() => setColor(swatch)}
+            />
+          ))}
+        </span>
+        <input
+          class="input color-hex"
+          type="text"
+          maxLength="7"
+          value={draft}
+          aria-label={label || "HEX-цвет"}
+          onInput={(e) => setColor(e.currentTarget.value)}
+          onBlur={() => setColor(color)}
+        />
+      </span>
+    </label>
+  );
+}
+
 function ChatStyleControls({ settings, change, save, saving, dirty, saved, twitchChannels = [] }) {
   const mono = settings.font === "mono";
   const previewText = settings.text_color;
@@ -186,12 +233,8 @@ function ChatStyleControls({ settings, change, save, saving, dirty, saved, twitc
         <label class="small muted">Отступ, px
           <input class="input ovl-size" type="number" min="0" max="32" value={settings.padding} onInput={setNum("padding", 0, 32)} />
         </label>
-        <label class="small muted">Цвет текста
-          <input type="color" value={settings.text_color} onInput={(e) => change("text_color", e.target.value)} />
-        </label>
-        <label class="small muted">Акцент
-          <input type="color" value={settings.accent_color} onInput={(e) => change("accent_color", e.target.value)} />
-        </label>
+        <ColorControl label="Цвет текста" value={settings.text_color} onChange={(value) => change("text_color", value)} />
+        <ColorControl label="Акцент" value={settings.accent_color} onChange={(value) => change("accent_color", value)} />
         <label class="ovl-check"><input type="checkbox" checked={settings.show_platform} onChange={(e) => change("show_platform", e.currentTarget.checked)} /> Метки платформ</label>
       </div>
       <div class="stack" style={{ borderTop: "1px solid #38443c", paddingTop: 14 }}>
@@ -809,14 +852,11 @@ export default function OverlaySection() {
                       />
                       Жирный
                     </label>
-                    <label class="ovl-field">
-                      Цвет текста
-                      <input
-                        type="color"
-                        value={widget.props.color || "#ffffff"}
-                        onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, color: e.target.value } }))}
-                      />
-                    </label>
+                    <ColorControl
+                      label="Цвет текста"
+                      value={widget.props.color || "#ffffff"}
+                      onChange={(value) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, color: value } }))}
+                    />
                   </>
                 )}
                 {widget.type === "image" && (
@@ -851,14 +891,11 @@ export default function OverlaySection() {
                         onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, date: e.target.value } }))}
                       />
                     </label>
-                    <label class="ovl-field">
-                      Цвет цифр
-                      <input
-                        type="color"
-                        value={widget.props.color || "#ff5a36"}
-                        onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, color: e.target.value } }))}
-                      />
-                    </label>
+                    <ColorControl
+                      label="Цвет цифр"
+                      value={widget.props.color || "#ff5a36"}
+                      onChange={(value) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, color: value } }))}
+                    />
                   </>
                 )}
                 {widget.type === "chat_top" && (
@@ -887,19 +924,16 @@ export default function OverlaySection() {
                     />
                   </label>
                 )}
-                <label class="ovl-field">
-                  Фон (пусто — стиль по умолчанию)
-                  <span class="color-row">
-                    <input
-                      type="color"
-                      value={widget.props.bg || "#141926"}
-                      onInput={(e) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, bg: e.target.value } }))}
-                    />
-                    <button class="btn mini" type="button" onClick={() => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, bg: "" } }))}>
-                      сброс
-                    </button>
-                  </span>
-                </label>
+                <div class="row-inline" style={{ alignItems: "end" }}>
+                  <ColorControl
+                    label="Фон"
+                    value={widget.props.bg || "#141926"}
+                    onChange={(value) => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, bg: value } }))}
+                  />
+                  <button class="btn mini" type="button" onClick={() => updateWidget(widget.id, (w) => ({ ...w, props: { ...w.props, bg: "" } }))}>
+                    Сбросить фон
+                  </button>
+                </div>
                 <label class="ovl-field">
                   Скругление — {widget.props.radius ?? 14}px
                   <input
