@@ -20,7 +20,9 @@ from app.services.stream_rsvp import resolve_rsvp_role
 from app.services.stream_session import session_is_live
 from app.services.twitch_command_settings import (
     command_settings_payload,
+    load_twitch_commands_paused,
     save_twitch_command_settings,
+    save_twitch_commands_paused,
 )
 from app.services.twitch_promo import (
     TWITCH_PROMO_KEY,
@@ -120,6 +122,45 @@ class _ProfilesApiMixin(_BaseApi):
         return self._json(
             {"ok": True, "commands": command_settings_payload(settings)}
         )
+
+    async def _api_twitch_control_get(self, request: web.Request) -> web.Response:
+        cog = self.bot.get_cog("StreamChat")
+        if cog is not None and hasattr(cog, "twitch_control_status"):
+            return self._json({"ok": True, "control": await cog.twitch_control_status()})
+        return self._json(
+            {
+                "ok": True,
+                "control": {
+                    "commands_paused": await load_twitch_commands_paused(self.services.kv),
+                    "connected": False,
+                    "can_write": False,
+                    "mode": "не запущен",
+                    "state": "stopped",
+                    "last_connected_at": None,
+                    "last_error": "",
+                    "reconnects": 0,
+                    "channels": list(self.bot.config.twitch_channels),
+                },
+            }
+        )
+
+    async def _api_twitch_control_post(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        action = str(payload.get("action") or "")
+        cog = self.bot.get_cog("StreamChat")
+        if action == "commands_paused":
+            paused = await save_twitch_commands_paused(
+                self.services.kv, bool(payload.get("paused"))
+            )
+            self.services.chat_commands.invalidate_twitch_control()
+            return self._json({"ok": True, "commands_paused": paused})
+        if action == "reconnect":
+            if cog is None or not hasattr(cog, "reconnect_twitch_chat"):
+                return self._json({"ok": False, "error": "Twitch-бот ещё не запущен"}, status=503)
+            if not await cog.reconnect_twitch_chat():
+                return self._json({"ok": False, "error": "Чат ещё не подключён"}, status=409)
+            return self._json({"ok": True})
+        return self._json({"ok": False, "error": "Неизвестное действие"}, status=400)
 
     async def _api_streams_get(self, request: web.Request) -> web.Response:
         """Стримы (Twitch/Kick/VK): конфигурация и данные сессии из KV.

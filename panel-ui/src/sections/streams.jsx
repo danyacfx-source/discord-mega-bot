@@ -20,6 +20,8 @@ export default function Streams() {
   const [sendingPromo, setSendingPromo] = useState(false);
   const [commands, setCommands] = useState(null);
   const [savingCommands, setSavingCommands] = useState(false);
+  const [control, setControl] = useState(null);
+  const [controlBusy, setControlBusy] = useState(false);
 
   async function load() {
     const r = await api("/api/streams");
@@ -66,6 +68,31 @@ export default function Streams() {
   async function loadCommands() {
     const r = await api("/api/twitch/commands");
     if (r.status === 200 && r.data.ok) setCommands(r.data.commands);
+  }
+
+  async function loadControl() {
+    const r = await api("/api/twitch/control");
+    if (r.status === 200 && r.data.ok) setControl(r.data.control);
+  }
+
+  async function setCommandsPaused(paused) {
+    setControlBusy(true);
+    const r = await api("/api/twitch/control", { action: "commands_paused", paused });
+    setControlBusy(false);
+    if (r.status === 200 && r.data.ok) {
+      setControl({ ...control, commands_paused: r.data.commands_paused });
+      toast(r.data.commands_paused ? "Команды Twitch приостановлены" : "Команды Twitch включены", true);
+    } else toast(r.data.error || "Не удалось изменить режим команд", false);
+  }
+
+  async function reconnectChat() {
+    setControlBusy(true);
+    const r = await api("/api/twitch/control", { action: "reconnect" });
+    setControlBusy(false);
+    if (r.status === 200 && r.data.ok) {
+      toast("Переподключение Twitch-чата запрошено", true);
+      setTimeout(loadControl, 1200);
+    } else toast(r.data.error || "Не удалось переподключить чат", false);
   }
 
   function updateCommand(id, patch) {
@@ -117,9 +144,11 @@ export default function Streams() {
     loadWatch();
     loadPromo();
     loadCommands();
+    loadControl();
     const t = setInterval(() => {
       load();
       loadWatch();
+      loadControl();
     }, 30000);
     return () => clearInterval(t);
   }, []);
@@ -174,6 +203,36 @@ export default function Streams() {
             );
           })}
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3 class="sec">Пульт Twitch</h3>
+            <p class="muted small">Состояние чат-бота и быстрые действия во время эфира.</p>
+          </div>
+          <button class="btn mini" type="button" onClick={loadControl}>Обновить</button>
+        </div>
+        {!control && <Loading />}
+        {control && <div class="stack">
+          <div class="two">
+            <div class="env-box">
+              <b>{control.connected ? "● Чат подключён" : "○ Чат не подключён"}</b>
+              <div class="muted small">Режим: {control.mode} · переподключений: {control.reconnects}</div>
+              {control.last_connected_at && <div class="muted small">Последнее подключение: {new Date(control.last_connected_at).toLocaleString()}</div>}
+              {control.last_error && <div class="muted small">Последнее состояние: {control.last_error}</div>}
+            </div>
+            <div class="env-box">
+              <b>{control.commands_paused ? "Команды на паузе" : "Команды активны"}</b>
+              <div class="muted small">Каналы: {control.channels.join(", ") || "не настроены"}</div>
+              <div class="muted small">Пауза не отключает чтение чата для OBS и не мешает автосообщениям.</div>
+            </div>
+          </div>
+          <div class="row-inline">
+            <button class="btn danger" type="button" disabled={controlBusy} onClick={() => setCommandsPaused(!control.commands_paused)}>{control.commands_paused ? "Включить команды" : "Пауза всех команд"}</button>
+            <button class="btn" type="button" disabled={controlBusy || !control.connected} onClick={reconnectChat}>Переподключить чат</button>
+          </div>
+        </div>}
       </div>
 
       <div class="card">

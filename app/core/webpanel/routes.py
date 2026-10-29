@@ -121,6 +121,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/twitch/promo/send", viewer(panel._api_twitch_promo_send, "admin"))
     router.add_get("/api/twitch/commands", viewer(panel._api_twitch_commands_get))
     router.add_post("/api/twitch/commands", viewer(panel._api_twitch_commands_post, "admin"))
+    router.add_get("/api/twitch/control", viewer(panel._api_twitch_control_get))
+    router.add_post("/api/twitch/control", viewer(panel._api_twitch_control_post, "admin"))
     router.add_get("/api/streams/archive/export", viewer(panel._api_streams_archive_csv))
     router.add_get("/api/streams/watchers", viewer(panel._api_streams_watchers))
     router.add_get("/api/birthdays", viewer(panel._api_birthdays_get))

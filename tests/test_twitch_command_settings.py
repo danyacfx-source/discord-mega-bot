@@ -13,6 +13,7 @@ from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.twitch_command_settings import (
     default_twitch_command_settings,
     save_twitch_command_settings,
+    save_twitch_commands_paused,
 )
 
 
@@ -122,6 +123,22 @@ async def test_duplicate_alias_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_global_twitch_pause_stops_replies_but_not_chat_ingestion() -> None:
+    kv = MemoryKv()
+    await save_twitch_commands_paused(kv, True)
+    service = ChatCommandsService(_config(), SimpleNamespace(), kv)
+    replies: list[str] = []
+
+    async def reply(_channel: str, text: str) -> None:
+        replies.append(text)
+
+    service.register_platform("twitch", reply=reply)
+    await service.handle(_message("!ping"))
+    assert replies == []
+    assert await service.twitch_commands_paused() is True
+
+
+@pytest.mark.asyncio
 async def test_twitch_commands_web_api(make_panel_bot) -> None:
     bot = make_panel_bot(twitch_channels=("channel",))
     database = Database(bot.config.db_path)
@@ -156,5 +173,16 @@ async def test_twitch_commands_web_api(make_panel_bot) -> None:
                 saved_commands = (await saved.json())["commands"]
                 slots = next(command for command in saved_commands if command["id"] == "slots")
                 assert slots["enabled"] is False
+
+                control = await client.get("/api/twitch/control", headers=headers)
+                assert control.status == 200
+                assert (await control.json())["control"]["connected"] is False
+                paused = await client.post(
+                    "/api/twitch/control",
+                    headers=headers,
+                    json={"action": "commands_paused", "paused": True},
+                )
+                assert paused.status == 200
+                assert (await paused.json())["commands_paused"] is True
     finally:
         await database.close()

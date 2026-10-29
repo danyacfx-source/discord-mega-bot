@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.services.twitch_command_settings import (
     load_twitch_command_settings,
+    load_twitch_commands_paused,
     twitch_command_alias_map,
 )
 
@@ -103,6 +104,8 @@ class ChatCommandsService:
         self._passive_ready: dict[tuple[str, str], float] = {}
         self._twitch_settings: dict[str, dict[str, Any]] | None = None
         self._twitch_settings_at = 0.0
+        self._twitch_commands_paused: bool | None = None
+        self._twitch_control_at = 0.0
 
     async def _remember(self, key: str, payload: dict[str, Any]) -> None:
         """Персистентное событие для оверлея (последний выигрыш/опрос)."""
@@ -150,6 +153,8 @@ class ChatCommandsService:
             return
         content = text
         if not content or msg.platform not in self._platforms:
+            return
+        if msg.platform == "twitch" and await self.twitch_commands_paused():
             return
         self._sweep()
         # Голос в опросе — голая цифра, без префикса команды.
@@ -213,6 +218,17 @@ class ChatCommandsService:
         self._twitch_settings = None
         self._twitch_settings_at = 0.0
 
+    async def twitch_commands_paused(self, *, force: bool = False) -> bool:
+        now = time.monotonic()
+        if force or self._twitch_commands_paused is None or now - self._twitch_control_at >= 2.0:
+            self._twitch_commands_paused = await load_twitch_commands_paused(self._kv)
+            self._twitch_control_at = now
+        return self._twitch_commands_paused
+
+    def invalidate_twitch_control(self) -> None:
+        self._twitch_commands_paused = None
+        self._twitch_control_at = 0.0
+
     async def match_twitch_command(
         self, msg: ChatMessage
     ) -> tuple[str, str, dict[str, Any]] | None:
@@ -220,6 +236,8 @@ class ChatCommandsService:
         prefix = self._config.chat_command_prefix
         content = msg.content.strip()
         if not content.startswith(prefix):
+            return None
+        if await self.twitch_commands_paused():
             return None
         raw = content[len(prefix) :].strip()
         if not raw:

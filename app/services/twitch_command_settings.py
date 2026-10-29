@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 TWITCH_COMMANDS_KEY = "panel.twitch.commands.v1"
+TWITCH_CONTROL_KEY = "panel.twitch.control.v1"
 TWITCH_COMMAND_RESPONSE_MAX = 450
 TWITCH_COMMAND_ALIASES_MAX = 12
 _ALIAS_RE = re.compile(r"^[0-9a-zа-яё_]+$", re.IGNORECASE)
@@ -143,6 +144,23 @@ async def save_twitch_command_settings(
         json.dumps({"commands": settings}, ensure_ascii=False, separators=(",", ":")),
     )
     return settings, None
+
+
+async def load_twitch_commands_paused(kv: Any) -> bool:
+    try:
+        raw = await kv.get(TWITCH_CONTROL_KEY, "{}")
+        stored = json.loads(raw or "{}")
+    except (TypeError, ValueError, AttributeError):
+        stored = {}
+    return bool(stored.get("commands_paused")) if isinstance(stored, dict) else False
+
+
+async def save_twitch_commands_paused(kv: Any, paused: bool) -> bool:
+    await kv.set(
+        TWITCH_CONTROL_KEY,
+        json.dumps({"commands_paused": bool(paused)}, ensure_ascii=False),
+    )
+    return bool(paused)
 
 
 def twitch_command_alias_map(settings: dict[str, dict[str, Any]]) -> dict[str, str]:

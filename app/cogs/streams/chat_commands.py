@@ -10,6 +10,7 @@ import asyncio
 import logging
 import random
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
@@ -204,10 +205,10 @@ class TwitchIrc:
             self._last_send = asyncio.get_running_loop().time()
         return True
 
-    def close(self) -> None:
+    async def close(self) -> None:
         ws = self._ws
         if ws is not None and not ws.closed:
-            ws.close()
+            await ws.close()
 
 
 class StreamChatCog(MegaCog, name="StreamChat"):
@@ -221,6 +222,10 @@ class StreamChatCog(MegaCog, name="StreamChat"):
         self._stream_key_at = 0.0
         self._sweep_tick = 0
         self._promo_send_lock = asyncio.Lock()
+        self._irc_status = "starting"
+        self._irc_last_connected_at: str | None = None
+        self._irc_last_error = ""
+        self._irc_reconnects = 0
 
     async def cog_load(self) -> None:
         config = self.bot.config
@@ -248,7 +253,7 @@ class StreamChatCog(MegaCog, name="StreamChat"):
             self._irc_task.cancel()
             self._irc_task = None
         if self._irc is not None:
-            self._irc.close()
+            await self._irc.close()
             self._irc = None
         self.chat.unregister_platform("twitch")
 
@@ -379,6 +384,9 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                 write_login=config.twitch_bot_login or config.twitch_channels[0],
             )
             self._irc = irc
+            self._irc_status = "connected"
+            self._irc_last_connected_at = datetime.now(UTC).isoformat(timespec="seconds")
+            self._irc_last_error = ""
             renewed = False
             try:
                 renew_after = auth.seconds_until_refresh() if auth is not None else None
@@ -392,8 +400,12 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                 renewed = True
                 logger.info("Twitch IRC: обновляем токен, переподключаем чат")
             except asyncio.CancelledError:
+                self._irc_status = "stopped"
                 return
             except Exception:
+                self._irc_status = "reconnecting"
+                self._irc_last_error = "сетевая ошибка подключения"
+                self._irc_reconnects += 1
                 logger.warning("Twitch IRC: обрыв, переподключение через %d сек", pause, exc_info=True)
             finally:
                 self._irc = None
@@ -403,11 +415,38 @@ class StreamChatCog(MegaCog, name="StreamChat"):
                         "Twitch IRC: Twitch отклонил авторизацию; переключаем OBS-чат на чтение без бот-аккаунта"
                     )
                     read_only = True
+                    self._irc_status = "read_only"
+                    self._irc_last_error = "авторизация чат-бота отклонена"
                     continue
                 logger.error("Twitch IRC: анонимный вход отклонён; чтение чата недоступно")
+                self._irc_status = "error"
+                self._irc_last_error = "подключение к чату отклонено"
                 return
             if not renewed:
                 await asyncio.sleep(pause)
+
+    async def twitch_control_status(self) -> dict[str, Any]:
+        paused = await self.chat.twitch_commands_paused()
+        irc = self._irc
+        return {
+            "commands_paused": paused,
+            "connected": irc is not None,
+            "can_write": bool(irc and irc.can_write),
+            "mode": "запись" if irc and irc.can_write else "только чтение",
+            "state": self._irc_status,
+            "last_connected_at": self._irc_last_connected_at,
+            "last_error": self._irc_last_error,
+            "reconnects": self._irc_reconnects,
+            "channels": list(self.bot.config.twitch_channels),
+        }
+
+    async def reconnect_twitch_chat(self) -> bool:
+        irc = self._irc
+        if irc is None:
+            return False
+        await irc.close()
+        self._irc_status = "reconnecting"
+        return True
 
     # --------------------------------------------------------- сессии зрителей
 
