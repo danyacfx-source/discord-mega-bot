@@ -30,6 +30,9 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", "::1"}
 _MAX_EMBEDS = 10
 _LOGIN_WINDOW = 60.0
 _LOGIN_LIMIT = 5
+#: Durable-блокировка после _LOGIN_LIMIT неудач: живёт в БД (panel_login_attempts),
+#: поэтому рестарт контейнера брутфорсу не помогает.
+_LOGIN_LOCK_SECONDS = 900.0
 _SESSION_TTL = 24 * 3600
 _SESSION_MAX = 2000
 _RATE_LIMIT_MAX = 600

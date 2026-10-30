@@ -129,6 +129,8 @@ class PanelConfig:
     bridge_token: str | None = None
     admin_role_ids: str = ""
     trusted_proxy: bool = False
+    #: base32-секрент второго фактора (RFC 6238). Пусто — 2FA выключена.
+    totp_secret: str | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -418,6 +420,7 @@ _PANEL_FIELDS = {
     "panel_bridge_token": "bridge_token",
     "panel_admin_role_ids": "admin_role_ids",
     "panel_trusted_proxy": "trusted_proxy",
+    "panel_totp_secret": "totp_secret",
 }
 
 _STREAM_FIELDS = {
@@ -797,6 +800,7 @@ class Config:
                 bridge_token=os.getenv("PANEL_BRIDGE_TOKEN") or None,
                 admin_role_ids=os.getenv("PANEL_ADMIN_ROLE_IDS", ""),
                 trusted_proxy=_bool(os.getenv("PANEL_TRUSTED_PROXY")),
+                totp_secret=os.getenv("PANEL_TOTP_SECRET") or None,
             ),
             stream=StreamConfig(
                 role_id=_single_int(os.getenv("STREAM_ROLE_ID")),

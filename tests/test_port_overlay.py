@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
+from app.core.crypto import decrypt_text, is_encrypted
 from app.core.overlay import Overlay
 
 
@@ -49,9 +50,11 @@ async def test_overlay_token_file(tmp_path, make_panel_bot):
     token_file = tmp_path / ".overlay-token"
     assert token_file.exists()
     saved = token_file.read_text(encoding="utf-8").strip()
-    assert len(saved) >= 16
+    assert is_encrypted(saved), "токен на диске должен лежать зашифрованным"
+    plain = decrypt_text(saved)
+    assert len(plain) >= 16
     overlay2 = Overlay(bot)
-    assert overlay2._token == saved
+    assert overlay2._token == plain
 
 
 @pytest.mark.asyncio
@@ -71,7 +74,9 @@ async def test_overlay_token_survives_redeploy_via_kv(tmp_path, make_panel_bot):
         first = Overlay(bot)
         await first._sync_token_to_kv()
         token = first._token
-        assert await bot.services.kv.get(Overlay._KV_KEY) == token
+        stored = await bot.services.kv.get(Overlay._KV_KEY)
+        assert is_encrypted(stored), "токен в KV должен лежать зашифрованным"
+        assert decrypt_text(stored) == token
 
         (tmp_path / ".overlay-token").unlink()
         second = Overlay(bot)

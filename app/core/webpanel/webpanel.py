@@ -14,6 +14,7 @@ import aiohttp
 from aiohttp import web
 from argon2 import PasswordHasher
 
+from app.core.crypto import decrypt_text, encrypt_text, is_encrypted
 from app.core.secrets import attach_redaction
 from app.core.webpanel.analytics_api import _AnalyticsApiMixin
 from app.core.webpanel.auth import _AuthMixin
@@ -128,6 +129,8 @@ class WebPanel(
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
         self._rate_gc: int = 0
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
+        #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
+        self._login_gc: int = 0
         self._runner: web.AppRunner | None = None
         self._http: aiohttp.ClientSession | None = None
         self._ring: RingBufferHandler | None = None
@@ -157,9 +160,15 @@ class WebPanel(
         path = Path(self.bot.config.db_path).parent / _TOKEN_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_file():
-            return path.read_text(encoding="utf-8").strip()
+            stored = path.read_text(encoding="utf-8").strip()
+            plain = decrypt_text(stored) if is_encrypted(stored) else stored
+            if plain and not is_encrypted(plain):
+                return plain
+            # Файл зашифрован, но ключ не подошёл: старый токен невосстановим,
+            # генерируем новый, иначе панель работала бы с мусором.
+            logger.error("Файл статик-токена не расшифрован (смена ключа?) — генерируем новый")
         token = secrets.token_urlsafe(32)
-        path.write_text(token, encoding="utf-8")
+        path.write_text(encrypt_text(token), encoding="utf-8")
         try:
             path.chmod(0o600)
         except (OSError, NotImplementedError):
@@ -171,7 +180,8 @@ class WebPanel(
 
         Используется только без пароля и OAuth. В БД есть токен — берём его
         (API-скрипты с X-Panel-Token переживают пересоздание контейнера),
-        нет — сохраняем текущий.
+        нет — сохраняем текущий. Значение шифруется at-rest: KV живёт в
+        PostgreSQL, и дамп БД не должен отдавать owner-токен открытым текстом.
         """
         if self._static_token is None:
             return
@@ -183,12 +193,18 @@ class WebPanel(
         except Exception:
             logger.debug("Не удалось прочитать статический токен из KV", exc_info=True)
             return
-        if stored and len(stored) >= 16:
-            self._static_token = stored
+        if stored:
+            plain = decrypt_text(stored) if is_encrypted(stored) else stored
+            if plain and not is_encrypted(plain) and len(plain) >= 16:
+                self._static_token = plain
+                return
+            # Ключ не подошёл: не затираем запись в KV (ключ может быть
+            # временно недоступен), работаем по локальному файлу.
+            logger.error("Статик-токен из KV не расшифрован (смена ключа?) — используем файловый")
             return
         try:
-            await services.kv.set("panel.static_token", self._static_token)
-            logger.info("Статический токен панели сохранён в БД — переживает редеплой")
+            await services.kv.set("panel.static_token", encrypt_text(self._static_token))
+            logger.info("Статический токен панели сохранён в БД (зашифрован) — переживает редеплой")
         except Exception:
             logger.debug("Не удалось сохранить статический токен в KV", exc_info=True)
 

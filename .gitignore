@@ -19,3 +19,9 @@ panel-ui/.vite/
 *.zip
 *.rar
 *.7z
+# Секреты at-rest: даже если PANEL_KEY_FILE вынесен за /data/,
+# ключ и токены не должны попасть в репозиторий.
+.panel-key
+.panel-token
+.overlay-token
+twitch_bot_oauth.json

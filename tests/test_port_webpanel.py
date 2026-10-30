@@ -5,6 +5,7 @@ import discord
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
+from app.core.crypto import decrypt_text, is_encrypted
 from app.core.webpanel.payload import (
     _LOGIN_LIMIT,
     _components_from_raw,
@@ -771,7 +772,9 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
         await first._sync_static_token_to_kv()
         token = first._static_token
         assert token
-        assert await bot.services.kv.get("panel.static_token") == token
+        stored = await bot.services.kv.get("panel.static_token")
+        assert is_encrypted(stored), "токен в KV должен лежать зашифрованным"
+        assert decrypt_text(stored) == token
 
         (tmp_path / ".panel-token").unlink()
         second = WebPanel(bot)

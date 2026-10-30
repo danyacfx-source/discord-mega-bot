@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
+from app.core.crypto import decrypt_text, encrypt_text, is_encrypted
 from app.core.overlay.chat_settings import filter_chat_messages, get_chat_paused, load_chat_settings
 from app.core.overlay.layout import load_layout
 from app.core.shield import is_scanner_path, is_scanner_ua
@@ -79,7 +80,12 @@ class Overlay:
         file_token = ""
         try:
             if token_file.exists():
-                file_token = token_file.read_text(encoding="utf-8").strip()
+                stored = token_file.read_text(encoding="utf-8").strip()
+                plain = decrypt_text(stored) if is_encrypted(stored) else stored
+                if plain and not is_encrypted(plain):
+                    file_token = plain
+                else:
+                    logger.error("Файл OVERLAY_TOKEN не расшифрован (смена ключа?) — генерируем новый")
         except OSError:
             pass
         if len(file_token) >= 16:
@@ -89,7 +95,7 @@ class Overlay:
         generated = secrets.token_urlsafe(32)
         try:
             token_file.parent.mkdir(parents=True, exist_ok=True)
-            token_file.write_text(generated + "\n", encoding="utf-8")
+            token_file.write_text(encrypt_text(generated) + "\n", encoding="utf-8")
             try:
                 token_file.chmod(0o600)
             except (OSError, NotImplementedError):
@@ -122,15 +128,21 @@ class Overlay:
         except Exception:
             logger.debug("Overlay: не удалось прочитать токен из KV", exc_info=True)
             return
-        if stored and len(stored) >= 16:
-            if stored != self._token:
-                self._token = stored
-                self._build_pages()
-                logger.info("Overlay: токен восстановлен из БД — виджеты пережили редеплой")
+        if stored:
+            plain = decrypt_text(stored) if is_encrypted(stored) else stored
+            if plain and not is_encrypted(plain) and len(plain) >= 16:
+                if plain != self._token:
+                    self._token = plain
+                    self._build_pages()
+                    logger.info("Overlay: токен восстановлен из БД — виджеты пережили редеплой")
+                return
+            # Ключ не подошёл: запись не затираем (ключ может быть временно
+            # недоступен), остаёмся на локальном токене.
+            logger.error("Overlay: токен из KV не расшифрован (смена ключа?) — используем локальный")
             return
         try:
-            await services.kv.set(self._KV_KEY, self._token)
-            logger.info("Overlay: токен сохранён в БД — переживает редеплой контейнера")
+            await services.kv.set(self._KV_KEY, encrypt_text(self._token))
+            logger.info("Overlay: токен сохранён в БД (зашифрован) — переживает редеплой контейнера")
         except Exception:
             logger.debug("Overlay: не удалось сохранить токен в KV", exc_info=True)
 
