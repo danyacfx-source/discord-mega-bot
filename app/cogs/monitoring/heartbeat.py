@@ -1,4 +1,4 @@
-"""Heartbeat: алерт в канал логов о тишине бота, нехватке диска и деградации шлюза.
+"""Heartbeat: alerts about Discord, Twitch, OBS and background-task failures.
 
 Три независимых детектора в одном тике:
 - тишина: нет сообщений дольше ``heartbeat_silence_minutes`` (любое сообщение
@@ -44,6 +44,9 @@ class HeartbeatCog(MegaCog, name="Heartbeat"):
         self._disk_alerted = False
         self._latency_alerted = False
         self._latency_strikes = 0
+        # State transitions only: a broken external service produces one alert,
+        # then one recovery notice, never a message every heartbeat tick.
+        self._service_alerts: dict[str, bool] = {}
 
     async def cog_load(self) -> None:
         minutes = self.bot.config.heartbeat_silence_minutes
@@ -68,6 +71,8 @@ class HeartbeatCog(MegaCog, name="Heartbeat"):
             config.heartbeat_silence_minutes > 0
             or config.disk_alert_mb > 0
             or config.latency_alert_seconds > 0
+            or bool(getattr(config, "twitch_channels", ()))
+            or getattr(config, "overlay_port", None) is not None
         )
 
     @commands.Cog.listener()
@@ -114,6 +119,63 @@ class HeartbeatCog(MegaCog, name="Heartbeat"):
 
         if reasons:
             await self._send_alert(reasons, silence=silence)
+        await self._check_service_alerts()
+
+    async def _check_service_alerts(self) -> None:
+        """Notify once when Twitch/OBS/task health changes state.
+
+        The watchdog already restarts failed loops. This layer makes that
+        visible in the Discord bot-log channel and confirms recovery.
+        """
+        observed: dict[str, tuple[bool, str]] = {}
+        config = self.bot.config
+
+        status_fn = getattr(self.bot, "background_task_status", None)
+        if callable(status_fn):
+            failed = list(status_fn().get("failed", []))
+            observed["tasks"] = (
+                bool(failed),
+                "упали фоновые задачи: " + ", ".join(failed[:5]),
+            )
+
+        if getattr(config, "twitch_channels", ()):
+            stream_chat = self.bot.get_cog("StreamChat")
+            state = "starting"
+            if stream_chat is not None:
+                try:
+                    control = await stream_chat.twitch_control_status()
+                    state = str(control.get("state") or "unknown")
+                except Exception:
+                    logger.debug("Heartbeat: не удалось проверить Twitch IRC", exc_info=True)
+                    state = "unknown"
+            observed["twitch"] = (
+                state in {"error", "read_only"},
+                "Twitch-чат недоступен для команд (" + state + ")",
+            )
+
+        if getattr(config, "overlay_port", None) is not None:
+            observed["overlay"] = (
+                getattr(self.bot, "overlay", None) is None,
+                "OBS-оверлей не запущен",
+            )
+
+        failed_reasons: list[str] = []
+        recovered: list[str] = []
+        for key, (unhealthy, reason) in observed.items():
+            previous = self._service_alerts.get(key, False)
+            self._service_alerts[key] = unhealthy
+            if unhealthy and not previous:
+                failed_reasons.append(reason)
+            elif previous and not unhealthy:
+                recovered.append({
+                    "tasks": "фоновые задачи снова работают",
+                    "twitch": "Twitch-чат восстановлен",
+                    "overlay": "OBS-оверлей снова доступен",
+                }[key])
+        if failed_reasons:
+            await self._send_alert(failed_reasons, silence=False)
+        if recovered:
+            await self._send_recovery(recovered)
 
     def _disk_check(self) -> str | None:
         threshold_mb = self.bot.config.disk_alert_mb
@@ -180,6 +242,17 @@ class HeartbeatCog(MegaCog, name="Heartbeat"):
                     "Heartbeat: не удалось отправить алерт в #%s",
                     getattr(channel, "name", channel.id),
                 )
+
+    async def _send_recovery(self, messages: list[str]) -> None:
+        targets = await self._log_targets()
+        if not targets:
+            return
+        embed = embeds.success("Heartbeat: связь восстановлена", "\n".join(f"• {message}" for message in messages))
+        for channel in targets:
+            try:
+                await channel.send(embed=embed)
+            except discord.HTTPException:
+                logger.exception("Heartbeat: не удалось отправить сообщение о восстановлении в #%s", getattr(channel, "name", channel.id))
 
     async def _log_targets(self) -> list[discord.abc.Messageable]:
         """Все каналы «Бот» из настроек гильдий с fallback на BOT_LOG_CHANNEL_ID.

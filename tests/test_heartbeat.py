@@ -39,6 +39,11 @@ def _cog(
     latency: float = 0.0,
     ws_latency: float = 0.05,
     db_path: str = "data/bot.db",
+    twitch_channels: tuple[str, ...] = (),
+    overlay_port: int | None = None,
+    task_status=None,
+    stream_chat=None,
+    overlay=None,
 ) -> HeartbeatCog:
     config = SimpleNamespace(
         heartbeat_silence_minutes=silence,
@@ -46,8 +51,15 @@ def _cog(
         disk_alert_mb=disk_mb,
         latency_alert_seconds=latency,
         db_path=db_path,
+        twitch_channels=twitch_channels,
+        overlay_port=overlay_port,
     )
-    bot = SimpleNamespace(config=config, guilds=list(guilds or []), latency=ws_latency)
+    bot = SimpleNamespace(
+        config=config, guilds=list(guilds or []), latency=ws_latency,
+        background_task_status=task_status or (lambda: {"running": [], "failed": []}),
+        get_cog=lambda name: stream_chat if name == "StreamChat" else None,
+        overlay=overlay,
+    )
     settings = SimpleNamespace(get=settings_get or AsyncMock(return_value={}))
     return HeartbeatCog(bot, settings)
 
@@ -203,6 +215,36 @@ def test_enabled_gates() -> None:
     assert _cog(silence=0, disk_mb=100)._enabled() is True
     assert _cog(silence=0, latency=1.5)._enabled() is True
     assert _cog(silence=5)._enabled() is True
+    assert _cog(silence=0, twitch_channels=("main",))._enabled() is True
+    assert _cog(silence=0, overlay_port=8765)._enabled() is True
+
+
+@pytest.mark.asyncio
+async def test_service_alerts_are_deduplicated_and_report_recovery() -> None:
+    channel = _Chan(7)
+    guild = _Guild(1, [channel])
+    state = {"failed": ["StreamChat.link_loop"]}
+    cog = _cog(guilds=[guild], bot_log=7, task_status=lambda: {"running": [], "failed": state["failed"]})
+    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+        await cog._check_service_alerts()
+        await cog._check_service_alerts()
+        state["failed"] = []
+        await cog._check_service_alerts()
+    assert channel.send.await_count == 2
+    assert "упали фоновые" in (channel.send.await_args_list[0].kwargs["embed"].description or "")
+    assert "снова работают" in (channel.send.await_args_list[1].kwargs["embed"].description or "")
+
+
+@pytest.mark.asyncio
+async def test_twitch_read_only_and_overlay_failure_are_reported() -> None:
+    channel = _Chan(7)
+    guild = _Guild(1, [channel])
+    chat = SimpleNamespace(twitch_control_status=AsyncMock(return_value={"state": "read_only"}))
+    cog = _cog(guilds=[guild], bot_log=7, twitch_channels=("main",), overlay_port=8765, stream_chat=chat)
+    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+        await cog._check_service_alerts()
+    text = channel.send.await_args.kwargs["embed"].description or ""
+    assert "Twitch-чат" in text and "OBS-оверлей" in text
 
 
 @pytest.mark.asyncio
