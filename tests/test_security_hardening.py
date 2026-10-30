@@ -133,7 +133,7 @@ def test_totp_verify_covers_window_and_rejects_garbage():
 def test_totp_provisioning_uri_is_standard():
     uri = totp_module.provisioning_uri("JBSWY3DPEHPK3PXP", "owner", "MegaBot")
     assert uri.startswith("otpauth://totp/MegaBot%3Aowner?")
-    assert "secret=JBSWY3DPEHPK3PXP" in uri
+    assert "secret=JBSWY3DPEHPK3PXP" in uri  # secrets-allow: RFC TOTP test fixture
     assert "algorithm=SHA1" in uri and "digits=6" in uri and "period=30" in uri
 
 
