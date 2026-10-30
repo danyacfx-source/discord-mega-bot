@@ -15,17 +15,20 @@ from aiohttp import web
 from argon2.exceptions import VerificationError
 
 from app.core.shield import is_scanner_path, is_scanner_ua
+from app.core.totp import verify as verify_totp
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _CSP,
     _CSP_REST,
     _LOGIN_LIMIT,
+    _LOGIN_LOCK_SECONDS,
     _LOGIN_WINDOW,
     _PANEL_ROLE_KEY,
     _SESSION_MAX,
     _SESSION_TTL,
 )
 from app.db.admin_audit_repository import AdminAuditRepository
+from app.db.panel_login_lock_repository import PanelLoginLockRepository
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -313,6 +316,84 @@ class _AuthMixin(_BaseApi):
         query = urlencode({"oauth_token": session_token, "oauth_csrf": csrf})
         return web.Response(status=302, headers={"Location": f"/admin#{query}"})
 
+    # --- durable-блокировка входа (переживает рестарт процесса) ---
+
+    def _login_locks(self) -> PanelLoginLockRepository | None:
+        """Репозиторий блокировок; None — БД недоступна (деградация в память)."""
+        db = self.bot.db
+        return PanelLoginLockRepository(db) if db is not None else None
+
+    async def _login_locked_until(self, key: str, now: float) -> float:
+        """Момент разблокировки из БД; 0 — блокировки нет.
+
+        Ошибка БД не должна ронять вход: остаётся in-memory лимит
+        из ``_api_login`` — это деградация до прежнего уровня, не обход.
+        """
+        locks = self._login_locks()
+        if locks is None:
+            return 0.0
+        try:
+            return await locks.locked_until(key, now)
+        except Exception:
+            logger.warning("Не удалось прочитать блокировку логина из БД — используется память", exc_info=True)
+            return 0.0
+
+    async def _login_note_failure(self, key: str, now: float) -> float:
+        """Чинит неудачу; возвращает момент разблокировки (0 — лок не наступил).
+
+        Факт блокировки — единственный сигнал, который пишется в аудит: по одной
+        строке на каждый лок, а не на каждую попытку, иначе перебор мог бы
+        раздуть таблицу admin_audit.
+        """
+        locks = self._login_locks()
+        if locks is None:
+            return 0.0
+        try:
+            locked_until = await locks.record_failure(
+                key,
+                now,
+                limit=_LOGIN_LIMIT,
+                window=_LOGIN_WINDOW,
+                lock_seconds=_LOGIN_LOCK_SECONDS,
+            )
+        except Exception:
+            logger.warning("Не удалось сохранить неудачу логина в БД", exc_info=True)
+            return 0.0
+        if locked_until:
+            logger.warning(
+                "Вход в панель заблокирован: ip=%s до %d (перебор пароля/2FA)",
+                key,
+                int(locked_until),
+            )
+            db = self.bot.db
+            if db is not None:
+                try:
+                    await AdminAuditRepository(db).record(
+                        "anonymous", "login lockout", "POST", "/api/login", key
+                    )
+                except Exception:
+                    logger.debug("Не удалось записать блокировку в аудит", exc_info=True)
+        return locked_until
+
+    async def _login_unlock(self, key: str) -> None:
+        locks = self._login_locks()
+        if locks is None:
+            return
+        try:
+            await locks.clear(key)
+        except Exception:
+            logger.warning("Не удалось сбросить блокировку логина", exc_info=True)
+
+    async def _login_prune(self, now: float) -> None:
+        """Протухшие ключи не копятся: сканер порождает множество IP."""
+        locks = self._login_locks()
+        if locks is None:
+            return
+        try:
+            await locks.prune(now, _LOGIN_WINDOW)
+        except Exception:
+            logger.debug("Не удалось почистить таблицу блокировок логина", exc_info=True)
+
     async def _api_login(self, request: web.Request) -> web.Response:
         if not self._password_auth:
             return self._json({"ok": False, "error": "Пароль не настроен"}, status=400)
@@ -324,11 +405,28 @@ class _AuthMixin(_BaseApi):
         # неудачи блокировали бы вход для всех сразу.
         ip = self._rate_key(request)
         now = time.time()
+        # Durable-блокировка первым делом: она живёт в БД, поэтому рестарт
+        # контейнера брутфорсу не помогает (раньше счётчик был только в памяти).
+        locked_until = await self._login_locked_until(ip, now)
+        if locked_until:
+            return self._json(
+                {
+                    "ok": False,
+                    "error": f"Слишком много попыток. Повторите через {int(locked_until - now) + 1} сек.",
+                },
+                status=429,
+            )
         if len(self._login_attempts) > 1000:
             cutoff = now - _LOGIN_WINDOW
             stale = [key for key, bucket in self._login_attempts.items() if not bucket or bucket[-1] < cutoff]
             for key in stale:
                 self._login_attempts.pop(key, None)
+        # Таблица блокировок чистится по счётчику вызовов, а не по размеру
+        # словаря: память GC-ится на 1000+ ключей, а БД иначе копила бы
+        # строки неделями при медленном сканере с разных адресов.
+        self._login_gc += 1
+        if self._login_gc % 100 == 0:
+            await self._login_prune(now)
         attempts = self._login_attempts[ip]
         while attempts and attempts[0] < now - _LOGIN_WINDOW:
             attempts.popleft()
@@ -338,7 +436,18 @@ class _AuthMixin(_BaseApi):
             payload = await request.json()
         except Exception:
             return self._json({"ok": False, "error": "Некорректный JSON"}, status=400)
+
+        totp_secret = (getattr(self.bot.config, "panel_totp_secret", None) or "").strip()
         password = str(payload.get("password") or "")
+        totp_code = str(payload.get("totp") or "").strip()
+        # Фронт не переделывается: при включённой 2FA код дописывается к паролю
+        # через двоеточие («пароль:123456») — существующая форма отдаёт его
+        # как есть в поле password. Поле totp поддержано для API-клиентов.
+        if totp_secret and not totp_code:
+            head, separator, tail = password.rpartition(":")
+            if separator and len(tail) == 6 and tail.isdigit():
+                password, totp_code = head, tail
+
         role = next(
             (
                 candidate
@@ -357,11 +466,28 @@ class _AuthMixin(_BaseApi):
                     continue
         if role is None:
             attempts.append(now)
+            await self._login_note_failure(ip, now)
+            logger.warning("Неудачный вход в панель: ip=%s (неверный пароль)", ip)
             return self._json({"ok": False, "error": "Неверный пароль"}, status=401)
         if self._role_rank(role) < self._role_rank("admin"):
             return self._json({"ok": False, "error": "Доступ запрещён. У вас недостаточно прав"}, status=403)
+
+        # Второй фактор после пароля и проверки роли. Неверный код идёт в тот же
+        # счётчик неудач — иначе 6-значный TOTP можно было бы перебирать
+        # без последствий, пока не угадается.
+        if totp_secret:
+            if not verify_totp(totp_secret, totp_code):
+                attempts.append(now)
+                await self._login_note_failure(ip, now)
+                logger.warning("Неудачный вход в панель: ip=%s (неверный код 2FA)", ip)
+                return self._json(
+                    {"ok": False, "error": "Неверный код 2FA (формат: пароль:123456)"},
+                    status=401,
+                )
+
         # Успех сбрасывает счётчик: старые опечатки не должны блокировать вход.
         self._login_attempts.pop(ip, None)
+        await self._login_unlock(ip)
         token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
         self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role, "csrf": csrf}

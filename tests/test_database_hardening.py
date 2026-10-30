@@ -31,7 +31,7 @@ async def test_database_migrations_integrity_and_backup(tmp_path: Path) -> None:
     row = await restored.fetchone("SELECT value FROM kv WHERE key = ?", ("health",))
     assert row is not None and row["value"] == "ok"
     migrations = await restored.fetchall("SELECT version FROM schema_migrations ORDER BY version")
-    assert [row["version"] for row in migrations] == list(range(1, 12))
+    assert [row["version"] for row in migrations] == list(range(1, 13))
     await ActivityRepository(restored).increment(1, "2026-09-24T00:00:00+00:00")
     activity = await ActivityRepository(restored).list_hourly(1)
     assert activity[0]["messages"] == 1

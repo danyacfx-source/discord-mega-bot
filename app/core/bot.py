@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import sys
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,7 @@ from discord.ext import commands, tasks
 
 from app.config import Config
 from app.core import embeds
+from app.core.crypto import encrypt_file
 from app.core.secrets import redact
 from app.core.stream_state import stream_activity
 
@@ -158,7 +160,13 @@ class MegaBot(commands.Bot):
     # --- guard: глобальный rate-limit и kill-switch команд ---
 
     async def _upload_backup_to_discord(self, path: Path) -> None:
-        """Backup уходит в канал Discord: файл на хосте умирает при пересоздании рабочей папки."""
+        """Backup уходит в канал Discord: файл на хосте умирает при пересоздании рабочей папки.
+
+        Копия шифруется перед отправкой (AES-256-GCM, ``MGBENC1``): канал —
+        это внешнее хранилище, и утечка Discord-канала не должна отдавать
+        дамп с токенами интеграций открытым текстом. Расшифровывается ключом
+        ``PANEL_ENCRYPTION_KEY``/``data/.panel-key`` через ``scripts/decrypt_backup.py``.
+        """
         channel_id = self.config.db_backup_discord_channel_id
         if not channel_id:
             return
@@ -166,12 +174,29 @@ class MegaBot(commands.Bot):
         if size > 25 * 1024 * 1024:
             logger.warning("Backup %s больше 25 МБ — в Discord не отправляем", path.name)
             return
+        try:
+            payload = encrypt_file(path.read_bytes())
+        except OSError:
+            logger.warning("Не удалось прочитать backup %s для отправки", path.name, exc_info=True)
+            return
+        if payload is None:
+            # Без ключа шифрование невозможно; лучше не отправлять plaintext-дамп
+            # в чужой канал, чем молча залить его открытым текстом.
+            logger.error(
+                "Ключ шифрования at-rest недоступен — backup %s в Discord не отправлен. "
+                "Задай PANEL_ENCRYPTION_KEY или разреши создание data/.panel-key.",
+                path.name,
+            )
+            return
         channel = self.get_channel(channel_id)
         if channel is None:
             channel = await self.fetch_channel(channel_id)
         await channel.send(
-            content=f"Автоматический backup базы `{path.name}` ({size / 1024 / 1024:.1f} МБ)",
-            file=discord.File(path),
+            content=(
+                f"Автоматический backup базы `{path.name}.enc` "
+                f"({len(payload) / 1024 / 1024:.1f} МБ, зашифрован AES-256-GCM)"
+            ),
+            file=discord.File(io.BytesIO(payload), filename=f"{path.name}.enc"),
         )
 
     async def _install_guards(self) -> None:

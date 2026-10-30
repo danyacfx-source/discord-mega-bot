@@ -70,6 +70,9 @@ class _GuildApiMixin(_BaseApi):
             return "Бот недоступен на сервере"
         if member.id == guild.owner_id:
             return "Нельзя: владелец сервера"
+        bot_owner = getattr(getattr(self.bot, "config", None), "owner_id", None)
+        if bot_owner and member.id == bot_owner:
+            return "Нельзя: владелец бота"
         if member.top_role.position >= me.top_role.position:
             return "Бот не может модернировать: роли участника выше ролей бота"
         if not can_moderate(me, member):

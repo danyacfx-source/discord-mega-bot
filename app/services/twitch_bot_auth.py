@@ -15,6 +15,8 @@ from urllib.parse import quote
 
 import aiohttp
 
+from app.core.crypto import decrypt_file, encrypt_file, is_encrypted_file
+
 logger = logging.getLogger("bot.services")
 
 _TOKEN_URL = "https://id.twitch.tv/oauth2/token"
@@ -51,8 +53,20 @@ class TwitchBotAuth:
 
     def _load(self) -> None:
         try:
-            payload = json.loads(self._file.read_text(encoding="utf-8"))
-        except (FileNotFoundError, OSError, ValueError):
+            raw = self._file.read_bytes()
+        except (FileNotFoundError, OSError):
+            return
+        if is_encrypted_file(raw):
+            decrypted = decrypt_file(raw)
+            if decrypted is None:
+                logger.error("Twitch OAuth: кэш токенов не расшифрован (смена ключа?) — игнорируем")
+                return
+            raw = decrypted
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            return
+        if not isinstance(payload, dict):
             return
         if (
             payload.get("login") != self.login
@@ -77,12 +91,18 @@ class TwitchBotAuth:
                 "expires_at": self._expires,
             },
             ensure_ascii=False,
-        )
+        ).encode("utf-8")
+        sealed = encrypt_file(payload)
+        if sealed is None:
+            # Без ключа лучше явно залогировать деградацию, чем молча
+            # положить refresh-токен открытым текстом.
+            logger.warning("Ключ at-rest недоступен — twitch OAuth-кэш пишется открытым текстом")
+            sealed = payload
         temp = self._file.with_name(self._file.name + ".tmp")
         fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                stream.write(payload)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(sealed)
             os.replace(temp, self._file)
             os.chmod(self._file, 0o600)
         finally:

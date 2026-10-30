@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.cogs.streams.chat_commands import TwitchIrc, _safe_auth_reason
+from app.core.crypto import decrypt_file, is_encrypted_file
 from app.services.chat_commands_service import ChatCommandsService, ChatMessage
 from app.services.twitch_bot_auth import TwitchBotAuth
 
@@ -157,7 +158,7 @@ async def test_managed_refresh_token_still_checks_app_client_id(monkeypatch, tmp
 
 
 @pytest.mark.asyncio
-async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, tmp_path) -> None:
+async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, tmp_path, at_rest_key) -> None:
     from app.services import twitch_bot_auth as auth_module
 
     client_id = "generator_application"
@@ -201,7 +202,9 @@ async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, 
         "https://twitchtokengenerator.com/api/refresh/old_refresh",
         "https://id.twitch.tv/oauth2/validate",
     ]
-    saved = json.loads(cache.read_text())
+    raw = cache.read_bytes()
+    assert is_encrypted_file(raw), "OAuth-кэш должен лежать зашифрованным на диске"
+    saved = json.loads(decrypt_file(raw))
     assert saved["provider"] == "ttg"
     assert saved["access_token"] == "new_access"
     assert saved["refresh_token"] == "new_refresh"

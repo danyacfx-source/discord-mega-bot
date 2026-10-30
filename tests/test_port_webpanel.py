@@ -5,6 +5,7 @@ import discord
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
+from app.core.crypto import decrypt_text, is_encrypted
 from app.core.webpanel.payload import (
     _LOGIN_LIMIT,
     _components_from_raw,
@@ -178,6 +179,49 @@ async def test_webpanel_requires_password_when_public(make_panel_bot):
         await panel.start()
     assert panel._runner is None
     assert panel._http is None
+
+
+def test_public_host_without_password_has_no_static_token(make_panel_bot):
+    """Fail-closed: публичный хост без пароля не грузит owner-статик-токен.
+
+    _create_app() минует guard из start() — токен не должен существовать вовсе,
+    иначе /admin инжектит owner-токен в публичный HTML.
+    """
+    public = WebPanel(make_panel_bot(panel_host="0.0.0.0"))
+    assert public._static_token is None
+
+    local = WebPanel(make_panel_bot())
+    assert local._static_token, "локальный хост без пароля должен получить статик-токен"
+
+
+def test_guard_blocks_bot_owner(make_panel_bot):
+    """Panel-admin не может модернировать владельца бота (config.owner_id)."""
+    BOT_OWNER = 999888777
+
+    class _Role:
+        def __init__(self, position: int) -> None:
+            self.position = position
+
+    class _Member:
+        def __init__(self, member_id: int, position: int) -> None:
+            self.id = member_id
+            self.bot = False
+            self.top_role = _Role(position)
+
+    class _Me(_Member):
+        def __init__(self) -> None:
+            super().__init__(1, 10)
+            self.guild = type("G", (), {"owner_id": 555})()
+
+    class _Guild:
+        owner_id = 555
+        me = _Me()
+
+    panel = WebPanel(make_panel_bot())
+    object.__setattr__(panel.bot.config, "owner_id", BOT_OWNER)
+    guild = _Guild()
+    assert "владелец бота" in (panel._guard_mod_target(guild, _Member(BOT_OWNER, 1)) or "")
+    assert panel._guard_mod_target(guild, _Member(424242, 1)) is None
 
 
 @pytest.mark.asyncio
@@ -728,7 +772,9 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
         await first._sync_static_token_to_kv()
         token = first._static_token
         assert token
-        assert await bot.services.kv.get("panel.static_token") == token
+        stored = await bot.services.kv.get("panel.static_token")
+        assert is_encrypted(stored), "токен в KV должен лежать зашифрованным"
+        assert decrypt_text(stored) == token
 
         (tmp_path / ".panel-token").unlink()
         second = WebPanel(bot)

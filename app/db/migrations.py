@@ -239,6 +239,23 @@ async def run_migrations(conn: Any) -> None:
         await conn.execute(
             "INSERT INTO schema_migrations(version, applied_at) VALUES (11, datetime('now'))"
         )
+    if 12 not in applied:
+        # Персистентный лок-аут входа в веб-панель: счётчик неудач жил в памяти
+        # процесса и сбрасывался при рестарте контейнера — брутфорс обходился
+        # просто перезапуском. Счётчик переезжает в БД и переживает рестарты.
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS panel_login_attempts (
+                key              TEXT PRIMARY KEY,
+                first_failure_at REAL NOT NULL,
+                failures         INTEGER NOT NULL,
+                locked_until     REAL NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO schema_migrations(version, applied_at) VALUES (12, datetime('now'))"
+        )
     await _backfill_columns(conn)
     await conn.commit()
 
