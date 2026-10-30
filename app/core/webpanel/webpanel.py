@@ -92,10 +92,23 @@ class WebPanel(
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
-        # Статический токен — только для localhost без пароля и без OAuth.
+        # Статический токен — только для loopback-хоста без пароля и без OAuth.
         # При OAuth-режиме он никогда не грузится: иначе инжектится owner-токен
         # в публичный HTML и обходит всю аутентификацию (C1).
-        self._static_token: str | None = None if (self.password or self._oauth_enabled) else self._load_static_token()
+        # Публичный хост (0.0.0.0/домен) без пароля и OAuth — fail-closed:
+        # токен не грузится, значит /admin отдаёт HTML с пустым токеном и
+        # все API отвечают 401, а не owner-доступом для любого посетителя.
+        self._static_token: str | None = None
+        if not (self.password or self._oauth_enabled):
+            if self._host_is_local():
+                self._static_token = self._load_static_token()
+            else:
+                logger.critical(
+                    "Вебпанель слушает %s без PANEL_PASSWORD и без OAuth — статик-токен "
+                    "отключён (fail-closed), доступ через API закрыт. Задай пароль "
+                    "(PANEL_PASSWORD / *_HASH) или настрой PANEL_OAUTH_*.",
+                    self.host,
+                )
         self._sessions: dict[str, _PanelSession] = {}
         self._oauth_states: dict[str, float] = {}
         self._panel_passwords: dict[str, str] = {}
@@ -135,6 +148,10 @@ class WebPanel(
         self._workboard_lock = asyncio.Lock()
 
     # --- жизненный цикл ---
+
+    def _host_is_local(self) -> bool:
+        """True, если панель слушает только loopback — можно отдавать статик-токен."""
+        return (self.host or "").strip() in _LOCAL_HOSTS
 
     def _load_static_token(self) -> str:
         path = Path(self.bot.config.db_path).parent / _TOKEN_FILE
