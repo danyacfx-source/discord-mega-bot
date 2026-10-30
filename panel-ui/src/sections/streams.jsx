@@ -22,6 +22,16 @@ export default function Streams() {
   const [savingCommands, setSavingCommands] = useState(false);
   const [control, setControl] = useState(null);
   const [controlBusy, setControlBusy] = useState(false);
+  const [preflight, setPreflight] = useState(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+
+  async function runPreflight() {
+    setPreflightLoading(true);
+    const r = await api("/api/preflight");
+    setPreflightLoading(false);
+    if (r.status === 200 && r.data.ok !== undefined) setPreflight(r.data);
+    else toast(r.data?.error || "Не удалось выполнить проверку", false);
+  }
 
   async function load() {
     const r = await api("/api/streams");
@@ -145,6 +155,7 @@ export default function Streams() {
     loadPromo();
     loadCommands();
     loadControl();
+    runPreflight();
     const t = setInterval(() => {
       load();
       loadWatch();
@@ -157,6 +168,22 @@ export default function Streams() {
 
   return (
     <div class="stack">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3 class="sec">Готовность к эфиру</h3>
+            <p class="muted small">Быстрая проверка сервисов перед запуском стрима.</p>
+          </div>
+          <button class="btn mini" type="button" onClick={runPreflight} disabled={preflightLoading}>{preflightLoading ? "Проверяем…" : "Проверить"}</button>
+        </div>
+        {!preflight && <Loading />}
+        {preflight && <div class="list">
+          {preflight.checks.map((item) => <ListRow key={item.name}>
+            <Chip tone={item.state === "ok" ? "ok" : item.state === "error" ? "bad" : "warn"}>{item.state === "ok" ? "● готово" : item.state === "error" ? "● ошибка" : "● внимание"}</Chip>
+            <span class="grow"><b>{item.name}</b><div class="sub">{item.detail}</div></span>
+          </ListRow>)}
+        </div>}
+      </div>
       <div class="card">
         <div class="card-head">
           <h3>Стримы</h3>

@@ -75,6 +75,7 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_get("/api/session", viewer(panel._api_session))
     router.add_get("/api/status", viewer(panel._api_status))
     router.add_get("/api/health", viewer(panel._api_health))
+    router.add_get("/api/preflight", viewer(panel._api_preflight, "admin"))
     router.add_get("/api/metrics", viewer(panel._api_metrics))
     router.add_get("/metrics", viewer(panel._prometheus_metrics, "admin"))
     router.add_get("/api/overview", viewer(panel._api_overview))

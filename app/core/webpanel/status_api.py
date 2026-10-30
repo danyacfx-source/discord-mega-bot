@@ -66,6 +66,47 @@ class _StatusApiMixin(_BaseApi):
         }
         return self._json(payload, status=200 if payload["ok"] else 503)
 
+    async def _api_preflight(self, request: web.Request) -> web.Response:
+        """Human-readable readiness check for the minutes before a stream."""
+        checks: list[dict[str, str]] = []
+
+        def add(name: str, state: str, detail: str) -> None:
+            checks.append({"name": name, "state": state, "detail": detail})
+
+        ready = self.bot.is_ready() and self.bot.user is not None
+        add("Discord", "ok" if ready else "error", "бот подключён" if ready else "бот ещё не подключён")
+
+        db = self.bot.db
+        try:
+            db_ok = db is not None and db.available and await db.integrity_check() == "ok"
+        except Exception:
+            logger.debug("Preflight: database check failed", exc_info=True)
+            db_ok = False
+        add("База данных", "ok" if db_ok else "error", "целостность подтверждена" if db_ok else "проверьте подключение или логи")
+
+        failed = self.bot.background_task_status()["failed"]
+        add("Фоновые задачи", "ok" if not failed else "error", "все задачи работают" if not failed else ", ".join(failed[:4]))
+
+        if self.bot.config.twitch_channels:
+            chat = self.bot.get_cog("StreamChat")
+            control = await chat.twitch_control_status() if chat is not None else {"state": "starting", "can_write": False}
+            state = str(control.get("state") or "unknown")
+            level = "ok" if state == "connected" and control.get("can_write") else "warn"
+            add("Twitch-чат", level, "подключён и может писать" if level == "ok" else f"режим: {state}")
+
+        if self.bot.config.overlay_port is not None:
+            overlay_ok = self.bot.overlay is not None
+            add("OBS-оверлей", "ok" if overlay_ok else "error", "сервер оверлея запущен" if overlay_ok else "сервер не запущен")
+
+        backup = self.bot.db_backups.status() if self.bot.db_backups is not None else {"enabled": False}
+        if backup.get("enabled"):
+            backup_detail = "последний: " + str(backup.get("last_backup") or "ещё не создан")
+            add("Автобэкапы", "ok" if backup.get("last_backup") else "warn", backup_detail)
+        else:
+            add("Автобэкапы", "warn", "автоматические копии выключены")
+
+        return self._json({"ok": not any(item["state"] == "error" for item in checks), "checks": checks})
+
     async def _api_metrics(self, request: web.Request) -> web.Response:
         """Диагностические метрики API и панели для owner/admin."""
         return self._json(
