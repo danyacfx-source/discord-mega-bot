@@ -1,4 +1,4 @@
-import { navQuery, navOpen, navigate, route, theme, setTheme, accent, setAccent, ACCENT_LIST, toasts } from "../store.js";
+import { navQuery, navOpen, navigate, route, theme, setTheme, accent, setAccent, ACCENT_LIST, sidebarCollapsed, toasts } from "../store.js";
 import { NAV } from "../sections/registry.jsx";
 import { doLogout } from "../api.js";
 import { Icon } from "../components/icons.jsx";
@@ -8,7 +8,7 @@ export default function Sidebar() {
   return (
     <>
       <div class="sidebar-scrim" onClick={() => (navOpen.value = false)} />
-      <aside class={"sidebar" + (navOpen.value ? " open" : "")}>
+      <aside class={"sidebar" + (navOpen.value ? " open" : "") + (sidebarCollapsed.value ? " collapsed" : "")}>
         <div class="brand">
           <span class="brand-ic"><img src="/icon.svg" alt="" /></span>
           <span class="brand-copy">

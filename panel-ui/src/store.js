@@ -5,6 +5,7 @@ const ACCENTS = ["#b9a47a", "#7d8869", "#c58c59", "#e1d4b7", "#8ba6ac", "#b37d72
 export const route = signal(parseRoute());
 export const navQuery = signal("");
 export const navOpen = signal(false);
+export const sidebarCollapsed = signal(localStorage.getItem("panel-sidebar-collapsed") === "1");
 export const loginVisible = signal(false);
 export const authed = signal(true);
 
@@ -53,6 +54,11 @@ export function setAccent(c) {
   accent.value = c;
   localStorage.setItem("panel-accent", c);
   applyTheme();
+}
+
+export function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  localStorage.setItem("panel-sidebar-collapsed", sidebarCollapsed.value ? "1" : "0");
 }
 
 export const toasts = signal([]);

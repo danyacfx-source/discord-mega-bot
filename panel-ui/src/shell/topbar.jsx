@@ -1,4 +1,4 @@
-import { navOpen, route } from "../store.js";
+import { navOpen, route, toggleSidebar } from "../store.js";
 import { sectionById } from "../sections/registry.jsx";
 import { Icon } from "../components/icons.jsx";
 
@@ -8,6 +8,9 @@ export default function Topbar() {
     <header class="topbar">
       <div class="topbar-left">
         <button class="mobile-menu" type="button" onClick={() => (navOpen.value = !navOpen.value)} aria-label="Меню">
+          <Icon name="menu" size={18} />
+        </button>
+        <button class="desktop-menu" type="button" onClick={toggleSidebar} aria-label="Скрыть или показать боковое меню" title="Скрыть или показать меню">
           <Icon name="menu" size={18} />
         </button>
         <div class="topbar-title">

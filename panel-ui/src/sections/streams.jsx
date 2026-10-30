@@ -22,6 +22,7 @@ export default function Streams() {
   const [savingCommands, setSavingCommands] = useState(false);
   const [control, setControl] = useState(null);
   const [controlBusy, setControlBusy] = useState(false);
+  const [commandsCollapsed, setCommandsCollapsed] = useState(localStorage.getItem("twitch-commands-collapsed") === "1");
   const [preflight, setPreflight] = useState(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
 
@@ -269,12 +270,13 @@ export default function Streams() {
             <p class="muted small">Настройки действуют только на основном Twitch-канале с командами. Kick и второй промо-канал не затрагиваются.</p>
           </div>
           <div class="row-inline">
+            <button class="btn mini" type="button" onClick={() => { const next = !commandsCollapsed; setCommandsCollapsed(next); localStorage.setItem("twitch-commands-collapsed", next ? "1" : "0"); }}>{commandsCollapsed ? "Развернуть" : "Свернуть"}</button>
             <button class="btn" type="button" onClick={resetCommands} disabled={!commands || savingCommands}>Сбросить</button>
             <button class="btn success" type="button" onClick={() => saveCommands()} disabled={!commands || savingCommands}>{savingCommands ? "Сохраняем…" : "Сохранить команды"}</button>
           </div>
         </div>
-        {!commands && <Loading />}
-        {commands && <div class="stack">
+        {!commands && !commandsCollapsed && <Loading />}
+        {commands && !commandsCollapsed && <div class="stack">
           <div class="env-box muted small">Шаблоны ответа: <b>{"{default}"}</b> — стандартный динамический ответ, <b>{"{user}"}</b> — имя зрителя, <b>{"{args}"}</b> — текст после команды, <b>{"{channel}"}</b> — Twitch-канал. Пустое поле оставляет стандартный ответ.</div>
           {commands.map((command) => (
             <details class="env-box" key={command.id}>
