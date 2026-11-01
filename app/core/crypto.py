@@ -85,6 +85,13 @@ def _key() -> bytes | None:
     _init_attempted = True
     raw = _load_raw_key()
     if raw is None or len(raw) != 32:
+        # Строгий режим: без ключа секреты не пишутся открытым текстом вообще.
+        if (os.getenv("PANEL_ENCRYPTION_REQUIRED") or "").strip().lower() in {"1", "true", "yes", "on"}:
+            _init_attempted = False
+            raise RuntimeError(
+                f"PANEL_ENCRYPTION_REQUIRED=1, но ключ шифрования недоступен. "
+                f"Задай {_KEY_ENV} или разреши создание {_DEFAULT_KEY_FILE}."
+            )
         if not _warned_no_key:
             logger.warning(
                 "Ключ шифрования at-rest недоступен — секреты хранятся открытым текстом. "

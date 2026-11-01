@@ -95,7 +95,8 @@ class _AuthMixin(_BaseApi):
             for match in _INLINE_SCRIPT_RE.finditer(body)
         ]
         script_src = "script-src 'self'" + ("".join(f" {digest}" for digest in hashes) if hashes else "")
-        return f"default-src 'self'; {script_src}; script-src-attr 'unsafe-inline'; {_CSP_REST}"
+        # Инлайн-обработчики (onclick= и т.п.) запрещены: только скрипты с хешами.
+        return f"default-src 'self'; {script_src}; script-src-attr 'none'; {_CSP_REST}"
 
     def _required_role(self, request: web.Request) -> str:
         if request.method == "GET":

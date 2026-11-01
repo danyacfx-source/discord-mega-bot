@@ -64,10 +64,23 @@ class _ToolsApiMixin(_BaseApi):
         if not config.overlay_port:
             return web.Response(status=404, text="Overlay disabled")
         url = f"http://127.0.0.1:{int(config.overlay_port)}{request.raw_path}"
+        # Панельные креды и cookie не уходят на оверлей: он их не должен видеть.
         headers = {
             key: value
             for key, value in request.headers.items()
-            if key.lower() not in {"host", "content-length", "connection", "keep-alive"}
+            if key.lower()
+            not in {
+                "host",
+                "content-length",
+                "connection",
+                "keep-alive",
+                "authorization",
+                "proxy-authorization",
+                "cookie",
+                "x-panel-token",
+                "x-panel-csrf",
+                "x-bridge-token",
+            }
         }
         try:
             async with self._require_http().get(url, headers=headers, allow_redirects=False) as resp:
