@@ -345,11 +345,17 @@ class WebPanel(
             <span>{html.escape(server.region)}</span>
           </div>
           <label>JOIN ID</label>
-          <button class="code" data-code="{safe_join_id}"
-            onclick="navigator.clipboard.writeText(this.dataset.code);
-              this.querySelector('small').textContent='Скопировано ✓'">
+          <button class="code" data-code="{safe_join_id}" data-copy>
             <strong>{safe_join_id}</strong><small>Нажми, чтобы скопировать</small>
           </button>
+          <script>
+            document.querySelectorAll("[data-copy]").forEach((button) => {{
+              button.addEventListener("click", () => {{
+                navigator.clipboard.writeText(button.dataset.code);
+                button.querySelector("small").textContent = "Скопировано ✓";
+              }});
+            }});
+          </script>
           <div class="actions">{launch}<a href="https://store.steampowered.com/app/1867240/WARDOGS/">Открыть WARDOGS в Steam</a></div>
           <p class="hint">В игре открой браузер серверов → <b>Join By ID</b> → вставь скопированный код.</p>
         """
