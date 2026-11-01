@@ -9,6 +9,19 @@ import discord
 from aiohttp import web
 
 from app.core.webpanel.base_api import _BaseApi
+from app.core.webpanel.payload import _PANEL_ROLE_KEY
+
+# Права Discord, которые делают роль «привилегированной»: её выдача — только owner панели.
+_PRIVILEGED_PERMS = (
+    "administrator",
+    "manage_guild",
+    "manage_roles",
+    "manage_webhooks",
+    "ban_members",
+    "kick_members",
+    "moderate_members",
+    "manage_channels",
+)
 
 _WARDOGS_CATEGORY_ID = 1534711415883956284
 _WARDOGS_ROLE_NAME = "Wardogs"
@@ -354,6 +367,16 @@ class _GuildApiMixin(_BaseApi):
             return self._json({"ok": False, "error": "У бота нет права manage_roles"}, status=400)
         if not role.is_assignable():
             return self._json({"ok": False, "error": "Роль нельзя выдавать (интегрированная или выше ролей бота)"}, status=400)
+        # Эскалация: admin панели не должен выдавать роли с админскими правами
+        # Discord или роли, которые дают доступ к панели (PANEL_ADMIN_ROLE_IDS).
+        # Такие роли выдаёт только owner панели.
+        if request.get(_PANEL_ROLE_KEY) != "owner" and action == "add":
+            privileged = any(getattr(role.permissions, perm, False) for perm in _PRIVILEGED_PERMS)
+            if privileged or role.id in getattr(self, "_admin_role_ids", set()):
+                return self._json(
+                    {"ok": False, "error": "Привилегированную роль может выдать только owner панели"},
+                    status=403,
+                )
         try:
             if action == "remove" and role in member.roles:
                 await member.remove_roles(role, reason="Вебпанель: снятие роли")
