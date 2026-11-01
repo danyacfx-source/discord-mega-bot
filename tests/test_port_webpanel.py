@@ -523,7 +523,9 @@ async def test_webpanel_csp_hashes_inline_scripts(make_panel_bot):
             api = await client.get("/api/public/showcase")
             api_csp = api.headers.get("Content-Security-Policy", "")
             assert "sha256-" not in api_csp
-            assert "script-src 'self' 'unsafe-inline'" in api_csp
+            # Не-HTML: инлайн-скрипты не разрешены даже в статичном CSP.
+            assert "script-src 'self' 'unsafe-inline'" not in api_csp
+            assert "script-src 'self'" in api_csp
 
 
 @pytest.mark.asyncio
