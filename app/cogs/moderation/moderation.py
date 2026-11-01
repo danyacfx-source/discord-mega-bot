@@ -76,10 +76,24 @@ class ModerationCog(MegaCog, name="Moderation"):
             logger.exception("Не удалось создать moderation case для %s", user_id)
             return None
 
-    async def _guard_invoker(self, interaction: discord.Interaction, member: discord.Member) -> bool:
+    async def _guard_invoker(
+        self, interaction: discord.Interaction, member: discord.Member, required_perm: str | None = None
+    ) -> bool:
         guild = interaction.guild
         invoker = interaction.user
         if isinstance(invoker, discord.Member) and guild is not None:
+            # default_permissions — лишь видимость по умолчанию, её может переопределить
+            # админ сервера. Право вызывающего проверяем сами.
+            if (
+                required_perm is not None
+                and invoker.id != guild.owner_id
+                and not getattr(invoker.guild_permissions, required_perm, False)
+            ):
+                await interaction.response.send_message(
+                    embed=embeds.error("Недостаточно прав", "У вас нет права на это действие."),
+                    ephemeral=True,
+                )
+                return False
             if member.id == invoker.id:
                 await interaction.response.send_message(
                     embed=embeds.error("Ошибка", "Нельзя применять это действие к себе."),
@@ -101,7 +115,9 @@ class ModerationCog(MegaCog, name="Moderation"):
                 return False
         return True
 
-    async def _guard_target(self, interaction: discord.Interaction, member: discord.Member) -> bool:
+    async def _guard_target(
+        self, interaction: discord.Interaction, member: discord.Member, required_perm: str | None = None
+    ) -> bool:
         guild = interaction.guild
         me = guild.me if guild is not None else None
         if not isinstance(me, discord.Member):
@@ -110,7 +126,7 @@ class ModerationCog(MegaCog, name="Moderation"):
                 ephemeral=True,
             )
             return False
-        if not await self._guard_invoker(interaction, member):
+        if not await self._guard_invoker(interaction, member, required_perm):
             return False
         if not self.moderation.can_moderate(me, member):
             await interaction.response.send_message(
@@ -150,7 +166,7 @@ class ModerationCog(MegaCog, name="Moderation"):
         member: discord.Member,
         reason: str = "",
     ) -> None:
-        if not await self._guard_target(interaction, member):
+        if not await self._guard_target(interaction, member, "kick_members"):
             return
         if not await self._perform(interaction, member.kick(reason=moderation_reason(interaction.user, reason)), "кик"):
             return
@@ -173,7 +189,7 @@ class ModerationCog(MegaCog, name="Moderation"):
         reason: str = "",
         delete_days: app_commands.Range[int, 0, 7] = 0,
     ) -> None:
-        if not await self._guard_target(interaction, member):
+        if not await self._guard_target(interaction, member, "ban_members"):
             return
         if not await self._perform(
             interaction,
@@ -233,7 +249,7 @@ class ModerationCog(MegaCog, name="Moderation"):
                 ephemeral=True,
             )
             return
-        if not await self._guard_target(interaction, member):
+        if not await self._guard_target(interaction, member, "moderate_members"):
             return
         if not await self._perform(
             interaction,
@@ -304,7 +320,7 @@ class ModerationCog(MegaCog, name="Moderation"):
     @app_commands.default_permissions(moderate_members=True)
     @app_commands.guild_only()
     async def warn(self, interaction: discord.Interaction, member: discord.Member, reason: str) -> None:
-        if not await self._guard_invoker(interaction, member):
+        if not await self._guard_invoker(interaction, member, "moderate_members"):
             return
         count = await self.moderation.warn(interaction.guild.id, member.id, interaction.user.id, reason)
         embed = _member_embed("Предупреждение", member, reason)
