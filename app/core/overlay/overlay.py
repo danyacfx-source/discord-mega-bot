@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
+from app.core import access_log_filter
 from app.core.crypto import decrypt_text, encrypt_text, is_encrypted
 from app.core.overlay.chat_settings import filter_chat_messages, get_chat_paused, load_chat_settings
 from app.core.overlay.layout import load_layout
@@ -465,6 +466,7 @@ class Overlay:
         config = self.bot.config
         host = config.overlay_host
         port = config.overlay_port or 8765
+        access_log_filter.install()
         runner = web.AppRunner(self._create_app())
         await runner.setup()
         try:
