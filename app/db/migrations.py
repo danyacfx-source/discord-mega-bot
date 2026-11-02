@@ -256,6 +256,25 @@ async def run_migrations(conn: Any) -> None:
         await conn.execute(
             "INSERT INTO schema_migrations(version, applied_at) VALUES (12, datetime('now'))"
         )
+    if 13 not in applied:
+        # Сессии панели жили только в памяти процесса: любой рестарт разлогинивал
+        # всех админов. Теперь сессии пишутся в БД и поднимаются при старте.
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS panel_sessions (
+                token_key TEXT PRIMARY KEY,
+                role      TEXT NOT NULL,
+                csrf      TEXT NOT NULL,
+                expires   REAL NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_panel_sessions_expires ON panel_sessions(expires)"
+        )
+        await conn.execute(
+            "INSERT INTO schema_migrations(version, applied_at) VALUES (13, datetime('now'))"
+        )
     await _backfill_columns(conn)
     await conn.commit()
 

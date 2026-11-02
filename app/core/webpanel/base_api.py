@@ -19,14 +19,15 @@ from app.core.webpanel.payload import (
     _LOCAL_HOSTS,
     _RATE_LIMIT_MAX,
     _RATE_LIMIT_WINDOW,
-    _SESSION_MAX,
-    _PanelSession,
+    _token_key,
 )
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
     from app.services import Services
 
+
+RATE_LIMIT_KEY = web.RequestKey("rate_limit", dict)
 
 class _BaseApi:
     """Общие методы для всех миксинов веб-панели.
@@ -98,9 +99,16 @@ class _BaseApi:
         hits = self._rate_hits[key]
         while hits and hits[0] < now - _RATE_LIMIT_WINDOW:
             hits.popleft()
+        reset = int(hits[0] + _RATE_LIMIT_WINDOW - now) + 1 if hits else _RATE_LIMIT_WINDOW
         if len(hits) >= _RATE_LIMIT_MAX:
+            request[RATE_LIMIT_KEY] = {"limit": _RATE_LIMIT_MAX, "remaining": 0, "reset": reset}
             return False
         hits.append(now)
+        request[RATE_LIMIT_KEY] = {
+            "limit": _RATE_LIMIT_MAX,
+            "remaining": _RATE_LIMIT_MAX - len(hits),
+            "reset": reset,
+        }
         self._rate_gc += 1
         if self._rate_gc % 500 == 0:
             self._prune_rate_hits(now)
@@ -155,14 +163,7 @@ class _BaseApi:
         if not self._password_auth and not self._oauth_enabled:
             return "owner" if self._static_token and secrets.compare_digest(token, self._static_token) else None
         now = time.time()
-        active: dict[str, _PanelSession] = {}
-        role: str | None = None
-        for saved, session in self._sessions.items():
-            if session["expires"] > now:
-                active[saved] = session
-                if secrets.compare_digest(token, saved):
-                    role = session["role"]
-        self._sessions = active
-        if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
-        return role
+        session = self._sessions.get(_token_key(token))
+        if session is None or session["expires"] <= now:
+            return None
+        return session["role"]

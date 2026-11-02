@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -35,6 +36,11 @@ _LOGIN_LIMIT = 5
 _LOGIN_LOCK_SECONDS = 900.0
 _SESSION_TTL = 24 * 3600
 _SESSION_MAX = 2000
+
+
+def _token_key(token: str) -> str:
+    """Ключ сессии — SHA-256 токена: ни в памяти, ни в БД не хранится сам bearer-токен."""
+    return sha256(token.encode()).hexdigest()
 _RATE_LIMIT_MAX = 600
 _RATE_LIMIT_WINDOW = 60.0
 _TOKEN_FILE = ".panel-token"

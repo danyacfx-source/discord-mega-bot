@@ -11,6 +11,17 @@ class DonationsRepository(BaseRepository):
         row = await self.db.fetchone("SELECT 1 FROM donations WHERE da_id = ?", (da_id,))
         return row is not None
 
+    async def known_ids(self, da_ids: list[int]) -> set[int]:
+        """Одним запросом возвращает, какие из ID уже записаны в БД (вместо N запросов)."""
+        if not da_ids:
+            return set()
+        placeholders = ",".join("?" for _ in da_ids)
+        rows = await self.db.fetchall(
+            f"SELECT da_id FROM donations WHERE da_id IN ({placeholders})",
+            tuple(da_ids),
+        )
+        return {int(row["da_id"]) for row in rows}
+
     async def record(
         self,
         da_id: int,

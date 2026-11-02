@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -10,6 +11,8 @@ import discord
 
 from app.core import embeds
 
+logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from app.services import Services
     from app.services.ticket_service import TicketService
@@ -17,6 +20,17 @@ if TYPE_CHECKING:
 TICKET_OPEN_ID = "ticket:open"
 TICKET_CLOSE_ID = "ticket:close"
 GIVEAWAY_ENTER_ID = "giveaway:enter"
+
+
+async def _reply_unexpected(interaction: discord.Interaction) -> None:
+    embed = embeds.error("Ошибка", "Неожиданная ошибка. Попробуйте позже.")
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(embed=embed, ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+    except discord.HTTPException:
+        logger.debug("Не удалось отправить сообщение об ошибке кнопки", exc_info=True)
 
 
 class ConfirmView(discord.ui.View):
@@ -107,26 +121,30 @@ class TicketOpenView(_TicketBaseView):
 
     @discord.ui.button(label="Открыть тикет", style=discord.ButtonStyle.success, custom_id=TICKET_OPEN_ID, emoji="🎫")
     async def open_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
-        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                embed=embeds.error("Не удалось открыть тикет", "Кнопка работает только на сервере."),
-                ephemeral=True,
-            )
-            return
-        result = await self.ticket_service.create(interaction.guild, interaction.user)
-        if result.error:
-            embed = embeds.error("Не удалось открыть тикет", result.error)
-        else:
-            channel = result.channel
-            if channel is None:
+        try:
+            if interaction.guild is None or not isinstance(interaction.user, discord.Member):
                 await interaction.response.send_message(
-                    embed=embeds.error("Не удалось открыть тикет", "Канал тикета не был создан."),
+                    embed=embeds.error("Не удалось открыть тикет", "Кнопка работает только на сервере."),
                     ephemeral=True,
                 )
                 return
-            embed = embeds.success("Тикет открыт", f"Перейдите в {channel.mention} и опишите вопрос одним сообщением.")
-            embed.add_field(name="КАНАЛ ПОДДЕРЖКИ", value=channel.mention, inline=False)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+            result = await self.ticket_service.create(interaction.guild, interaction.user)
+            if result.error:
+                embed = embeds.error("Не удалось открыть тикет", result.error)
+            else:
+                channel = result.channel
+                if channel is None:
+                    await interaction.response.send_message(
+                        embed=embeds.error("Не удалось открыть тикет", "Канал тикета не был создан."),
+                        ephemeral=True,
+                    )
+                    return
+                embed = embeds.success("Тикет открыт", f"Перейдите в {channel.mention} и опишите вопрос одним сообщением.")
+                embed.add_field(name="КАНАЛ ПОДДЕРЖКИ", value=channel.mention, inline=False)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception:
+            logger.exception("Сбой кнопки open_ticket")
+            await _reply_unexpected(interaction)
 
 
 class GiveawayView(discord.ui.View):
@@ -137,60 +155,64 @@ class GiveawayView(discord.ui.View):
 
     @discord.ui.button(label="Участвовать", style=discord.ButtonStyle.success, custom_id=GIVEAWAY_ENTER_ID, emoji="🎉")
     async def enter(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
-        services: Services | None = getattr(interaction.client, "services", None)
-        if services is None:
-            await interaction.response.send_message(embed=embeds.error("Ошибка", "Сервисы недоступны."), ephemeral=True)
-            return
-        giveaway = await services.giveaways.get_by_message(interaction.message.id)
-        if giveaway is None:
-            await interaction.response.send_message(embed=embeds.error("Розыгрыш не найден"), ephemeral=True)
-            return
-        if interaction.guild_id is not None and giveaway["guild_id"] != interaction.guild_id:
-            await interaction.response.send_message(embed=embeds.error("Не на этом сервере"), ephemeral=True)
-            return
-        if not giveaway["active"]:
-            await interaction.response.send_message(embed=embeds.warning("Розыгрыш завершён"), ephemeral=True)
-            return
-
-        min_days = giveaway.get("min_days", 0)
-        if min_days > 0 and interaction.guild is not None:
-            member = interaction.guild.get_member(interaction.user.id)
-            if member is None:
-                try:
-                    member = await interaction.guild.fetch_member(interaction.user.id)
-                except discord.HTTPException:
-                    member = None
-            if member is None or member.joined_at is None:
-                await interaction.response.send_message(
-                    embed=embeds.error("Ошибка", "Не удалось определить дату вашего вступления на сервер."), ephemeral=True
-                )
-                return
-            joined = member.joined_at
-            if joined.tzinfo is None:
-                joined = joined.replace(tzinfo=UTC)
-            delta = datetime.now(UTC) - joined
-            if delta.days < min_days:
-                await interaction.response.send_message(
-                    embed=embeds.error(
-                        "Не выполнено условие",
-                        f"Для участия нужно находиться на сервере минимум {min_days} дн. (вы на сервере {delta.days} дн.).",
-                    ),
-                    ephemeral=True,
-                )
-                return
-
-        added = await services.giveaways.join(giveaway["id"], interaction.user.id)
-        embed = (
-            embeds.success("Заявка принята", "Вы участвуете в розыгрыше. Результат появится здесь после завершения.")
-            if added
-            else embeds.info("Вы уже участвуете", "Повторно нажимать кнопку не нужно.")
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
         try:
-            embed = await services.giveaways.embed(giveaway)
-            await interaction.message.edit(embed=embed)
-        except discord.HTTPException:
-            pass
+            services: Services | None = getattr(interaction.client, "services", None)
+            if services is None:
+                await interaction.response.send_message(embed=embeds.error("Ошибка", "Сервисы недоступны."), ephemeral=True)
+                return
+            giveaway = await services.giveaways.get_by_message(interaction.message.id)
+            if giveaway is None:
+                await interaction.response.send_message(embed=embeds.error("Розыгрыш не найден"), ephemeral=True)
+                return
+            if interaction.guild_id is not None and giveaway["guild_id"] != interaction.guild_id:
+                await interaction.response.send_message(embed=embeds.error("Не на этом сервере"), ephemeral=True)
+                return
+            if not giveaway["active"]:
+                await interaction.response.send_message(embed=embeds.warning("Розыгрыш завершён"), ephemeral=True)
+                return
+
+            min_days = giveaway.get("min_days", 0)
+            if min_days > 0 and interaction.guild is not None:
+                member = interaction.guild.get_member(interaction.user.id)
+                if member is None:
+                    try:
+                        member = await interaction.guild.fetch_member(interaction.user.id)
+                    except discord.HTTPException:
+                        member = None
+                if member is None or member.joined_at is None:
+                    await interaction.response.send_message(
+                        embed=embeds.error("Ошибка", "Не удалось определить дату вашего вступления на сервер."), ephemeral=True
+                    )
+                    return
+                joined = member.joined_at
+                if joined.tzinfo is None:
+                    joined = joined.replace(tzinfo=UTC)
+                delta = datetime.now(UTC) - joined
+                if delta.days < min_days:
+                    await interaction.response.send_message(
+                        embed=embeds.error(
+                            "Не выполнено условие",
+                            f"Для участия нужно находиться на сервере минимум {min_days} дн. (вы на сервере {delta.days} дн.).",
+                        ),
+                        ephemeral=True,
+                    )
+                    return
+
+            added = await services.giveaways.join(giveaway["id"], interaction.user.id)
+            embed = (
+                embeds.success("Заявка принята", "Вы участвуете в розыгрыше. Результат появится здесь после завершения.")
+                if added
+                else embeds.info("Вы уже участвуете", "Повторно нажимать кнопку не нужно.")
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            try:
+                embed = await services.giveaways.embed(giveaway)
+                await interaction.message.edit(embed=embed)
+            except discord.HTTPException:
+                pass
+        except Exception:
+            logger.exception("Сбой кнопки enter")
+            await _reply_unexpected(interaction)
 
 
 class PollView(discord.ui.View):
@@ -252,16 +274,20 @@ class TicketCloseView(_TicketBaseView):
 
     @discord.ui.button(label="Закрыть тикет", style=discord.ButtonStyle.danger, custom_id=TICKET_CLOSE_ID, emoji="🔒")
     async def close_ticket(self, interaction: discord.Interaction, _button: discord.ui.Button) -> None:
-        if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message(
-                embed=embeds.error("Не удалось закрыть тикет", "Кнопка работает только на сервере."),
-                ephemeral=True,
-            )
-            return
-        channel = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
-        result = await self.ticket_service.close(interaction.guild, channel, interaction.user)
-        if result.error:
-            embed = embeds.error("Не удалось закрыть тикет", result.error)
-        else:
-            embed = embeds.success("Тикет закрыт", result.transcript_channel_mention)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        try:
+            if interaction.guild is None or not isinstance(interaction.user, discord.Member):
+                await interaction.response.send_message(
+                    embed=embeds.error("Не удалось закрыть тикет", "Кнопка работает только на сервере."),
+                    ephemeral=True,
+                )
+                return
+            channel = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
+            result = await self.ticket_service.close(interaction.guild, channel, interaction.user)
+            if result.error:
+                embed = embeds.error("Не удалось закрыть тикет", result.error)
+            else:
+                embed = embeds.success("Тикет закрыт", result.transcript_channel_mention)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception:
+            logger.exception("Сбой кнопки close_ticket")
+            await _reply_unexpected(interaction)

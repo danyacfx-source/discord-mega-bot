@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import random
@@ -197,7 +198,10 @@ class ChatCommandsService:
         if handler is None:
             return
         try:
-            text = await handler(self, msg, rest.strip())
+            text = await asyncio.wait_for(handler(self, msg, rest.strip()), timeout=10.0)
+        except TimeoutError:
+            logger.error("ChatCommands: timeout на команде !%s (%s)", cmd, msg.platform)
+            return
         except Exception:
             logger.exception("ChatCommands: сбой команды !%s (%s)", cmd, msg.platform)
             return
