@@ -296,6 +296,11 @@ CREATE TABLE IF NOT EXISTS media_files (
     name TEXT PRIMARY KEY, bytes BYTEA NOT NULL, mime TEXT NOT NULL,
     size INTEGER NOT NULL, created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS panel_sessions (
+    token_key TEXT PRIMARY KEY, role TEXT NOT NULL, csrf TEXT NOT NULL,
+    expires DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_panel_sessions_expires ON panel_sessions(expires);
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(active, remind_at);
 CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_messages(done, send_at);
 CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(active, ends_at);
