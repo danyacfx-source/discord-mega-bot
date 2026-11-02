@@ -833,3 +833,79 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
         assert second._static_token == token, "токен должен вернуться из БД"
     finally:
         await bot.db.close()
+
+
+class _FakeResp:
+    def __init__(self, status: int, text: str) -> None:
+        self.status = status
+        self._text = text
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def text(self) -> str:
+        return self._text
+
+
+class _FakeSession:
+    def __init__(self, mapping: dict) -> None:
+        self.mapping = mapping
+        self.calls: list[str] = []
+
+    def get(self, url, **kwargs):
+        self.calls.append(url)
+        value = self.mapping[url]
+        if isinstance(value, Exception):
+            raise value
+        return _FakeResp(*value)
+
+
+_V4 = "https://www.cloudflare.com/ips-v4"
+_V6 = "https://www.cloudflare.com/ips-v6"
+
+
+def _cf_panel(make_panel_bot, mapping, trusted=True):
+    panel = WebPanel(make_panel_bot())
+    panel._trusted_proxy = trusted
+    session = _FakeSession(mapping)
+    panel._http = session  # type: ignore[assignment]
+    return panel, session
+
+
+@pytest.mark.asyncio
+async def test_cf_refresh_success_replaces_list(make_panel_bot):
+    panel, _ = _cf_panel(make_panel_bot, {_V4: (200, "10.0.0.0/8\n1.2.3.0/24\n"), _V6: (200, "2001:db8::/32\n")})
+    await panel._refresh_trusted_networks()
+    assert set(panel._trusted_networks) == {
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("1.2.3.0/24"),
+        ipaddress.ip_network("2001:db8::/32"),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {_V4: (200, "10.0.0.0/8\nnot-a-cidr\n"), _V6: (200, "2001:db8::/32\n")},
+        {_V4: (200, "10.0.0.0/8\n"), _V6: (500, "2001:db8::/32\n")},
+        {_V4: (200, "10.0.0.0/8\n"), _V6: (200, "\n\n")},
+        {_V4: (200, "10.0.0.0/8\n"), _V6: TimeoutError()},
+        {_V4: (403, "10.0.0.0/8\n"), _V6: (200, "2001:db8::/32\n")},
+    ],
+)
+async def test_cf_refresh_failure_keeps_old_list(make_panel_bot, mapping):
+    panel, _ = _cf_panel(make_panel_bot, mapping)
+    before = panel._trusted_networks
+    await panel._refresh_trusted_networks()
+    assert panel._trusted_networks is before
+
+
+@pytest.mark.asyncio
+async def test_cf_refresh_disabled_does_not_fetch(make_panel_bot):
+    panel, session = _cf_panel(make_panel_bot, {}, trusted=False)
+    await panel._refresh_trusted_networks()
+    assert session.calls == []

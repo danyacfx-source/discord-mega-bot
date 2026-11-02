@@ -46,7 +46,7 @@ from app.core.webpanel.settings_api import _SettingsApiMixin
 from app.core.webpanel.showcase_api import _ShowcaseApiMixin
 from app.core.webpanel.status_api import _StatusApiMixin
 from app.core.webpanel.tools_api import _ToolsApiMixin
-from app.core.webpanel.trusted_proxy import CLOUDFLARE_NETWORKS
+from app.core.webpanel.trusted_proxy import CLOUDFLARE_NETWORKS, fetch_cloudflare_networks
 from app.core.webpanel.uploads_api import _UploadsApiMixin
 from app.core.webpanel.workboard_api import _WorkboardApiMixin
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
@@ -58,6 +58,8 @@ logger = logging.getLogger("bot.webpanel")
 
 
 
+_CF_REFRESH_SECONDS = 24 * 3600
+_CF_RETRY_SECONDS = 3600
 _MAINTENANCE_INTERVAL_SECONDS = 600.0
 
 
@@ -97,6 +99,7 @@ class WebPanel(
                 self._admin_role_ids.add(int(part))
         self._trusted_proxy = bool(config.panel_trusted_proxy)
         self._trusted_networks = CLOUDFLARE_NETWORKS
+        self._cf_next_refresh = 0.0
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
@@ -276,7 +279,25 @@ class WebPanel(
         logging.getLogger().addHandler(self._ring)
         self._events_task = asyncio.create_task(self._events_loop())
         self._maintenance_task = asyncio.create_task(self._maintenance_loop())
+        await self._refresh_trusted_networks()
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
+
+    async def _refresh_trusted_networks(self) -> None:
+        """Обновляет диапазоны Cloudflare; при любой ошибке оставляет текущий список."""
+        if not self._trusted_proxy or self._http is None:
+            return
+        now = time.time()
+        if now < self._cf_next_refresh:
+            return
+        try:
+            networks = await fetch_cloudflare_networks(self._http)
+        except Exception as exc:
+            self._cf_next_refresh = now + _CF_RETRY_SECONDS
+            logger.warning("Не удалось обновить диапазоны Cloudflare, оставляем текущие: %s", exc)
+            return
+        self._trusted_networks = networks
+        self._cf_next_refresh = now + _CF_REFRESH_SECONDS
+        logger.info("Диапазоны Cloudflare обновлены: %d сетей", len(networks))
 
     async def _maintenance_loop(self) -> None:
         """Фоновая очистка: без неё сессии и попытки входа копятся до рестарта."""
@@ -286,6 +307,10 @@ class WebPanel(
                 await self._prune_auth_state(time.time())
             except Exception:
                 logger.warning("Сбой очистки памяти вебпанели", exc_info=True)
+            try:
+                await self._refresh_trusted_networks()
+            except Exception:
+                logger.warning("Сбой обновления диапазонов Cloudflare", exc_info=True)
 
     async def stop(self) -> None:
         if self._maintenance_task is not None:

@@ -5,13 +5,23 @@
 напрямую, позволяет подделать IP и обойти бан сканера.
 
 Диапазоны публичные: https://www.cloudflare.com/ips-v4 и ips-v6.
-Меняются редко; обновлять вручную.
+Встроенный список — запасной; при включённом доверии к прокси панель
+периодически обновляет его (fetch_cloudflare_networks).
 """
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 from collections.abc import Iterable
+
+import aiohttp
+
+CLOUDFLARE_IPS_URLS = (
+    "https://www.cloudflare.com/ips-v4",
+    "https://www.cloudflare.com/ips-v6",
+)
+FETCH_TIMEOUT_SECONDS = 10
 
 CLOUDFLARE_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = tuple(
     ipaddress.ip_network(net)
@@ -54,3 +64,25 @@ def is_trusted_peer(
     except ValueError:
         return False
     return any(ip in network for network in networks)
+
+async def fetch_cloudflare_networks(
+    session: aiohttp.ClientSession,
+) -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    """Скачивает и строго разбирает диапазоны Cloudflare.
+
+    Бросает исключение при любой ошибке: не-200, сетевой сбой, строка,
+    не являющаяся CIDR, или пустой ответ. Частичный результат не возвращается.
+    """
+    timeout = aiohttp.ClientTimeout(total=FETCH_TIMEOUT_SECONDS)
+    networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for url in CLOUDFLARE_IPS_URLS:
+        async with asyncio.timeout(FETCH_TIMEOUT_SECONDS):
+            async with session.get(url, timeout=timeout) as resp:
+                if resp.status != 200:
+                    raise ValueError(f"{url}: HTTP {resp.status}")
+                text = await resp.text()
+        found = [ipaddress.ip_network(line.strip()) for line in text.splitlines() if line.strip()]
+        if not found:
+            raise ValueError(f"{url}: пустой ответ")
+        networks.extend(found)
+    return tuple(networks)
