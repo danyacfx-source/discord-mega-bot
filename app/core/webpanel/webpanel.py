@@ -15,9 +15,9 @@ import aiohttp
 from aiohttp import web
 from argon2 import PasswordHasher
 
+from app.core import access_log_filter
 from app.core.crypto import decrypt_text, encrypt_text, is_encrypted
 from app.core.secrets import attach_redaction
-from app.core import access_log_filter
 from app.core.webpanel.analytics_api import _AnalyticsApiMixin
 from app.core.webpanel.auth import _AuthMixin
 from app.core.webpanel.base_api import _BaseApi
