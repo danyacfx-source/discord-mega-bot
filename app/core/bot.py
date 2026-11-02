@@ -139,6 +139,9 @@ class MegaBot(commands.Bot):
                         continue
                     name = f"{cog_name}.{attr_name}"
                     attempts = self._task_restart_attempts.get(name, 0)
+                    if attempts >= 5:
+                        logger.error("Watchdog: задача %s превысила лимит попыток рестарта (5) — прекращаем", name)
+                        continue
                     delay = min(300, 30 * (2**attempts))
                     last_key = f"{name}:last"
                     last = getattr(self, "_task_watchdog_last", {}).get(last_key, 0.0)
