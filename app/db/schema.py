@@ -305,6 +305,7 @@ CREATE TABLE IF NOT EXISTS panel_scan_offenses (
     ip TEXT PRIMARY KEY, offenses INTEGER NOT NULL,
     banned_until DOUBLE PRECISION NOT NULL
 );
+ALTER TABLE panel_scan_offenses ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS panel_login_attempts (
     key TEXT PRIMARY KEY, first_failure_at DOUBLE PRECISION NOT NULL,
     failures INTEGER NOT NULL, locked_until DOUBLE PRECISION NOT NULL

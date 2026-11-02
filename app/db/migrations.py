@@ -331,3 +331,7 @@ async def _backfill_columns(conn: Any) -> None:
     tk_columns = {row["name"] for row in await tk_cursor.fetchall()}
     if "transcript" not in tk_columns:
         await conn.execute("ALTER TABLE tickets ADD COLUMN transcript TEXT")
+    scan_cursor = await conn.execute("PRAGMA table_info(panel_scan_offenses)")
+    scan_columns = {row["name"] for row in await scan_cursor.fetchall()}
+    if "location" not in scan_columns:
+        await conn.execute("ALTER TABLE panel_scan_offenses ADD COLUMN location TEXT NOT NULL DEFAULT ''")

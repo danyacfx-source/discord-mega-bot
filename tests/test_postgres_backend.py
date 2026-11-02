@@ -76,3 +76,4 @@ def test_postgres_schema_defines_panel_tables() -> None:
     """Регрессия: panel_login_attempts (миграция 12) отсутствовала в PG-схеме."""
     tables = postgres_table_names(POSTGRES_SCHEMA)
     assert {"panel_login_attempts", "panel_sessions", "panel_scan_offenses"} <= tables
+    assert "ALTER TABLE panel_scan_offenses ADD COLUMN IF NOT EXISTS location" in POSTGRES_SCHEMA

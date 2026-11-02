@@ -59,6 +59,21 @@ async def test_expired_ban_keeps_counter_and_is_not_restored_as_active(make_pane
 
 
 @pytest.mark.asyncio
+async def test_scan_location_survives_restart_and_is_not_erased(make_panel_bot):
+    bot = make_panel_bot()
+    await _boot_db(bot)
+    try:
+        panel = WebPanel(bot)
+        await panel._save_scan_ban("10.0.0.6", 1, 5e9, "Frankfurt, DE")
+        await panel._save_scan_ban("10.0.0.6", 2, 5e9)  # повторный бан без заголовков
+        restarted = WebPanel(bot)
+        await restarted._restore_scan_state()
+        assert restarted._scan_locations["10.0.0.6"] == "Frankfurt, DE"
+    finally:
+        await bot.db.close()
+
+
+@pytest.mark.asyncio
 async def test_each_ban_notifies_owner(make_panel_bot, monkeypatch):
     bot = make_panel_bot()
     panel = WebPanel(bot)

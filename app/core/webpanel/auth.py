@@ -287,15 +287,15 @@ class _AuthMixin(_BaseApi):
                 "Бан IP за сканирование панели: ip=%s (%s) на %d с, нарушение %d",
                 ip, location or "локация неизвестна", int(until - now), count,
             )
-        await self._save_scan_ban(ip, count, until)
+        await self._save_scan_ban(ip, count, until, self._scan_locations.get(ip, ""))
         await self._notify_scan_ban(ip, detail, count, until, now)
 
-    async def _save_scan_ban(self, ip: str, count: int, until: float) -> None:
+    async def _save_scan_ban(self, ip: str, count: int, until: float, location: str = "") -> None:
         db = self.bot.db
         if db is None:
             return
         try:
-            await PanelScanRepository(db).save(ip, count, until)
+            await PanelScanRepository(db).save(ip, count, until, location)
         except Exception:
             logger.warning("Не удалось сохранить бан сканера в БД — только в памяти", exc_info=True)
 
@@ -310,8 +310,10 @@ class _AuthMixin(_BaseApi):
             logger.warning("Не удалось восстановить нарушителей сканирования из БД", exc_info=True)
             return
         now = time.time()
-        for ip, count, until in rows:
+        for ip, count, until, location in rows:
             self._scan_offenses[ip] = (count, until)
+            if location:
+                self._scan_locations[ip] = location
             if until > now:
                 self._scan_bans[ip] = until
         if rows:
