@@ -26,7 +26,8 @@ def _base(
     embed = discord.Embed(title=title, description=description, color=color)
     if timestamp:
         embed.timestamp = datetime.now(UTC)
-    embed.set_footer(text=footer or f"{BOT_NAME}  •  Discord bot")
+    if footer:
+        embed.set_footer(text=footer)
     return embed
 
 
