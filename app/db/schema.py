@@ -305,6 +305,10 @@ CREATE TABLE IF NOT EXISTS panel_scan_offenses (
     ip TEXT PRIMARY KEY, offenses INTEGER NOT NULL,
     banned_until DOUBLE PRECISION NOT NULL
 );
+CREATE TABLE IF NOT EXISTS panel_login_attempts (
+    key TEXT PRIMARY KEY, first_failure_at DOUBLE PRECISION NOT NULL,
+    failures INTEGER NOT NULL, locked_until DOUBLE PRECISION NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(active, remind_at);
 CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_messages(done, send_at);
 CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(active, ends_at);
@@ -322,7 +326,7 @@ CREATE INDEX IF NOT EXISTS idx_music_history_guild ON music_history(guild_id, pl
 CREATE INDEX IF NOT EXISTS idx_chat_coins_top ON chat_coins(platform, coins DESC);
 CREATE INDEX IF NOT EXISTS idx_birthdays_date ON birthdays(month, day);
 INSERT INTO schema_migrations(version, applied_at)
-SELECT version, CURRENT_TIMESTAMP::text FROM generate_series(1, 11) AS version
+SELECT version, CURRENT_TIMESTAMP::text FROM generate_series(1, 14) AS version
 ON CONFLICT (version) DO NOTHING;
 """
 
