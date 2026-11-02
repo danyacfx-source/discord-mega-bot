@@ -131,3 +131,55 @@ async def test_unban_clears_ban_but_keeps_counter(make_panel_bot):
         assert missing.status == 404
     finally:
         await bot.db.close()
+
+
+@pytest.mark.asyncio
+async def test_clear_scan_ban_helper_keeps_counter_and_reports_unknown_ip(make_panel_bot):
+    bot = make_panel_bot()
+    await _boot_db(bot)
+    try:
+        panel = WebPanel(bot)
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                await _probe_until_banned(client)
+        assert await panel.clear_scan_ban("127.0.0.1", "тест") == 1
+        assert "127.0.0.1" not in panel._scan_bans
+        assert await panel.clear_scan_ban("10.9.9.9", "тест") is None
+    finally:
+        await bot.db.close()
+
+
+@pytest.mark.asyncio
+async def test_scanbans_unban_command_is_owner_only_and_clears_ban(make_panel_bot):
+    from app.cogs.administration.scan_bans import ScanBansCog
+
+    bot = make_panel_bot()
+    await _boot_db(bot)
+    try:
+        panel = WebPanel(bot)
+        bot.webpanel = panel
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                await _probe_until_banned(client)
+        cog = ScanBansCog(bot)
+        assert "127.0.0.1" in panel._scan_bans
+
+        class _Resp:
+            def __init__(self):
+                self.messages = []
+
+            async def send_message(self, text=None, **kwargs):
+                self.messages.append(text or kwargs.get("embed"))
+
+        class _Interaction:
+            def __init__(self, user_id):
+                self.user = type("U", (), {"id": user_id, "__str__": lambda s: "u"})()
+                self.response = _Resp()
+
+        assert cog.unban.checks, "команда должна быть закрыта проверкой is_owner"
+        owner = _Interaction(user_id=bot.config.owner_id)
+        await cog.unban.callback(cog, owner, "127.0.0.1")
+        assert "127.0.0.1" not in panel._scan_bans
+        assert "снят" in owner.response.messages[0]
+    finally:
+        await bot.db.close()
