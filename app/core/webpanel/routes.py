@@ -101,6 +101,8 @@ def register_routes(panel: Any, app: web.Application) -> None:
     router.add_post("/api/moderation/ban", viewer(panel._api_mod_ban, "admin"))
     router.add_post("/api/moderation/unban", viewer(panel._api_mod_unban, "admin"))
     router.add_post("/api/moderation/timeout", viewer(panel._api_mod_timeout, "admin"))
+    router.add_get("/api/scan-bans", viewer(panel._api_scan_bans_get, "admin"))
+    router.add_post("/api/scan-bans/clear", viewer(panel._api_scan_ban_clear, "admin"))
     router.add_get("/api/giveaways", viewer(panel._api_giveaways))
     router.add_post("/api/giveaways/create", viewer(panel._api_giveaway_create))
     router.add_post("/api/giveaways/end", viewer(panel._api_giveaway_end))

@@ -275,6 +275,20 @@ async def run_migrations(conn: Any) -> None:
         await conn.execute(
             "INSERT INTO schema_migrations(version, applied_at) VALUES (13, datetime('now'))"
         )
+    if 14 not in applied:
+        # Нарушители сканирования жили в памяти: рестарт обнулял счётчик и баны.
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS panel_scan_offenses (
+                ip           TEXT PRIMARY KEY,
+                offenses     INTEGER NOT NULL,
+                banned_until REAL NOT NULL
+            )
+            """
+        )
+        await conn.execute(
+            "INSERT INTO schema_migrations(version, applied_at) VALUES (14, datetime('now'))"
+        )
     await _backfill_columns(conn)
     await conn.commit()
 
