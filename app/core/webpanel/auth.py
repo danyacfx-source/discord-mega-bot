@@ -366,18 +366,27 @@ class _AuthMixin(_BaseApi):
         items.sort(key=lambda item: (not item["banned"], not item["permanent"], -item["offenses"]))
         return self._json({"ok": True, "items": items[:500], "total": len(items)})
 
-    async def _api_scan_ban_clear(self, request: web.Request) -> web.Response:
-        """Снимает действующий бан IP. Счётчик нарушений остаётся: эскалация не обнуляется."""
-        payload = await self._read_json(request)
-        ip = str(payload.get("ip") or "").strip()
+    async def clear_scan_ban(self, ip: str, source: str) -> int | None:
+        """Снимает действующий бан IP и возвращает число нарушений; None — IP неизвестен.
+
+        Счётчик нарушений остаётся: эскалация не обнуляется.
+        """
         if ip not in self._scan_offenses:
-            return self._json({"ok": False, "error": "IP нет среди нарушителей сканирования"}, status=404)
+            return None
         count, _ = self._scan_offenses[ip]
         self._scan_bans.pop(ip, None)
         self._scan_hits.pop(ip, None)
         self._scan_offenses[ip] = (count, 0.0)
         await self._save_scan_ban(ip, count, 0.0)
-        logger.warning("Бан сканера снят вручную из панели: ip=%s (нарушений всего %d)", ip, count)
+        logger.warning("Бан сканера снят вручную (%s): ip=%s (нарушений всего %d)", source, ip, count)
+        return count
+
+    async def _api_scan_ban_clear(self, request: web.Request) -> web.Response:
+        payload = await self._read_json(request)
+        ip = str(payload.get("ip") or "").strip()
+        count = await self.clear_scan_ban(ip, "панель")
+        if count is None:
+            return self._json({"ok": False, "error": "IP нет среди нарушителей сканирования"}, status=404)
         return self._json({"ok": True, "ip": ip, "offenses": count})
 
     async def _api_logout(self, request: web.Request) -> web.Response:
