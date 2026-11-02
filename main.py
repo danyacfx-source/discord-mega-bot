@@ -11,6 +11,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 from app.config import Config  # noqa: E402
+from app.core import crash_guard  # noqa: E402
 from app.core.bot import MegaBot  # noqa: E402
 from app.core.logger import setup_logging  # noqa: E402
 from app.core.secrets import fix_env_permissions, load_file_secrets  # noqa: E402
@@ -24,6 +25,8 @@ def main() -> None:
     secret_warnings = load_file_secrets()
     config = Config.from_env()
     setup_logging(config.log_level)
+    crash_guard.install()
+    crash_guard.log_startup_banner(config.version)
     for warning in secret_warnings:
         logger.error("Secrets: %s", warning)
     for warning in fix_env_permissions():
@@ -34,6 +37,9 @@ def main() -> None:
         bot.run(config.token)
     except KeyboardInterrupt:
         logger.info("Бот остановлен пользователем")
+    except Exception:
+        logger.critical("Бот аварийно остановился", exc_info=True)
+        raise
     finally:
         logger.info("Завершение работы")
 
