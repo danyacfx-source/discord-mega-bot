@@ -38,6 +38,10 @@ _LOGIN_LOCK_SECONDS = 900.0
 _SCAN_WINDOW = 300.0
 _SCAN_LIMIT = 5
 _SCAN_BAN_SECONDS = 3600.0
+#: Срок бана удваивается с каждым нарушением; на _SCAN_PERMANENT_AFTER-м — навсегда.
+_SCAN_PERMANENT_AFTER = 4
+#: Сколько помнить нарушителя после окончания бана, чтобы эскалация не сбрасывалась.
+_SCAN_FORGET_SECONDS = 7 * 24 * 3600.0
 _SESSION_TTL = 24 * 3600
 _SESSION_MAX = 2000
 

@@ -1,11 +1,13 @@
 """Экран от сканеров: path'ы и User-Agent'ы глушатся до хендлеров."""
 from __future__ import annotations
 
+import time
+
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from app.core.overlay import Overlay
-from app.core.webpanel.payload import _SCAN_LIMIT
+from app.core.webpanel.payload import _SCAN_BAN_SECONDS, _SCAN_LIMIT, _SCAN_PERMANENT_AFTER
 from app.core.webpanel.webpanel import WebPanel
 
 
@@ -25,6 +27,28 @@ async def test_panel_scanner_paths_and_ua_are_blocked(make_panel_bot):
 
             nikto = await client.get("/admin", headers={"User-Agent": "Mozilla/5.0 Nikto/2.5.0"})
             assert nikto.status == 403
+
+
+@pytest.mark.asyncio
+async def test_panel_scan_ban_escalates_to_permanent(make_panel_bot):
+    bot = make_panel_bot()
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for offense in range(1, _SCAN_PERMANENT_AFTER + 1):
+                for _ in range(_SCAN_LIMIT):
+                    await client.get("/.env")
+                until = next(iter(panel._scan_bans.values()))
+                if offense < _SCAN_PERMANENT_AFTER:
+                    # Срок бана удваивается: 1 ч, 2 ч, 4 ч...
+                    expected = _SCAN_BAN_SECONDS * 2 ** (offense - 1)
+                    assert expected - 5 < until - time.time() <= expected
+                    # Имитируем истечение бана; нарушитель продолжает — растёт следующий.
+                    panel._scan_bans.clear()
+                else:
+                    assert until == float("inf")
+
+            assert (await client.get("/admin")).status == 403
 
 
 @pytest.mark.asyncio

@@ -25,7 +25,9 @@ from app.core.webpanel.payload import (
     _LOGIN_WINDOW,
     _PANEL_ROLE_KEY,
     _SCAN_BAN_SECONDS,
+    _SCAN_FORGET_SECONDS,
     _SCAN_LIMIT,
+    _SCAN_PERMANENT_AFTER,
     _SCAN_WINDOW,
     _SESSION_MAX,
     _SESSION_TTL,
@@ -261,14 +263,24 @@ class _AuthMixin(_BaseApi):
         while hits and hits[0] < now - _SCAN_WINDOW:
             hits.popleft()
         if len(hits) >= _SCAN_LIMIT:
-            self._scan_bans[ip] = now + _SCAN_BAN_SECONDS
             hits.clear()
-            logger.warning("Бан IP за сканирование панели: ip=%s на %d с", ip, int(_SCAN_BAN_SECONDS))
+            count = self._scan_offenses.get(ip, (0, 0.0))[0] + 1
+            until = float("inf") if count >= _SCAN_PERMANENT_AFTER else now + _SCAN_BAN_SECONDS * 2 ** (count - 1)
+            self._scan_bans[ip] = until
+            self._scan_offenses[ip] = (count, until)
+            if until == float("inf"):
+                logger.warning("Бан IP за сканирование панели навсегда: ip=%s (нарушение %d)", ip, count)
+            else:
+                logger.warning(
+                    "Бан IP за сканирование панели: ip=%s на %d с (нарушение %d)", ip, int(until - now), count
+                )
 
     async def _prune_auth_state(self, now: float) -> None:
         """Периодическая очистка: протухшие сессии и попытки входа в памяти, сессии и блокировки в БД."""
         for ip in [ip for ip, until in self._scan_bans.items() if until <= now]:
             self._scan_bans.pop(ip, None)
+        for ip in [ip for ip, (_, until) in self._scan_offenses.items() if until + _SCAN_FORGET_SECONDS <= now]:
+            self._scan_offenses.pop(ip, None)
         cutoff_scan = now - _SCAN_WINDOW
         for ip in [ip for ip, hits in self._scan_hits.items() if not hits or hits[-1] < cutoff_scan]:
             self._scan_hits.pop(ip, None)
