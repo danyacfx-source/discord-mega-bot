@@ -397,7 +397,7 @@ class WebPanel(
         return f"""<!doctype html>
         <html lang="ru"><head><meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>WARDOGS · Асуна Юки</title><style>
+        <title>WARDOGS</title><style>
         *{{box-sizing:border-box}}
         body{{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;
           background:radial-gradient(circle at 20% 10%,#342365 0,transparent 38%),

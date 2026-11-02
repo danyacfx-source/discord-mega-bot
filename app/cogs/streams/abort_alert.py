@@ -6,8 +6,6 @@ from datetime import UTC, datetime
 
 import discord
 
-from app.core.embeds import BOT_NAME
-
 logger = logging.getLogger("bot.cogs")
 
 
@@ -52,7 +50,7 @@ async def abort_alert(
     )
     embed.add_field(name="⏱ Длился", value=f"{round(minutes)} мин", inline=True)
     embed.add_field(name="Порог", value=f"{threshold_minutes} мин", inline=True)
-    embed.set_footer(text=f"Эфир завершился раньше ожидаемого • {BOT_NAME}")
+    embed.set_footer(text="Эфир завершился раньше ожидаемого")
     try:
         await channel.send(embed=embed)
     except discord.HTTPException:

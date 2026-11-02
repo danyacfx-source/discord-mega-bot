@@ -18,7 +18,6 @@ from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.core.embeds import BOT_NAME
 from app.core.stream_state import stream_activity
 from app.services.twitch_service import TwitchService
 
@@ -244,7 +243,7 @@ class TwitchCog(MegaCog, name="TwitchStatus"):
             description=f"**[{clip_title}]({clip_url})**",
             color=0x9146FF,
         )
-        embed.set_footer(text=f"{login} • {BOT_NAME}")
+        embed.set_footer(text=login)
         embed.timestamp = datetime.now(UTC)
         await interaction.followup.send(embed=embed)
 
