@@ -21,6 +21,7 @@ from app.core.webpanel.payload import (
     _RATE_LIMIT_WINDOW,
     _token_key,
 )
+from app.core.webpanel.trusted_proxy import is_trusted_peer
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
@@ -86,14 +87,15 @@ class _BaseApi:
 
     def _rate_key(self, request: web.Request) -> str:
         # Адрес соединения — единственный ключ, который нельзя подделать
-        # извне. Заголовки прокси учитываются только за доверенным прокси:
-        # Cloudflare передаёт реальный адрес клиента в CF-Connecting-IP.
-        if self._trusted_proxy:
+        # извне. Заголовки прокси берём только если соединение пришло с
+        # диапазона Cloudflare: иначе их подставит любой, кто достучался до порта.
+        peer = request.remote or "?"
+        if self._trusted_proxy and is_trusted_peer(peer, self._trusted_networks):
             for header in ("CF-Connecting-IP", "X-Forwarded-For"):
                 client = request.headers.get(header, "").split(",")[0].strip()
                 if client:
                     return client
-        return request.remote or "?"
+        return peer
 
     def _rate_ok(self, request: web.Request) -> bool:
         key = self._rate_key(request)
