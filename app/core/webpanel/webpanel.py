@@ -6,6 +6,7 @@ import html
 import logging
 import re
 import secrets
+import time
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -54,6 +55,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("bot.webpanel")
 
+
+
+_MAINTENANCE_INTERVAL_SECONDS = 600.0
 
 
 class WebPanel(
@@ -133,6 +137,7 @@ class WebPanel(
         #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
         self._login_gc: int = 0
         self._runner: web.AppRunner | None = None
+        self._maintenance_task: asyncio.Task | None = None
         self._http: aiohttp.ClientSession | None = None
         self._ring: RingBufferHandler | None = None
         self._lat: deque[dict[str, Any]] = deque(maxlen=90)
@@ -241,6 +246,7 @@ class WebPanel(
                 self.port,
             )
         access_log_filter.install()
+        await self._restore_sessions()
         runner = web.AppRunner(self._create_app())
         try:
             await runner.setup()
@@ -261,9 +267,26 @@ class WebPanel(
         attach_redaction(self._ring)
         logging.getLogger().addHandler(self._ring)
         self._events_task = asyncio.create_task(self._events_loop())
+        self._maintenance_task = asyncio.create_task(self._maintenance_loop())
         logger.info("Вебпанель запущена: http://%s:%d/admin", self.host, self.port)
 
+    async def _maintenance_loop(self) -> None:
+        """Фоновая очистка: без неё сессии и попытки входа копятся до рестарта."""
+        while True:
+            await asyncio.sleep(_MAINTENANCE_INTERVAL_SECONDS)
+            try:
+                await self._prune_auth_state(time.time())
+            except Exception:
+                logger.warning("Сбой очистки памяти вебпанели", exc_info=True)
+
     async def stop(self) -> None:
+        if self._maintenance_task is not None:
+            self._maintenance_task.cancel()
+            try:
+                await self._maintenance_task
+            except asyncio.CancelledError:
+                pass
+            self._maintenance_task = None
         if self._analytics_task is not None:
             self._analytics_task.cancel()
             try:

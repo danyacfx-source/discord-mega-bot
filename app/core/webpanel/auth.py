@@ -26,9 +26,11 @@ from app.core.webpanel.payload import (
     _PANEL_ROLE_KEY,
     _SESSION_MAX,
     _SESSION_TTL,
+    _token_key,
 )
 from app.db.admin_audit_repository import AdminAuditRepository
 from app.db.panel_login_lock_repository import PanelLoginLockRepository
+from app.db.panel_session_repository import PanelSessionRepository
 
 logger = logging.getLogger("bot.webpanel")
 
@@ -192,14 +194,75 @@ class _AuthMixin(_BaseApi):
         return self._check_token_value(request.headers.get("X-Panel-Token", ""))
 
     def _csrf_for_token(self, token: str) -> str | None:
-        session = self._sessions.get(token)
+        session = self._sessions.get(_token_key(token))
         if session is None or session["expires"] <= time.time():
             return None
         return session["csrf"]
 
+    def _session_repo(self) -> PanelSessionRepository | None:
+        db = self.bot.db
+        return PanelSessionRepository(db) if db is not None else None
+
+    async def _store_session(self, token: str, role: str, csrf: str, expires: float) -> None:
+        """Сессия живёт в памяти для быстрых проверок и в БД — переживает рестарт.
+
+        Ошибка БД не валит вход: сессия остаётся в памяти до рестарта.
+        """
+        key = _token_key(token)
+        self._sessions[key] = {"expires": expires, "role": role, "csrf": csrf}
+        if len(self._sessions) > _SESSION_MAX:
+            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        repo = self._session_repo()
+        if repo is None:
+            return
+        try:
+            await repo.save(key, role, csrf, expires)
+        except Exception:
+            logger.warning("Не удалось сохранить сессию панели в БД — только в памяти", exc_info=True)
+
+    async def _drop_session(self, key: str) -> None:
+        self._sessions.pop(key, None)
+        repo = self._session_repo()
+        if repo is None:
+            return
+        try:
+            await repo.delete(key)
+        except Exception:
+            logger.warning("Не удалось удалить сессию панели из БД", exc_info=True)
+
+    async def _restore_sessions(self) -> None:
+        """Поднимает живые сессии из БД после рестарта процесса."""
+        repo = self._session_repo()
+        if repo is None:
+            return
+        try:
+            rows = await repo.load_active(time.time())
+        except Exception:
+            logger.warning("Не удалось восстановить сессии панели из БД", exc_info=True)
+            return
+        for key, role, csrf, expires in rows:
+            self._sessions[key] = {"expires": expires, "role": role, "csrf": csrf}
+        if rows:
+            logger.info("Восстановлено сессий панели из БД: %d", len(rows))
+
+    async def _prune_auth_state(self, now: float) -> None:
+        """Периодическая очистка: протухшие сессии и попытки входа в памяти, сессии и блокировки в БД."""
+        for key in [key for key, session in self._sessions.items() if session["expires"] <= now]:
+            self._sessions.pop(key, None)
+        cutoff = now - _LOGIN_WINDOW
+        for key in [key for key, bucket in self._login_attempts.items() if not bucket or bucket[-1] < cutoff]:
+            self._login_attempts.pop(key, None)
+        repo = self._session_repo()
+        if repo is not None:
+            try:
+                await repo.prune(now)
+            except Exception:
+                logger.warning("Не удалось очистить протухшие сессии в БД", exc_info=True)
+        await self._login_prune(now)
+
     async def _api_logout(self, request: web.Request) -> web.Response:
         token = request.headers.get("X-Panel-Token", "")
-        self._sessions.pop(token, None)
+        await self._drop_session(_token_key(token))
         return self._json({"ok": True})
 
     async def _api_session(self, request: web.Request) -> web.Response:
@@ -316,9 +379,7 @@ class _AuthMixin(_BaseApi):
 
         session_token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
-        self._sessions[session_token] = {"expires": time.time() + _SESSION_TTL, "role": role, "csrf": csrf}
-        if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        await self._store_session(session_token, role, csrf, time.time() + _SESSION_TTL)
         # Токен уходит во fragment: он не попадает ни в access-log сервера,
         # ни в историю запросов, в отличие от query-строки.
         query = urlencode({"oauth_token": session_token, "oauth_csrf": csrf})
@@ -498,7 +559,5 @@ class _AuthMixin(_BaseApi):
         await self._login_unlock(ip)
         token = secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(32)
-        self._sessions[token] = {"expires": now + _SESSION_TTL, "role": role, "csrf": csrf}
-        if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
+        await self._store_session(token, role, csrf, now + _SESSION_TTL)
         return self._json({"ok": True, "token": token, "role": role, "csrf": csrf})

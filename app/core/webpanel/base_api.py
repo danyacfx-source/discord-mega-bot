@@ -19,8 +19,7 @@ from app.core.webpanel.payload import (
     _LOCAL_HOSTS,
     _RATE_LIMIT_MAX,
     _RATE_LIMIT_WINDOW,
-    _SESSION_MAX,
-    _PanelSession,
+    _token_key,
 )
 
 if TYPE_CHECKING:
@@ -164,14 +163,7 @@ class _BaseApi:
         if not self._password_auth and not self._oauth_enabled:
             return "owner" if self._static_token and secrets.compare_digest(token, self._static_token) else None
         now = time.time()
-        active: dict[str, _PanelSession] = {}
-        role: str | None = None
-        for saved, session in self._sessions.items():
-            if session["expires"] > now:
-                active[saved] = session
-                if secrets.compare_digest(token, saved):
-                    role = session["role"]
-        self._sessions = active
-        if len(self._sessions) > _SESSION_MAX:
-            self._sessions = dict(sorted(self._sessions.items(), key=lambda item: item[1]["expires"])[:_SESSION_MAX])
-        return role
+        session = self._sessions.get(_token_key(token))
+        if session is None or session["expires"] <= now:
+            return None
+        return session["role"]

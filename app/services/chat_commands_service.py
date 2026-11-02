@@ -199,7 +199,7 @@ class ChatCommandsService:
             return
         try:
             text = await asyncio.wait_for(handler(self, msg, rest.strip()), timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("ChatCommands: timeout на команде !%s (%s)", cmd, msg.platform)
             return
         except Exception:
