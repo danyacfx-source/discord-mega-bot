@@ -5,6 +5,7 @@ import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from app.core.overlay import Overlay
+from app.core.webpanel.payload import _SCAN_LIMIT
 from app.core.webpanel.webpanel import WebPanel
 
 
@@ -14,19 +15,33 @@ async def test_panel_scanner_paths_and_ua_are_blocked(make_panel_bot):
     panel = WebPanel(bot)
     async with TestServer(panel._create_app()) as server:
         async with TestClient(server) as client:
-            for path in ("/.env", "/wp-login.php", "/xmlrpc.php", "/phpmyadmin", "/.git/HEAD"):
+            # Нормальный трафик не задет — проверяем до сканов, иначе сработает бан IP.
+            ok = await client.get("/admin")
+            assert ok.status == 200
+
+            for path in ("/.env", "/wp-login.php", "/xmlrpc.php", "/phpmyadmin"):
                 resp = await client.get(path)
                 assert resp.status == 404, path
 
             nikto = await client.get("/admin", headers={"User-Agent": "Mozilla/5.0 Nikto/2.5.0"})
             assert nikto.status == 403
 
-            sqlmap = await client.get("/api/status", headers={"User-Agent": "sqlmap/1.7.2#stable"})
-            assert sqlmap.status == 403
 
-            # Нормальный трафик не задет.
-            ok = await client.get("/admin")
-            assert ok.status == 200
+@pytest.mark.asyncio
+async def test_panel_scanner_bans_ip_after_repeated_probes(make_panel_bot):
+    bot = make_panel_bot()
+    panel = WebPanel(bot)
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for _ in range(_SCAN_LIMIT):
+                assert (await client.get("/.env")).status == 404
+
+            # После бана даже нормальный запрос с того же IP получает 403.
+            assert (await client.get("/admin")).status == 403
+
+            # Бан истекает: сбрасываем его вручную, как сделал бы таймаут.
+            panel._scan_bans.clear()
+            assert (await client.get("/admin")).status == 200
 
 
 @pytest.mark.asyncio

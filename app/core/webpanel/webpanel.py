@@ -134,6 +134,9 @@ class WebPanel(
         self._rate_hits: dict[str, deque[float]] = defaultdict(deque)
         self._rate_gc: int = 0
         self._login_attempts: dict[str, deque[float]] = defaultdict(deque)
+        #: Попадания сканеров по IP и баны; в памяти, сбрасываются при рестарте.
+        self._scan_hits: dict[str, deque[float]] = defaultdict(deque)
+        self._scan_bans: dict[str, float] = {}
         #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
         self._login_gc: int = 0
         self._runner: web.AppRunner | None = None

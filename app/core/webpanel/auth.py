@@ -24,6 +24,9 @@ from app.core.webpanel.payload import (
     _LOGIN_LOCK_SECONDS,
     _LOGIN_WINDOW,
     _PANEL_ROLE_KEY,
+    _SCAN_BAN_SECONDS,
+    _SCAN_LIMIT,
+    _SCAN_WINDOW,
     _SESSION_MAX,
     _SESSION_TTL,
     _token_key,
@@ -46,9 +49,15 @@ class _AuthMixin(_BaseApi):
     @web.middleware
     async def _security_middleware(self, request: web.Request, handler: Any) -> web.Response:
         # Сканеры глушим до rate-лимита и хендлеров: пустые 404/403 без логов.
+        ip = self._rate_key(request)
+        now = time.time()
+        if self._scan_bans.get(ip, 0.0) > now:
+            return web.Response(status=403)
         if is_scanner_ua(request.headers.get("User-Agent", "")):
+            self._note_scan(ip, now)
             return web.Response(status=403)
         if is_scanner_path(request.path):
+            self._note_scan(ip, now)
             return web.Response(status=404, text="Not Found")
         # Страницы, статика и прочие не-API маршруты не проходят через
         # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
@@ -245,8 +254,24 @@ class _AuthMixin(_BaseApi):
         if rows:
             logger.info("Восстановлено сессий панели из БД: %d", len(rows))
 
+    def _note_scan(self, ip: str, now: float) -> None:
+        """Считает попадание сканера; после _SCAN_LIMIT за _SCAN_WINDOW — бан IP."""
+        hits = self._scan_hits[ip]
+        hits.append(now)
+        while hits and hits[0] < now - _SCAN_WINDOW:
+            hits.popleft()
+        if len(hits) >= _SCAN_LIMIT:
+            self._scan_bans[ip] = now + _SCAN_BAN_SECONDS
+            hits.clear()
+            logger.warning("Бан IP за сканирование панели: ip=%s на %d с", ip, int(_SCAN_BAN_SECONDS))
+
     async def _prune_auth_state(self, now: float) -> None:
         """Периодическая очистка: протухшие сессии и попытки входа в памяти, сессии и блокировки в БД."""
+        for ip in [ip for ip, until in self._scan_bans.items() if until <= now]:
+            self._scan_bans.pop(ip, None)
+        cutoff_scan = now - _SCAN_WINDOW
+        for ip in [ip for ip, hits in self._scan_hits.items() if not hits or hits[-1] < cutoff_scan]:
+            self._scan_hits.pop(ip, None)
         for key in [key for key, session in self._sessions.items() if session["expires"] <= now]:
             self._sessions.pop(key, None)
         cutoff = now - _LOGIN_WINDOW

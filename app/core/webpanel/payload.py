@@ -34,6 +34,10 @@ _LOGIN_LIMIT = 5
 #: Durable-блокировка после _LOGIN_LIMIT неудач: живёт в БД (panel_login_attempts),
 #: поэтому рестарт контейнера брутфорсу не помогает.
 _LOGIN_LOCK_SECONDS = 900.0
+#: Бан IP за сканирование: _SCAN_LIMIT попаданий на ловушки-пути и сканерские UA за _SCAN_WINDOW.
+_SCAN_WINDOW = 300.0
+_SCAN_LIMIT = 5
+_SCAN_BAN_SECONDS = 3600.0
 _SESSION_TTL = 24 * 3600
 _SESSION_MAX = 2000
 
