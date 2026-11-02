@@ -1,5 +1,4 @@
 """Smoke-тест: полная сборка бота без подключения к Discord."""
-import os
 import tempfile
 
 import pytest
@@ -9,12 +8,12 @@ from app.core.bot import MegaBot
 
 
 @pytest.mark.asyncio
-async def test_bot_bootstrap():
+async def test_bot_bootstrap(pg_url):
     with tempfile.TemporaryDirectory() as tmp:
         config = Config(
             token="dummy-token",
             prefix="!",
-            db_path=os.path.join(tmp, "bot.db"),
+            data_dir=tmp, database_url=pg_url,
             log_level="ERROR",
             status_activity="test",
             owner_id=None,

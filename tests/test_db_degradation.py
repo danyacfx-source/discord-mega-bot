@@ -5,58 +5,61 @@
 """
 from __future__ import annotations
 
-import sqlite3
 import time
-from pathlib import Path
 from typing import Any
+
+import asyncpg
 
 from app.db.database import Database, _is_availability_error
 from app.services.settings_service import SettingsService
 
+_URL = "postgresql://u:p@localhost:5432/x"
+
 
 def test_storage_error_is_availability_error() -> None:
-    assert _is_availability_error(sqlite3.OperationalError("database is locked"))
-    assert _is_availability_error(sqlite3.OperationalError("disk I/O error"))
-    assert _is_availability_error(sqlite3.DatabaseError("database disk image is malformed"))
     assert _is_availability_error(ConnectionError("connection refused"))
+    assert _is_availability_error(TimeoutError("timeout"))
+    assert _is_availability_error(OSError("network unreachable"))
+    assert _is_availability_error(asyncpg.CannotConnectNowError("starting up"))
+    assert _is_availability_error(asyncpg.ConnectionDoesNotExistError("closed"))
 
 
 def test_sql_error_is_not_availability_error() -> None:
-    assert not _is_availability_error(sqlite3.OperationalError("no such table: foo"))
-    assert not _is_availability_error(sqlite3.OperationalError("near 'SELCT': syntax error"))
-    assert not _is_availability_error(sqlite3.IntegrityError("UNIQUE constraint failed: kv.key"))
+    assert not _is_availability_error(asyncpg.UndefinedTableError("relation foo does not exist"))
+    assert not _is_availability_error(asyncpg.PostgresSyntaxError("syntax error"))
+    assert not _is_availability_error(asyncpg.UniqueViolationError("duplicate key"))
     assert not _is_availability_error(ValueError("БД не подключена"))
 
 
 def test_three_storage_failures_mark_database_unavailable() -> None:
-    db = Database("unused.db")
+    db = Database(_URL)
     assert db.available
 
     for _ in range(3):
-        db._note_failure(sqlite3.OperationalError("database is locked"))
+        db._note_failure(ConnectionError("connection refused"))
 
     assert not db.available
     assert db.consecutive_failures == 3
-    assert db.last_error is not None and "database is locked" in db.last_error
+    assert db.last_error is not None and "connection refused" in db.last_error
 
 
 def test_sql_errors_never_mark_database_unavailable() -> None:
-    db = Database("unused.db")
+    db = Database(_URL)
     for _ in range(10):
-        db._note_failure(sqlite3.OperationalError("no such table: settings"))
+        db._note_failure(asyncpg.UndefinedTableError("relation settings does not exist"))
 
     assert db.available
     assert db.consecutive_failures == 0
 
 
-async def test_successful_query_recovers_state(tmp_path: Path) -> None:
-    db = Database(str(tmp_path / "recovery.db"))
+async def test_successful_query_recovers_state(pg_url: str) -> None:
+    db = Database(pg_url)
     await db.connect()
     for _ in range(3):
-        db._note_failure(sqlite3.OperationalError("database is locked"))
+        db._note_failure(ConnectionError("connection refused"))
     assert not db.available
 
-    row = await db.fetchone("SELECT 1")
+    row = await db.fetchone("SELECT 1 AS one")
     assert row is not None
     assert db.available
     assert db.consecutive_failures == 0
@@ -64,12 +67,12 @@ async def test_successful_query_recovers_state(tmp_path: Path) -> None:
     await db.close()
 
 
-async def test_queries_still_work_while_degraded(tmp_path: Path) -> None:
+async def test_queries_still_work_while_degraded(pg_url: str) -> None:
     """Degraded — это сигнал для health, а не блокировка работы."""
-    db = Database(str(tmp_path / "degraded.db"))
+    db = Database(pg_url)
     await db.connect()
     for _ in range(3):
-        db._note_failure(sqlite3.OperationalError("database is locked"))
+        db._note_failure(ConnectionError("connection refused"))
     assert not db.available
 
     await db.execute("INSERT INTO kv(key, value) VALUES (?, ?)", ("k", "v"))
@@ -89,7 +92,7 @@ class _FlakyRepo:
     async def get(self, guild_id: int) -> dict[str, Any]:
         self.calls += 1
         if self.broken:
-            raise sqlite3.OperationalError("database is locked")
+            raise ConnectionError("connection refused")
         return {"prefix": "!", "automod_enabled": 1, "blocked_words": None}
 
 
@@ -123,7 +126,7 @@ async def test_settings_without_cache_still_raise() -> None:
 
     try:
         await service.get(42)
-    except sqlite3.OperationalError:
+    except ConnectionError:
         pass
     else:
         raise AssertionError("без кеша ошибка должна пройти наружу")

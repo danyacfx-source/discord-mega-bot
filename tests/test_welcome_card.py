@@ -18,7 +18,6 @@ def _config(**overrides) -> Config:
     config = Config(
         token="x",
         prefix="!",
-        db_path="bot.db",
         log_level="ERROR",
         status_activity="s",
         owner_id=None,

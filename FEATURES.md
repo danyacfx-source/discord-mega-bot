@@ -1,6 +1,6 @@
 # Discord Mega Bot — структура и возможности
 
-Версия: **3.5.0** · discord.py 2.x · Python 3.11+ · SQLite (aiosqlite)
+Версия: **3.5.0** · discord.py 2.x · Python 3.11+ · PostgreSQL (asyncpg)
 
 ---
 
@@ -9,7 +9,7 @@
 ```
 discord-mega-bot/
 ├── main.py                    # точка входа: запуск бота (логи, исключения, graceful shutdown)
-├── requirements.txt           # прод-зависимости (discord.py, aiosqlite, python-dotenv, yt-dlp, PyNaCl, psutil)
+├── requirements.txt           # прод-зависимости (discord.py, asyncpg, python-dotenv, yt-dlp, PyNaCl, psutil)
 ├── requirements-dev.txt       # pytest, ruff
 ├── pyproject.toml             # конфиг ruff (line-length 140) и pytest (asyncio_mode=auto)
 ├── .env.example               # шаблон конфигурации
@@ -186,7 +186,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 `play` · `skip [n]` · `skipvote` · `seek` · `history` · `stop` · `pause` · `resume` · `nowplaying` · `queue` · `shuffle` · `remove` · `volume 0-200` · `loop` · `leave`
 `playlist save/load/list/delete/import` (YouTube/Spotify при заданных Spotify Client Credentials)
 - Очередь на сервер, повтор трека, авто-выход при пустой очереди через 60 сек
-- Плейлисты хранятся в SQLite, ограничены 100 треками, а stream URL обновляется при загрузке
+- Плейлисты хранятся в PostgreSQL, ограничены 100 треками, а stream URL обновляется при загрузке
 
 ### Администрирование
 - Тикеты: `/ticket panel` (кнопка 🎫), закрытие 🔒, транскрипты в отдельный канал
@@ -205,7 +205,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 
 Фоновая проверка каждые 30 сек: напоминание уходит в канал или в ЛС. Команды доступны и в личных сообщениях. Переживает рестарт (хранится в БД).
 
-Для защиты от дублей несколько экземпляров бота используют SQLite lease-claim: одно напоминание или scheduled-сообщение в каждый момент обрабатывает только один worker.
+Для защиты от дублей несколько экземпляров бота используют lease-claim в PostgreSQL: одно напоминание или scheduled-сообщение в каждый момент обрабатывает только один worker.
 
 ### Опросы (Polls)
 - `/poll <вопрос> <вариант1…5>` — 2–5 вариантов, голосование кнопками, счётчики в реальном времени
@@ -524,7 +524,7 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 
 ---
 
-## Схема БД (SQLite, WAL)
+## Схема БД (PostgreSQL)
 
 - `guild_settings` — настройки сервера (каналы, автомод, стоп-слова JSON)
 - `warns` — предупреждения
@@ -571,7 +571,8 @@ app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVI
 |---|---|
 | `BOT_TOKEN` | — (обязательна) |
 | `BOT_PREFIX` | `!` (зарезерв legacy-команд) |
-| `DB_PATH` | `data/bot.db` |
+| `DATABASE_URL` | — (обязательна, `postgresql://...`) |
+| `DATA_DIR` | `data` |
 | `LOG_LEVEL` | `INFO` |
 | `STATUS_ACTIVITY` | `играет с кодом` |
 | `OWNER_ID` | пусто |

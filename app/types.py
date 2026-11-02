@@ -1,8 +1,7 @@
 """Typed row contracts shared by repositories and services.
 
-SQLite returns dynamically shaped rows. Keeping the public contracts here makes
-the service layer explicit without pretending that a raw ``aiosqlite.Row`` is
-already type-safe.
+Строки из БД приходят динамическими словарями. Публичные контракты лежат здесь,
+чтобы сервисный слой был явным и не делал вид, что сырая строка уже типобезопасна.
 """
 from __future__ import annotations
 

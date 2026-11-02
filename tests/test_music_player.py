@@ -137,8 +137,8 @@ async def test_music_queue_tools_are_safe() -> None:
     assert player.resume() is False
 
 
-async def test_music_playlists_round_trip(tmp_path) -> None:
-    database = Database(str(tmp_path / "music.db"))
+async def test_music_playlists_round_trip(tmp_path, pg_url) -> None:
+    database = Database(pg_url)
     await database.connect()
     try:
         repo = MusicRepository(database)

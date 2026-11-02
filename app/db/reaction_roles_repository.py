@@ -9,8 +9,8 @@ from app.db.base_repository import BaseRepository
 class ReactionRolesRepository(BaseRepository):
     async def add(self, guild_id: int, channel_id: int, message_id: int, role_id: int, emoji: str) -> bool:
         cursor = await self.db.execute(
-            "INSERT OR IGNORE INTO reaction_roles (guild_id, channel_id, message_id, role_id, emoji) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO reaction_roles (guild_id, channel_id, message_id, role_id, emoji) "
+            "VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
             (guild_id, channel_id, message_id, role_id, emoji),
         )
         return cursor.rowcount > 0

@@ -9,11 +9,11 @@ from app.core.bot import MegaBot
 from app.core.webpanel.webpanel import WebPanel
 
 
-def _panel(tmp_path) -> MegaBot:
+def _panel(tmp_path, pg_url) -> MegaBot:
     config = Config(
         token="x",
         prefix="!",
-        db_path=str(tmp_path / "bot.db"),
+        data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
@@ -23,8 +23,8 @@ def _panel(tmp_path) -> MegaBot:
 
 
 @pytest.mark.asyncio
-async def test_public_showcase_and_settings(tmp_path):
-    bot = _panel(tmp_path)
+async def test_public_showcase_and_settings(tmp_path, pg_url):
+    bot = _panel(tmp_path, pg_url)
     await bot.setup_hook()
     panel = WebPanel(bot)
     headers = {"X-Panel-Token": panel._static_token or ""}
@@ -143,8 +143,8 @@ async def test_public_showcase_and_settings(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_showcase_corrupt_settings_degrade(tmp_path):
-    bot = _panel(tmp_path)
+async def test_showcase_corrupt_settings_degrade(tmp_path, pg_url):
+    bot = _panel(tmp_path, pg_url)
     await bot.setup_hook()
     panel = WebPanel(bot)
     try:

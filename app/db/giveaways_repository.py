@@ -27,7 +27,7 @@ class GiveawaysRepository(BaseRepository):
             (guild_id, channel_id, author_id, prize, winners, ends_at.isoformat(), _now_iso(), min_days),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID розыгрыша")
+            raise RuntimeError("БД не вернула ID розыгрыша")
         return int(cursor.lastrowid)
 
     async def set_message_id(self, giveaway_id: int, message_id: int) -> None:
@@ -79,7 +79,7 @@ class GiveawaysRepository(BaseRepository):
 
     async def add_entry(self, giveaway_id: int, user_id: int) -> bool:
         cursor = await self.db.execute(
-            "INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?)",
+            "INSERT INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
             (giveaway_id, user_id),
         )
         return cursor.rowcount > 0

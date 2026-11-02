@@ -48,7 +48,7 @@ _SETTING_SQL_COLUMNS = {column: column for column in DEFAULT_SETTINGS}
 
 class SettingsRepository(BaseRepository):
     async def ensure_row(self, guild_id: int) -> None:
-        await self.db.execute("INSERT OR IGNORE INTO guild_settings (guild_id) VALUES (?)", (guild_id,))
+        await self.db.execute("INSERT INTO guild_settings (guild_id) VALUES (?) ON CONFLICT DO NOTHING", (guild_id,))
 
     async def get(self, guild_id: int) -> dict[str, Any]:
         row = await self.db.fetchone("SELECT * FROM guild_settings WHERE guild_id = ?", (guild_id,))

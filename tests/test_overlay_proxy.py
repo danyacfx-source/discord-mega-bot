@@ -12,11 +12,11 @@ from app.core.webpanel.webpanel import WebPanel
 _TOKEN = "overlay-secret-token-32chars"
 
 
-def _bot(tmp_path, panel_port: int, **overrides) -> MegaBot:
+def _bot(tmp_path, pg_url, panel_port: int, **overrides) -> MegaBot:
     config = Config(
         token="x",
         prefix="!",
-        db_path=str(tmp_path / "bot.db"),
+        data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
@@ -27,8 +27,8 @@ def _bot(tmp_path, panel_port: int, **overrides) -> MegaBot:
 
 
 @pytest.mark.asyncio
-async def test_overlay_proxy_end_to_end(tmp_path) -> None:
-    bot = _bot(tmp_path, 17895, overlay_port=18770, overlay_token=_TOKEN)
+async def test_overlay_proxy_end_to_end(tmp_path, pg_url) -> None:
+    bot = _bot(tmp_path, pg_url, 17895, overlay_port=18770, overlay_token=_TOKEN)
     await bot.setup_hook()
     panel = WebPanel(bot)
     try:
@@ -52,8 +52,8 @@ async def test_overlay_proxy_end_to_end(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_overlay_proxy_offline_returns_502(tmp_path) -> None:
-    bot = _bot(tmp_path, 17896, overlay_port=18771, overlay_token=_TOKEN)
+async def test_overlay_proxy_offline_returns_502(tmp_path, pg_url) -> None:
+    bot = _bot(tmp_path, pg_url, 17896, overlay_port=18771, overlay_token=_TOKEN)
     await bot.setup_hook()
     panel = WebPanel(bot)
     try:
@@ -68,8 +68,8 @@ async def test_overlay_proxy_offline_returns_502(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_overlay_proxy_disabled_returns_404(tmp_path) -> None:
-    bot = _bot(tmp_path, 17897)
+async def test_overlay_proxy_disabled_returns_404(tmp_path, pg_url) -> None:
+    bot = _bot(tmp_path, pg_url, 17897)
     await bot.setup_hook()
     panel = WebPanel(bot)
     try:

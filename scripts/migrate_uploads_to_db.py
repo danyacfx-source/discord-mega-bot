@@ -37,22 +37,20 @@ _GALLERY_KEY = "panel.media.gallery"
 
 
 def _uploads_dir() -> Path:
-    db_path = os.getenv("DB_PATH", "data/bot.db")
-    return Path(db_path).parent / "uploads"
+    data_dir = os.getenv("DATA_DIR", "").strip()
+    if not data_dir and os.getenv("DB_PATH", "").strip():
+        data_dir = str(Path(os.environ["DB_PATH"]).parent)
+    return Path(data_dir or "data") / "uploads"
 
 
 async def main() -> int:
     database_url = os.getenv("DATABASE_URL", "")
-    db_path = os.getenv("DB_PATH", "data/bot.db")
-    db = Database(database_url or db_path)
-    await db.connect()
+    if not database_url:
+        print("[migrate] не задан DATABASE_URL (PostgreSQL)", file=sys.stderr)
+        return 1
+    db = Database(database_url)
+    await db.connect()  # схема, включая media_files, создаётся при подключении
     try:
-        blob = "BYTEA" if db.is_postgres else "BLOB"
-        await db.execute(
-            f"CREATE TABLE IF NOT EXISTS media_files ("
-            f"name TEXT PRIMARY KEY, bytes {blob} NOT NULL, mime TEXT NOT NULL, "
-            f"size INTEGER NOT NULL, created_at TEXT NOT NULL)"
-        )
 
         uploads = _uploads_dir()
         migrated = 0

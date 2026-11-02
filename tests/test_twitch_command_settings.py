@@ -141,7 +141,7 @@ async def test_global_twitch_pause_stops_replies_but_not_chat_ingestion() -> Non
 @pytest.mark.asyncio
 async def test_twitch_commands_web_api(make_panel_bot) -> None:
     bot = make_panel_bot(twitch_channels=("channel",))
-    database = Database(bot.config.db_path)
+    database = Database(bot.config.database_url)
     await database.connect()
     assemble(config=bot.config, db=database, bot=bot)
     panel = WebPanel(bot)

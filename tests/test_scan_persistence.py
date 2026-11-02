@@ -12,7 +12,7 @@ from app.db.database import Database
 
 
 async def _boot_db(bot) -> None:
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
 
 

@@ -39,11 +39,12 @@ class _KV:
         return self.data.pop(key, None) is not None
 
 
-def _config(tmp_path, **overrides) -> Config:
+def _config(tmp_path, pg_url, **overrides) -> Config:
     values = {
         "token": "x",
         "prefix": "!",
-        "db_path": str(tmp_path / "bot.db"),
+        "data_dir": str(tmp_path),
+        "database_url": pg_url,
         "log_level": "ERROR",
         "status_activity": "s",
         "owner_id": None,
@@ -132,8 +133,8 @@ async def test_layout_kv_roundtrip() -> None:
 
 
 @pytest.mark.asyncio
-async def test_overlay_layout_page_and_api(tmp_path) -> None:
-    config = _config(tmp_path, overlay_token="overlay-secret-token-32chars")
+async def test_overlay_layout_page_and_api(tmp_path, pg_url) -> None:
+    config = _config(tmp_path, pg_url, overlay_token="overlay-secret-token-32chars")
     bot = MegaBot(config)
     await bot.setup_hook()
     overlay = Overlay(bot)
@@ -169,8 +170,8 @@ async def test_overlay_layout_page_and_api(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_webpanel_overlay_api_roundtrip(tmp_path) -> None:
-    config = _config(tmp_path, panel_port=17894)
+async def test_webpanel_overlay_api_roundtrip(tmp_path, pg_url) -> None:
+    config = _config(tmp_path, pg_url, panel_port=17894)
     bot = MegaBot(config)
     await bot.setup_hook()
     panel = WebPanel(bot)
@@ -209,8 +210,8 @@ async def test_webpanel_overlay_api_roundtrip(tmp_path) -> None:
         await bot.close()
 
 
-def test_overlay_url_base(tmp_path) -> None:
-    cfg = _config(tmp_path, overlay_port=8765, overlay_host="0.0.0.0", overlay_public_url="https://dendich.ru")
+def test_overlay_url_base(tmp_path, pg_url) -> None:
+    cfg = _config(tmp_path, pg_url, overlay_port=8765, overlay_host="0.0.0.0", overlay_public_url="https://dendich.ru")
     assert overlay_url_base(cfg) == "https://dendich.ru"
     object.__setattr__(cfg, "overlay_public_url", None)
     assert overlay_url_base(cfg) == ""
@@ -221,8 +222,8 @@ def test_overlay_url_base(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_overlay_page(tmp_path) -> None:
-    config = _config(tmp_path, overlay_token="overlay-secret-token-32chars")
+async def test_chat_overlay_page(tmp_path, pg_url) -> None:
+    config = _config(tmp_path, pg_url, overlay_token="overlay-secret-token-32chars")
     bot = MegaBot(config)
     await bot.setup_hook()
     overlay = Overlay(bot)

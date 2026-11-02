@@ -154,7 +154,7 @@ class MusicRepository(BaseRepository):
         await self.db.execute(
             """
             INSERT INTO music_history(guild_id, user_id, title, url, duration, played_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP::text)
             """,
             (guild_id, user_id, track.title[:256], track.url[:2048], track.duration),
         )

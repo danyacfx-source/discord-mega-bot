@@ -70,7 +70,9 @@ class MegaBot(commands.Bot):
         from app.core.loader import load_cogs, register_persistent_views
         from app.db.database import Database
 
-        self.db = Database(self.config.database_url or self.config.db_path)
+        if not self.config.database_url:
+            raise RuntimeError("Не задан DATABASE_URL: бот работает только с PostgreSQL")
+        self.db = Database(self.config.database_url)
         await self.db.connect()
         from app.db.backup_manager import DatabaseBackupManager
 
@@ -102,9 +104,8 @@ class MegaBot(commands.Bot):
             self.overlay = Overlay(self)
             await self.overlay.start()
         await self._sync_commands()
-        # Запускаем первый backup только после bootstrap: SQLite backup API
-        # использует очередь того же aiosqlite-соединения и не должен
-        # конкурировать с регистрацией persistent views на старте.
+        # Запускаем первый backup только после bootstrap, чтобы pg_dump не
+        # конкурировал с регистрацией persistent views на старте.
         if self.db_backups is not None:
             self.db_backups.start()
         logger.info("Хук установки завершён: когов %d, views зарегистрированы", len(loaded))
@@ -369,7 +370,7 @@ class MegaBot(commands.Bot):
             try:
                 await backups.stop()
             except Exception:
-                logger.exception("Ошибка при остановке планировщика SQLite backup")
+                logger.exception("Ошибка при остановке планировщика backup БД")
             self.db_backups = None
         try:
             await super().close()

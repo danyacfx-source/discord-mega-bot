@@ -17,7 +17,7 @@ class PollsRepository(BaseRepository):
             (guild_id, channel_id, author_id, question, json.dumps(options, ensure_ascii=False), _now_iso()),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID опроса")
+            raise RuntimeError("БД не вернула ID опроса")
         return int(cursor.lastrowid)
 
     async def set_message_id(self, poll_id: int, message_id: int) -> None:
@@ -52,7 +52,8 @@ class PollsRepository(BaseRepository):
         if current is not None and int(current["option"]) == option:
             return 0
         await self.db.execute(
-            "INSERT OR REPLACE INTO poll_votes (poll_id, user_id, option) VALUES (?, ?, ?)",
+            "INSERT INTO poll_votes (poll_id, user_id, option) VALUES (?, ?, ?) "
+            "ON CONFLICT (poll_id, user_id) DO UPDATE SET option = EXCLUDED.option",
             (poll_id, user_id, option),
         )
         return 1 if current is not None else 2

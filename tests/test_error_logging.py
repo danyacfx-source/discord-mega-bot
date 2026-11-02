@@ -20,7 +20,6 @@ def _bot() -> MegaBot:
     bot.config = Config(
         token="x",
         prefix="!",
-        db_path=":memory:",
         log_level="ERROR",
         status_activity="s",
         owner_id=None,

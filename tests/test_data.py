@@ -1,5 +1,4 @@
-"""Интеграционные тесты репозиториев (SQLite в памяти/файл)."""
-import os
+"""Интеграционные тесты репозиториев (PostgreSQL)."""
 
 import pytest
 
@@ -11,8 +10,8 @@ from app.services.settings_service import SettingsService
 
 
 @pytest.fixture
-async def db(tmp_path):
-    database = Database(os.path.join(tmp_path, "test.db"))
+async def db(tmp_path, pg_url):
+    database = Database(pg_url)
     await database.connect()
     try:
         yield database

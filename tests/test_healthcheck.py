@@ -51,11 +51,10 @@ def test_panel_401_is_alive(monkeypatch) -> None:
 
 
 def test_panel_token_read_beside_db(tmp_path, monkeypatch) -> None:
-    """Токен берётся из data/.panel-token рядом с DB_PATH."""
+    """Токен берётся из DATA_DIR/.panel-token."""
     _clear_ports(monkeypatch)
-    db_path = tmp_path / "bot.db"
     (tmp_path / ".panel-token").write_text("secret-token", encoding="utf-8")
-    monkeypatch.setenv("DB_PATH", str(db_path))
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("PANEL_PORT", "3000")
     seen: dict[str, object] = {}
 

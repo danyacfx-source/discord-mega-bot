@@ -7,7 +7,7 @@
 - **Модерация**: kick, ban, unban, timeout, purge, warn-система, moderation cases, роли, slowmode, точечное снятие варнов.
 - **Авто-мод**: стоп-слова, приглашения, флуд упоминаниями, CAPS-детектор.
 - **Guard**: глобальный rate-limit инвоков команд (per-user и per-guild, скользящее окно), kill-switch `/guard pause`, точечное отключение команд `/guard block`, мут сервера `/guard mute`. Состояние переживает рестарт, владелец и админы мимо лимитов, `/guard status` показывает счётчики.
-- **Музыка**: поиск/воспроизведение (yt-dlp + FFmpeg), очередь, skip/skipvote/seek/history/stop/pause/resume/shuffle/remove/volume/loop, импорт YouTube/Spotify Playlist и SQLite-плейлисты.
+- **Музыка**: поиск/воспроизведение (yt-dlp + FFmpeg), очередь, skip/skipvote/seek/history/stop/pause/resume/shuffle/remove/volume/loop, импорт YouTube/Spotify Playlist и сохранённые плейлисты.
 - **Администрирование**: тикеты с транскриптами, настройка приветствий/прощаний, логирование событий.
 - **Напоминания**: `/remindme`, список, отмена, чистка (фоновая доставка).
 - **Опросы**: до 5 вариантов, голосование кнопками, подведение итогов.
@@ -16,7 +16,7 @@
 - **Утилиты**: lock/unlock каналов, avatar, servericon, emoji, roleinfo, channelinfo, whois.
 - **Snipe**: удалённые и изменённые сообщения.
 - **Общее**: ping, health-диагностика, serverinfo, userinfo, справка, пагинация, embed-фабрика.
-- **Backup/restore**: проверка SQLite integrity и безопасное восстановление через `scripts/restore_db.py`.
+- **Backup/restore**: backup через `pg_dump` (custom format), восстановление через `pg_restore`.
 - **Донаты (DonationAlerts)**: роль «Спонсор» за донат, VIP-код в сообщении, `/donate`, спонсор-кнопка (генерирует персональный код и выдаёт роль по сумме).
 - **Стримы**: Twitch, Kick и VK Видео Live — автоуведомления о старте/конце (sticky-сообщение, пинг роли), статусы командой, присутствие бота «🔴 стрим: …» во время эфира.
 - **API-слой**: общий aiohttp-клиент для Twitch/Kick/VK/DonationAlerts с таймаутами, ограничением параллелизма, retry для 429/5xx, `Retry-After`, circuit breaker, User-Agent и прокси через `API_PROXY`.
@@ -28,7 +28,7 @@
 - **Дни рождения**: `/birthday set/list/remove` и ежедневный анонс именинников.
 - **Оверлей (OBS)**: aiohttp-виджет статуса стрима и донат-цели (`/overlay`, токен-защита, автогенерация `OVERLAY_TOKEN` в `data/.overlay-token`).
 - **Панель**: RBAC, парольный вход или Discord OAuth2, Argon2-хэши паролей, CSRF-защита для изменяющих запросов, аудит, `/api/health`, JSON `/api/metrics` и защищённый Prometheus `/metrics`.
-- **Хранилище**: SQLite по умолчанию (WAL, `busy_timeout`, автоматический консистентный backup и retention) или PostgreSQL через `DATABASE_URL`; сервисы и репозитории используют общий backend API.
+- **Хранилище**: PostgreSQL (обязателен `DATABASE_URL`; автоматический backup через `pg_dump` и retention) через `DATABASE_URL`; сервисы и репозитории используют общий backend API.
 - **RamReport**: периодический отчёт «📊 Память бота» (текущий RSS и пик) в назначенный канал.
 
 Портированы ключевые функции из Node.js-бота (`Бот-Node`): донаты, Twitch/Kick, логи, правила-гейт, tempvoice, конструктор эмбедов, дни рождения, оверлей, RamReport, стартовый embed и присутствие по статусу стрима. Все они опциональны (`env`-гейт) и выключены без токенов.
@@ -196,7 +196,7 @@ main.py                 # точка входа
 app/
   config.py             # конфигурация из .env
   core/                 # ядро: бот, composition root (assemble), порты, логгер, загрузчик когов, embed-фабрика, views, checks
-  db/                   # слой данных: БД (SQLite) + репозитории
+  db/                   # слой данных: БД (PostgreSQL) + репозитории
   services/             # бизнес-логика: settings, moderation, tickets, logging, music, reminders…
   services/audio/       # Track, GuildPlayer (очередь/воспроизведение), yt-dlp resolver
   cogs/                 # коги: сервисы приходят конструктором (собирает loader по COG_PROVIDERS)
@@ -233,7 +233,7 @@ powershell -ExecutionPolicy Bypass -File scripts\check_windows.ps1
 
 ### PostgreSQL
 
-PostgreSQL включается без изменения команд и сервисов:
+PostgreSQL — единственный backend, `DATABASE_URL` обязателен (без него бот не стартует):
 
 ```env
 DATABASE_URL=postgresql://megabot:пароль@127.0.0.1:5432/megabot
@@ -242,18 +242,8 @@ POSTGRES_POOL_SIZE=8
 
 При старте приложение создаёт финальную схему и индексы автоматически.
 Для backup PostgreSQL нужен установленный `pg_dump`; `scripts/restore_db.py`
-остаётся SQLite-инструментом, а PostgreSQL восстанавливается через `pg_restore`.
-Перед боевым переключением рекомендуется сначала экспортировать SQLite и
-проверить данные на копии PostgreSQL. Готовый перенос:
-
-```bat
-.venv\Scripts\python scripts\migrate_sqlite_to_postgres.py ^
-  --source data\bot.db ^
-  --target "%DATABASE_URL%"
-```
-
-Скрипт не пишет в непустую БД без `--force`, переносит все текущие таблицы и
-восстанавливает последовательности автоинкрементных ID.
+восстанавливается через `pg_restore`. Каталог файловых данных (загрузки,
+токен панели, оверлей) задаётся `DATA_DIR` (по умолчанию `data`).
 
 Для запуска PostgreSQL вместе с Docker-ботом используй имя сервиса `postgres`
 вместо `127.0.0.1`:

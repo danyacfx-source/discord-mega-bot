@@ -1,4 +1,4 @@
-"""Discord community idea board, persisted in the existing PostgreSQL/SQLite KV.
+"""Discord community idea board, persisted in the existing PostgreSQL KV.
 
 No new external tokens, Discord intents or database migrations are required.
 All votes are keyed to Discord member IDs and survive container redeploys.

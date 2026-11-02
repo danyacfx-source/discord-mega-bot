@@ -17,8 +17,7 @@ if TYPE_CHECKING:
 #: EPQ-recheck после коммита конкурента пере-проверяет только внешний qual
 #: (`id = <кэш>`) — предикат внутри подзапроса не перепроверяется. Без
 #: дубликата второй инстанс перехватывал бы уже занятую строку и отдавал
-#: напоминание дважды. Для SQLite дубликат безвреден: строка, выбранная
-#: подзапросом, тут же проходит внешнюю проверку с тем же значением now.
+#: напоминание дважды.
 _CLAIM_DUE_SQL = """
     UPDATE reminders
     SET processing_until = ?
@@ -43,7 +42,7 @@ class RemindersRepository(BaseRepository):
             (user_id, guild_id, channel_id, message, remind_at.isoformat(), _now_iso()),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID напоминания")
+            raise RuntimeError("БД не вернула ID напоминания")
         return int(cursor.lastrowid)
 
     async def active_for_user(self, user_id: int) -> list[ReminderSummary]:

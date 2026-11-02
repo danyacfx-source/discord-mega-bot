@@ -182,8 +182,7 @@ class HeartbeatCog(MegaCog, name="Heartbeat"):
         if threshold_mb <= 0:
             return None
         try:
-            target = Path(self.bot.config.db_path)
-            directory = target if target.is_dir() else target.parent
+            directory = Path(self.bot.config.data_dir)
             free_mb = shutil.disk_usage(directory).free // (1024 * 1024)
         except OSError:
             logger.warning("Heartbeat: не удалось проверить свободное место на диске", exc_info=True)

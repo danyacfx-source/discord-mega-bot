@@ -41,7 +41,7 @@ class ScheduledRepository(BaseRepository):
             (guild_id, channel_id, author_id, content, embed_json, send_at.isoformat(), _now_iso()),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID запланированного сообщения")
+            raise RuntimeError("БД не вернула ID запланированного сообщения")
         return int(cursor.lastrowid)
 
     async def get(self, scheduled_id: int) -> ScheduledMessageRow | None:

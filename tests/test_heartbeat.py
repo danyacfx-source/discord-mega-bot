@@ -38,7 +38,7 @@ def _cog(
     disk_mb: int = 0,
     latency: float = 0.0,
     ws_latency: float = 0.05,
-    db_path: str = "data/bot.db",
+    data_dir: str = "data",
     twitch_channels: tuple[str, ...] = (),
     overlay_port: int | None = None,
     task_status=None,
@@ -50,7 +50,7 @@ def _cog(
         bot_log_channel_id=bot_log,
         disk_alert_mb=disk_mb,
         latency_alert_seconds=latency,
-        db_path=db_path,
+        data_dir=data_dir,
         twitch_channels=twitch_channels,
         overlay_port=overlay_port,
     )
@@ -198,7 +198,7 @@ def test_config_heartbeat_env(tmp_path, monkeypatch) -> None:
     env.write_text("BOT_TOKEN=t\nHEARTBEAT_SILENCE_MINUTES=45\n", encoding="utf-8")
     assert Config.from_env(env).heartbeat_silence_minutes == 45
     os.environ.pop("HEARTBEAT_SILENCE_MINUTES", None)
-    base = Config(token="t", prefix="!", db_path="bot.db", log_level="INFO", status_activity="x", owner_id=None)
+    base = Config(token="t", prefix="!", log_level="INFO", status_activity="x", owner_id=None)
     assert base.heartbeat_silence_minutes == 0
 
 

@@ -16,7 +16,7 @@ class WarnsRepository(BaseRepository):
             (guild_id, user_id, moderator_id, reason, created_at),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID предупреждения")
+            raise RuntimeError("БД не вернула ID предупреждения")
         return int(cursor.lastrowid)
 
     async def list_for_user(self, guild_id: int, user_id: int, limit: int = 50) -> list[WarnRow]:

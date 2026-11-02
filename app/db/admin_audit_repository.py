@@ -18,7 +18,7 @@ class AdminAuditRepository(BaseRepository):
         await self.db.execute(
             """
             INSERT INTO admin_audit(actor_role, action, method, path, remote, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP::text)
             """,
             (actor_role, action[:200], method[:16], path[:500], remote[:120]),
         )

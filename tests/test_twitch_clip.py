@@ -25,7 +25,6 @@ def _config(**overrides) -> Config:
     base: dict = {
         "token": "x",
         "prefix": "!",
-        "db_path": ":",
         "log_level": "INFO",
         "status_activity": "",
         "owner_id": None,

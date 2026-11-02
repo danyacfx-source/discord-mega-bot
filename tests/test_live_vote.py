@@ -80,10 +80,10 @@ async def test_live_vote_auto_expires_after_deadline() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_vote_panel_and_old_obs_links(tmp_path) -> None:
+async def test_live_vote_panel_and_old_obs_links(tmp_path, pg_url) -> None:
     overlay_token = "never-rotate-existing-overlay-token"
     config = Config(
-        token="x", prefix="!", db_path=str(tmp_path / "bot.db"), log_level="ERROR",
+        token="x", prefix="!", data_dir=str(tmp_path), database_url=pg_url, log_level="ERROR",
         status_activity="s", owner_id=None, panel_port=17091,
         overlay_port=18091, overlay_token=overlay_token,
         chat_commands_enabled=False,

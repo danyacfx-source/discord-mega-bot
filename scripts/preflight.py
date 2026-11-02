@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 REQUIRED_MODULES = {
     "discord": "discord.py",
-    "aiosqlite": "aiosqlite",
+    "asyncpg": "asyncpg",
     "aiohttp": "aiohttp",
     "dotenv": "python-dotenv",
     "yt_dlp": "yt-dlp",
@@ -96,10 +96,25 @@ def main() -> int:
         warnings.append("BOT_TOKEN пока не задан — это нормально до заполнения .env")
         print("[WARN] BOT_TOKEN не задан")
 
-    db_path = Path(os.getenv("DB_PATH", str(ROOT / "data" / "bot.db")))
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if database_url.startswith(("postgresql://", "postgres://")):
+        print("[OK] DATABASE_URL задан")
+    elif args.strict or database_url:
+        message = (
+            "DATABASE_URL должен начинаться с postgresql:// или postgres://"
+            if database_url
+            else "DATABASE_URL не задан (нужен PostgreSQL)"
+        )
+        errors.append(message)
+        print(f"[FAIL] {message}")
+    else:
+        warnings.append("DATABASE_URL пока не задан — это нормально до заполнения .env")
+        print("[WARN] DATABASE_URL не задан")
+
+    data_dir = Path(os.getenv("DATA_DIR", "").strip() or str(ROOT / "data"))
     backup_dir = Path(os.getenv("DB_BACKUP_DIR", str(ROOT / "data" / "backups")))
-    for label, path in (("DB_PATH", db_path), ("DB_BACKUP_DIR", backup_dir)):
-        writable_error = _check_writable(path.parent if path.suffix else path)
+    for label, path in (("DATA_DIR", data_dir), ("DB_BACKUP_DIR", backup_dir)):
+        writable_error = _check_writable(path)
         if writable_error:
             errors.append(f"{label}: {writable_error}")
             print(f"[FAIL] {label}: {writable_error}")

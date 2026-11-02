@@ -1,7 +1,6 @@
 """Тесты новых сервисов: напоминания, опросы, розыгрыши, reaction-роли, варны."""
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -15,8 +14,8 @@ from app.db.warns_repository import WarnsRepository
 
 
 @pytest.fixture
-async def db(tmp_path):
-    database = Database(os.path.join(tmp_path, "test.db"))
+async def db(tmp_path, pg_url):
+    database = Database(pg_url)
     await database.connect()
     try:
         yield database

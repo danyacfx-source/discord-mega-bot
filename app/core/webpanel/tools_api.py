@@ -380,14 +380,10 @@ class _ToolsApiMixin(_BaseApi):
     async def _api_backup_db(self, request: web.Request) -> web.Response:
         if self.bot.db is None:
             return self._json({"ok": False, "error": "База данных не подключена"}, status=503)
-        # На PostgreSQL файл db_path не существует — дамп делает pg_dump
-        # внутри Database.backup(), поэтому проверяем сам бэкенд, а не файл.
-        is_postgres = getattr(self.bot.db, "is_postgres", False)
-        if not is_postgres and not Path(self.bot.config.db_path).is_file():
-            return self._json({"ok": False, "error": "Файл БД не найден"}, status=404)
+        # Дамп делает pg_dump внутри Database.backup().
         stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        ext = "dump" if is_postgres else "db"
-        snapshot_path = Path(self.bot.config.db_path).parent / f".db-snapshot-{int(time.time())}.{ext}"
+        ext = "dump"
+        snapshot_path = Path(self.bot.config.data_dir) / f".db-snapshot-{int(time.time())}.{ext}"
         try:
             await self.bot.db.backup(snapshot_path)
             if not snapshot_path.is_file():
