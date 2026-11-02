@@ -86,11 +86,13 @@ class _BaseApi:
 
     def _rate_key(self, request: web.Request) -> str:
         # Адрес соединения — единственный ключ, который нельзя подделать
-        # извне. X-Forwarded-For учитывается только за доверенным прокси.
+        # извне. Заголовки прокси учитываются только за доверенным прокси:
+        # Cloudflare передаёт реальный адрес клиента в CF-Connecting-IP.
         if self._trusted_proxy:
-            forwarded = request.headers.get("X-Forwarded-For", "")
-            if forwarded:
-                return forwarded.split(",")[0].strip() or (request.remote or "?")
+            for header in ("CF-Connecting-IP", "X-Forwarded-For"):
+                client = request.headers.get(header, "").split(",")[0].strip()
+                if client:
+                    return client
         return request.remote or "?"
 
     def _rate_ok(self, request: web.Request) -> bool:
