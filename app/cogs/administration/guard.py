@@ -49,6 +49,10 @@ def _flatten_command_names(commands: Iterable[object]) -> list[str]:
 
 
 class GuardCog(MegaCog, name="Administration"):
+    # The group must be a class attribute for discord.py's CogMeta to collect
+    # it when the cog is loaded.
+    guard = guard_group
+
     def __init__(self, bot: MegaBot, guard: CommandGuardService) -> None:
         super().__init__(bot)
         self.guard = guard

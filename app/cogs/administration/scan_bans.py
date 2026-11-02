@@ -15,6 +15,9 @@ scanbans_group = app_commands.Group(name="scanbans", description="Баны ск�
 
 class ScanBansCog(MegaCog, name="ScanBans"):
     """Управление банами IP за сканирование веб-панели (только владелец бота)."""
+    # The group must be a class attribute for discord.py's CogMeta to collect
+    # it when the cog is loaded.
+    scanbans = scanbans_group
 
     @scanbans_group.command(name="list", description="Нарушители сканирования и их баны")
     @is_owner()
