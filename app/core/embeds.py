@@ -1,4 +1,4 @@
-"""Единая визуальная система Discord-сообщений бота «Асуна Юки»."""
+"""Единая визуальная система Discord-сообщений бота."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ ERROR = discord.Color(0xFF4D67)
 INFO = discord.Color(0x6C7CFF)
 WARNING = discord.Color(0xFFB547)
 NEUTRAL = discord.Color(0x272D3A)
-BOT_NAME = "Асуна Юки"
 
 
 def _base(

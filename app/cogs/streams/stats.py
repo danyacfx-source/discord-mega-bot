@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from app.cogs.streams.quiet import resolve_tz
 from app.core import embeds
-from app.core.embeds import BOT_NAME, NEUTRAL
+from app.core.embeds import NEUTRAL
 from app.services.stream_archive import parse_dt
 from app.utils.format import truncate
 
@@ -226,7 +226,7 @@ class StreamStats(commands.Cog):
             lines.extend(_entry_line(entry, tz) for entry in shown)
 
         embed = discord.Embed(title="📊 Статистика стримов", description="\n".join(lines), color=NEUTRAL)
-        embed.set_footer(text=f"Показаны {len(shown)} из {len(all_entries)} • {BOT_NAME}")
+        embed.set_footer(text=f"Показаны {len(shown)} из {len(all_entries)}")
         embed.timestamp = datetime.now(UTC)
         await interaction.response.send_message(embed=embed)
 
@@ -271,6 +271,6 @@ class StreamStats(commands.Cog):
         lines = [_segment_line(segment, tz) for segment in segments]
         lines.append(f"[Полное расписание]({schedule_url})")
         embed = discord.Embed(title="📅 Ближайшие эфиры Twitch", description="\n".join(lines), color=0x9146FF)
-        embed.set_footer(text=f"{login} • {self.bot.config.stream_quiet_tz} • {BOT_NAME}")
+        embed.set_footer(text=f"{login} • {self.bot.config.stream_quiet_tz}")
         embed.timestamp = datetime.now(UTC)
         await interaction.response.send_message(embed=embed)

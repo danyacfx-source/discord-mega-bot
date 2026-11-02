@@ -149,7 +149,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
         embed.add_field(name="ТЕПЕРЬ НАС", value=f"**{member.guild.member_count}**", inline=True)
         if member.guild.rules_channel:
             embed.add_field(name="НАЧАТЬ ЗДЕСЬ", value=member.guild.rules_channel.mention, inline=True)
-        embed.set_footer(text=f"Асуна Юки  •  USER ID {member.id}")
+        embed.set_footer(text=f"USER ID {member.id}")
         file = await self._welcome_card_file(member, embed) if self.bot.config.welcome_card else None
         try:
             if file is not None:
@@ -196,7 +196,7 @@ class GreetingsCog(MegaCog, name="Greetings"):
             f"**{member.display_name}** вышел из сообщества. Надеемся ещё увидеться.",
         )
         embed.set_thumbnail(url=member.display_avatar.with_size(256).url)
-        embed.set_footer(text=f"Асуна Юки  •  USER ID {member.id}")
+        embed.set_footer(text=f"USER ID {member.id}")
         try:
             await channel.send(embed=embed)
         except discord.HTTPException:

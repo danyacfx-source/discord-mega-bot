@@ -44,5 +44,5 @@ class PingCog(MegaCog, name="General"):
         embed.add_field(name="Коги", value=f"`{len(self.bot.cogs)}`", inline=True)
         embed.add_field(name="Голосовые подключения", value=f"`{len(self.bot.voice_clients)}`", inline=True)
         embed.add_field(name="Опциональные модули", value=", ".join(enabled) or "не включены", inline=False)
-        embed.set_footer(text=f"Асуна Юки • uptime {format_duration(int(self.bot.uptime.total_seconds()))}")
+        embed.set_footer(text=f"uptime {format_duration(int(self.bot.uptime.total_seconds()))}")
         await interaction.response.send_message(embed=embed, ephemeral=True)

@@ -15,7 +15,7 @@ from typing import Any
 
 import discord
 
-from app.core.embeds import BOT_NAME, NEUTRAL
+from app.core.embeds import NEUTRAL
 from app.utils.format import truncate
 from app.utils.stream_history import sparkline, trend
 
@@ -114,7 +114,7 @@ def _p_color(sec: dict[str, Any], platform: str, default: discord.Color) -> disc
 def _p_footer(sec: dict[str, Any], platform: str, default: str) -> str:
     value = sec.get("footer")
     if isinstance(value, str) and value.strip():
-        text = value.strip().replace("{bot}", BOT_NAME).replace("{label}", platform)
+        text = value.strip().replace("{bot}", "Бот").replace("{label}", platform)
         return truncate(text, 2048)
     return default
 
@@ -159,7 +159,7 @@ def live_card(
         description=_link(str(status.get("title") or "Без названия"), url),
         color=_p_color(sec, platform, _COLORS.get(platform, NEUTRAL)),
     )
-    embed.set_footer(text=_p_footer(sec, label, f"{label} • {BOT_NAME}"))
+    embed.set_footer(text=_p_footer(sec, label, label))
     embed.timestamp = datetime.now(UTC)
 
     thumbnail = str(status.get("thumbnail") or "")
@@ -214,7 +214,7 @@ def offline_card(
         title=_p_title(sec, platform, _OFFLINE_TITLES.get(platform, f"📺 {label}: офлайн")),
         color=_p_color(sec, platform, NEUTRAL),
     )
-    embed.set_footer(text=_p_footer(sec, label, f"Спасибо за просмотр • {BOT_NAME}"))
+    embed.set_footer(text=_p_footer(sec, label, "Спасибо за просмотр"))
     embed.timestamp = datetime.now(UTC)
 
     if vod_url:

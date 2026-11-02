@@ -246,7 +246,7 @@ class TempVoiceCog(MegaCog, name="TempVoice"):
             "`03`  **Выгнать** · отключить участника\n"
             "`04`  **Передать** · назначить владельца\n"
             "`05`  **Удалить** · закрыть канал",
-            footer="Асуна Юки  •  управление голосовым каналом",
+            footer="управление голосовым каналом",
         )
         await interaction.response.send_message(embed=embed, view=TempVoicePanelView(interaction.user.id, self.tempvoice))
 

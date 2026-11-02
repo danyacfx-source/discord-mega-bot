@@ -22,7 +22,7 @@ class WardogsCog(MegaCog, name="Wardogs"):
         except WardogsUnavailable as exc:
             embed = discord.Embed(
                 title="⚠️ Сервер пока не виден",
-                description=f"{exc}\n\nПопробуй снова через пару минут — Асуна Юки проверит каталог ещё раз.",
+                description=f"{exc}\n\nПопробуй снова через пару минут — Бот проверит каталог ещё раз.",
                 color=discord.Color(0xF59E0B),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
@@ -39,7 +39,7 @@ class WardogsCog(MegaCog, name="Wardogs"):
         embed.add_field(name="🌍 Регион", value=server.region, inline=True)
         embed.add_field(name="🎮 Режим", value=server.mode, inline=False)
         embed.add_field(name="🔑 Join ID", value=f"```{server.join_id}```", inline=False)
-        embed.set_footer(text="Асуна Юки • живой статус WARDOGS")
+        embed.set_footer(text="Живой статус WARDOGS")
 
         view = discord.ui.View(timeout=180)
         join_url = self.config.wardogs_join_url
