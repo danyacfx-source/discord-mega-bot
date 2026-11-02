@@ -1,6 +1,7 @@
 """Сессии, CSRF, OAuth, rate-limit и авторизация запросов веб-панели."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import secrets
@@ -25,7 +26,6 @@ from app.core.webpanel.payload import (
     _LOGIN_WINDOW,
     _PANEL_ROLE_KEY,
     _SCAN_BAN_SECONDS,
-    _SCAN_FORGET_SECONDS,
     _SCAN_LIMIT,
     _SCAN_PERMANENT_AFTER,
     _SCAN_WINDOW,
@@ -35,6 +35,7 @@ from app.core.webpanel.payload import (
 )
 from app.db.admin_audit_repository import AdminAuditRepository
 from app.db.panel_login_lock_repository import PanelLoginLockRepository
+from app.db.panel_scan_repository import PanelScanRepository
 from app.db.panel_session_repository import PanelSessionRepository
 
 logger = logging.getLogger("bot.webpanel")
@@ -56,10 +57,10 @@ class _AuthMixin(_BaseApi):
         if self._scan_bans.get(ip, 0.0) > now:
             return web.Response(status=403)
         if is_scanner_ua(request.headers.get("User-Agent", "")):
-            self._note_scan(ip, now)
+            await self._note_scan(ip, now, f"UA: {request.headers.get('User-Agent', '')}")
             return web.Response(status=403)
         if is_scanner_path(request.path):
-            self._note_scan(ip, now)
+            await self._note_scan(ip, now, f"путь: {request.path}")
             return web.Response(status=404, text="Not Found")
         # Страницы, статика и прочие не-API маршруты не проходят через
         # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
@@ -256,31 +257,79 @@ class _AuthMixin(_BaseApi):
         if rows:
             logger.info("Восстановлено сессий панели из БД: %d", len(rows))
 
-    def _note_scan(self, ip: str, now: float) -> None:
-        """Считает попадание сканера; после _SCAN_LIMIT за _SCAN_WINDOW — бан IP."""
+    async def _note_scan(self, ip: str, now: float, detail: str) -> None:
+        """Считает попадание сканера; после _SCAN_LIMIT за _SCAN_WINDOW — бан IP.
+
+        Счётчик нарушений не сбрасывается: эскалация идёт по всей истории IP,
+        каждый бан пишется в БД и владельцу уходит ЛС.
+        """
         hits = self._scan_hits[ip]
         hits.append(now)
         while hits and hits[0] < now - _SCAN_WINDOW:
             hits.popleft()
-        if len(hits) >= _SCAN_LIMIT:
-            hits.clear()
-            count = self._scan_offenses.get(ip, (0, 0.0))[0] + 1
-            until = float("inf") if count >= _SCAN_PERMANENT_AFTER else now + _SCAN_BAN_SECONDS * 2 ** (count - 1)
-            self._scan_bans[ip] = until
+        if len(hits) < _SCAN_LIMIT:
+            return
+        hits.clear()
+        count = self._scan_offenses.get(ip, (0, 0.0))[0] + 1
+        until = float("inf") if count >= _SCAN_PERMANENT_AFTER else now + _SCAN_BAN_SECONDS * 2 ** (count - 1)
+        self._scan_bans[ip] = until
+        self._scan_offenses[ip] = (count, until)
+        if until == float("inf"):
+            logger.warning("Бан IP за сканирование панели навсегда: ip=%s (нарушение %d)", ip, count)
+        else:
+            logger.warning("Бан IP за сканирование панели: ip=%s на %d с (нарушение %d)", ip, int(until - now), count)
+        await self._save_scan_ban(ip, count, until)
+        await self._notify_scan_ban(ip, detail, count, until, now)
+
+    async def _save_scan_ban(self, ip: str, count: int, until: float) -> None:
+        db = self.bot.db
+        if db is None:
+            return
+        try:
+            await PanelScanRepository(db).save(ip, count, until)
+        except Exception:
+            logger.warning("Не удалось сохранить бан сканера в БД — только в памяти", exc_info=True)
+
+    async def _restore_scan_state(self) -> None:
+        """Поднимает нарушителей и активные баны из БД после рестарта процесса."""
+        db = self.bot.db
+        if db is None:
+            return
+        try:
+            rows = await PanelScanRepository(db).load_all()
+        except Exception:
+            logger.warning("Не удалось восстановить нарушителей сканирования из БД", exc_info=True)
+            return
+        now = time.time()
+        for ip, count, until in rows:
             self._scan_offenses[ip] = (count, until)
-            if until == float("inf"):
-                logger.warning("Бан IP за сканирование панели навсегда: ip=%s (нарушение %d)", ip, count)
-            else:
-                logger.warning(
-                    "Бан IP за сканирование панели: ip=%s на %d с (нарушение %d)", ip, int(until - now), count
-                )
+            if until > now:
+                self._scan_bans[ip] = until
+        if rows:
+            logger.info("Восстановлено нарушителей сканирования из БД: %d", len(rows))
+
+    async def _notify_scan_ban(self, ip: str, detail: str, count: int, until: float, now: float) -> None:
+        """ЛС владельцу о каждом бане за сканирование; сбой отправки не мешает защите."""
+        owner_id = self.bot.config.owner_id
+        if not owner_id:
+            return
+        when = "навсегда" if until == float("inf") else f"на {int(until - now) // 60} мин"
+        text = (
+            "🚨 **Веб-панель: попытка сканирования**\n"
+            f"IP: `{ip}`\n"
+            f"Нарушение №{count}, бан {when}\n"
+            f"Последний запрос: {detail[:200]}"
+        )
+        try:
+            user = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
+            await asyncio.wait_for(user.send(text), timeout=10)
+        except Exception:
+            logger.warning("Не удалось отправить владельцу ЛС о сканировании ip=%s", ip, exc_info=True)
 
     async def _prune_auth_state(self, now: float) -> None:
         """Периодическая очистка: протухшие сессии и попытки входа в памяти, сессии и блокировки в БД."""
         for ip in [ip for ip, until in self._scan_bans.items() if until <= now]:
             self._scan_bans.pop(ip, None)
-        for ip in [ip for ip, (_, until) in self._scan_offenses.items() if until + _SCAN_FORGET_SECONDS <= now]:
-            self._scan_offenses.pop(ip, None)
         cutoff_scan = now - _SCAN_WINDOW
         for ip in [ip for ip, hits in self._scan_hits.items() if not hits or hits[-1] < cutoff_scan]:
             self._scan_hits.pop(ip, None)

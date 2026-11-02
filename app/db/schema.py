@@ -301,6 +301,10 @@ CREATE TABLE IF NOT EXISTS panel_sessions (
     expires DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_panel_sessions_expires ON panel_sessions(expires);
+CREATE TABLE IF NOT EXISTS panel_scan_offenses (
+    ip TEXT PRIMARY KEY, offenses INTEGER NOT NULL,
+    banned_until DOUBLE PRECISION NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_reminders_due ON reminders(active, remind_at);
 CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_messages(done, send_at);
 CREATE INDEX IF NOT EXISTS idx_giveaways_due ON giveaways(active, ends_at);

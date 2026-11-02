@@ -252,6 +252,7 @@ class WebPanel(
             )
         access_log_filter.install()
         await self._restore_sessions()
+        await self._restore_scan_state()
         runner = web.AppRunner(self._create_app())
         try:
             await runner.setup()
