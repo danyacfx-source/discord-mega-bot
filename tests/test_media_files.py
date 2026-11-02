@@ -14,8 +14,8 @@ _PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 async def _boot_db(bot) -> None:
-    """Реальная SQLite без setup_hook: загрузкам нужен только bot.db."""
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    """Реальный PostgreSQL без setup_hook: загрузкам нужна только БД."""
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
 
 

@@ -69,7 +69,7 @@ class Overlay:
     # ------------------------------------------------------------------ токен
     def _resolve_token(self) -> str:
         config = self.bot.config
-        data_dir = Path(config.db_path).parent
+        data_dir = Path(config.data_dir)
         env_token = (config.overlay_token or "").strip()
         if env_token and len(env_token) < 16:
             logger.warning("OVERLAY_TOKEN too short (<16) — ignoring insecure token")

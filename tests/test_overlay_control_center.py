@@ -51,10 +51,10 @@ def test_twitch_overlay_defaults_to_primary_channel_but_can_include_secondary() 
 
 
 @pytest.mark.asyncio
-async def test_panel_obs_controls_persist_and_old_url_works(tmp_path) -> None:
+async def test_panel_obs_controls_persist_and_old_url_works(tmp_path, pg_url) -> None:
     token = "existing-overlay-token-32-characters"
     config = Config(
-        token="x", prefix="!", db_path=str(tmp_path / "bot.db"),
+        token="x", prefix="!", data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR", status_activity="s", owner_id=None,
         panel_port=17851, overlay_port=18751, overlay_token=token,
     )
@@ -128,9 +128,9 @@ async def test_panel_obs_controls_persist_and_old_url_works(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_disabled_overlay_rejects_control_mutations(tmp_path) -> None:
+async def test_disabled_overlay_rejects_control_mutations(tmp_path, pg_url) -> None:
     config = Config(
-        token="x", prefix="!", db_path=str(tmp_path / "bot.db"),
+        token="x", prefix="!", data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR", status_activity="s", owner_id=None, panel_port=17852,
     )
     bot = MegaBot(config)

@@ -35,7 +35,8 @@ class ScanBansCog(MegaCog, name="ScanBans"):
                 status = f"бан ещё {int(until - now) // 60} мин"
             else:
                 status = "бана нет"
-            lines.append(f"`{ip}` — нарушений: {count}, {status}")
+            place = panel._scan_locations.get(ip)
+            lines.append(f"`{ip}` — нарушений: {count}, {status}" + (f", {place}" if place else ""))
         body = "\n".join(lines[:20]) or "Нарушителей нет."
         await interaction.response.send_message(embed=embeds.brand("Баны сканеров", body), ephemeral=True)
 

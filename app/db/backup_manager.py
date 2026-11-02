@@ -1,4 +1,4 @@
-"""Периодические консистентные backup-файлы SQLite."""
+"""Периодические backup-файлы PostgreSQL (pg_dump)."""
 from __future__ import annotations
 
 import asyncio
@@ -61,7 +61,7 @@ class DatabaseBackupManager:
     def start(self) -> None:
         if self.running:
             return
-        self._task = asyncio.create_task(self._run(), name="sqlite-backups")
+        self._task = asyncio.create_task(self._run(), name="db-backups")
 
     async def stop(self) -> None:
         task = self._task
@@ -71,15 +71,15 @@ class DatabaseBackupManager:
         task.cancel()
         done, _pending = await asyncio.wait({task}, timeout=10.0)
         if not done:
-            logger.warning("SQLite backup-таск не завершился за 10с; продолжаем shutdown")
+            logger.warning("backup-таск не завершился за 10с; продолжаем shutdown")
 
     async def backup_now(self) -> Path:
         self.directory.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        target = self.directory / f"bot-{timestamp}.db"
+        target = self.directory / f"bot-{timestamp}.dump"
         # Секунда может совпасть при ручном вызове и старте; добавляем суффикс.
         if target.exists():
-            target = self.directory / f"bot-{timestamp}-{datetime.now(UTC).microsecond:06d}.db"
+            target = self.directory / f"bot-{timestamp}-{datetime.now(UTC).microsecond:06d}.dump"
         try:
             result = await self.database.backup(target)
         finally:
@@ -87,7 +87,7 @@ class DatabaseBackupManager:
             self._prune()
         self._last_backup = result
         self._last_error = None
-        logger.info("SQLite backup создан: %s", result)
+        logger.info("Backup БД создан: %s", result)
         if self._on_backup is not None:
             try:
                 await self._on_backup(result)
@@ -105,7 +105,7 @@ class DatabaseBackupManager:
             raise
         except Exception:
             self._last_error = "backup failed; retry scheduled"
-            logger.exception("Периодический SQLite backup завершился ошибкой; повтор через интервал")
+            logger.exception("Периодический backup БД завершился ошибкой; повтор через интервал")
             # Ошибка единичного backup не должна выключать бота.
             while True:
                 await asyncio.sleep(self.interval_seconds)
@@ -115,11 +115,11 @@ class DatabaseBackupManager:
                     raise
                 except Exception:
                     self._last_error = "backup failed; retry scheduled"
-                    logger.exception("Не удалось создать периодический SQLite backup")
+                    logger.exception("Не удалось создать периодический backup БД")
 
     def _prune(self) -> None:
         backups = sorted(
-            (path for path in self.directory.glob("bot-*.db") if path.is_file()),
+            (path for path in self.directory.glob("bot-*.dump") if path.is_file()),
             key=lambda path: path.stat().st_mtime,
             reverse=True,
         )
@@ -127,14 +127,14 @@ class DatabaseBackupManager:
             try:
                 old_backup.unlink()
             except OSError:
-                logger.warning("Не удалось удалить старый SQLite backup: %s", old_backup, exc_info=True)
+                logger.warning("Не удалось удалить старый backup БД: %s", old_backup, exc_info=True)
         self._prune_temp_files()
 
     def _prune_temp_files(self, max_age_seconds: float = 3600.0) -> None:
         """Удаляет осиротевшие .tmp отменённых backup'ов.
 
         На Windows unlink временного файла может проиграть гонку с хэндлом
-        aiosqlite, и файл остаётся навсегда — glob их не видит, т.к. имя
+        pg_dump, и файл остаётся навсегда — glob их не видит, т.к. имя
         начинается с точки.
         """
         now = time.time()

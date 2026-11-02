@@ -32,8 +32,9 @@ class DonationsRepository(BaseRepository):
         vip: bool,
     ) -> bool:
         cursor = await self.db.execute(
-            "INSERT OR IGNORE INTO donations (da_id, user_name, amount, currency, message, vip, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
+            "INSERT INTO donations (da_id, user_name, amount, currency, message, vip, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP::text) "
+            "ON CONFLICT DO NOTHING",
             (da_id, user_name, amount, currency, message, int(vip)),
         )
         return cursor.rowcount > 0

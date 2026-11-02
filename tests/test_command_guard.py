@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 import tempfile
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -43,7 +42,7 @@ def _config(tmp: str, **overrides: Any) -> Config:
     cfg = Config(
         token="x",
         prefix="!",
-        db_path=os.path.join(tmp, "bot.db"),
+        data_dir=tmp,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
@@ -261,29 +260,29 @@ def _interaction(*, user_id: int = 1, guild_id: int | None = 10, name: str = "pi
     return interaction
 
 
-async def _bot_with_guard(tmp: str, **overrides: Any) -> MegaBot:
+async def _bot_with_guard(tmp: str, pg_url: str, **overrides: Any) -> MegaBot:
     from app.db.database import Database
 
-    bot = MegaBot(_config(tmp, **overrides))
-    bot.db = Database(os.path.join(tmp, "bot.db"))
+    bot = MegaBot(_config(tmp, database_url=pg_url, **overrides))
+    bot.db = Database(pg_url)
     await bot.db.connect()
     assemble(config=bot.config, db=bot.db, bot=bot)
     await bot._install_guards()
     return bot
 
 
-async def test_tree_check_allows_normal_invocation() -> None:
+async def test_tree_check_allows_normal_invocation(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp, guard_user_max=3, guard_user_window=60.0)
+        bot = await _bot_with_guard(tmp, pg_url, guard_user_max=3, guard_user_window=60.0)
         try:
             assert await bot.tree.interaction_check(_interaction()) is True
         finally:
             await bot.close()
 
 
-async def test_tree_check_blocks_and_explains() -> None:
+async def test_tree_check_blocks_and_explains(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp, guard_user_max=1, guard_user_window=60.0)
+        bot = await _bot_with_guard(tmp, pg_url, guard_user_max=1, guard_user_window=60.0)
         try:
             assert await bot.tree.interaction_check(_interaction()) is True
             blocked = _interaction(user_id=1)
@@ -295,9 +294,9 @@ async def test_tree_check_blocks_and_explains() -> None:
             await bot.close()
 
 
-async def test_tree_check_names_blocked_command() -> None:
+async def test_tree_check_names_blocked_command(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp)
+        bot = await _bot_with_guard(tmp, pg_url)
         try:
             await bot.services.guard.block_command("purge")
             interaction = _interaction(name="purge")
@@ -307,10 +306,10 @@ async def test_tree_check_names_blocked_command() -> None:
             await bot.close()
 
 
-async def test_tree_check_keeps_autocomplete_unblocked() -> None:
+async def test_tree_check_keeps_autocomplete_unblocked(pg_url) -> None:
     """Autocomplete нельзя ответить сообщением — guard его не тормозит."""
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp, guard_user_max=1, guard_user_window=60.0)
+        bot = await _bot_with_guard(tmp, pg_url, guard_user_max=1, guard_user_window=60.0)
         try:
             assert await bot.tree.interaction_check(_interaction()) is True
             autocomplete = _interaction()
@@ -320,9 +319,9 @@ async def test_tree_check_keeps_autocomplete_unblocked() -> None:
             await bot.close()
 
 
-async def test_owner_bypasses_limits() -> None:
+async def test_owner_bypasses_limits(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp, guard_user_max=1, guard_user_window=60.0, owner_id=42)
+        bot = await _bot_with_guard(tmp, pg_url, guard_user_max=1, guard_user_window=60.0, owner_id=42)
         try:
             assert await bot.tree.interaction_check(_interaction(user_id=42)) is True
             assert await bot.tree.interaction_check(_interaction(user_id=42)) is True
@@ -332,9 +331,9 @@ async def test_owner_bypasses_limits() -> None:
             await bot.close()
 
 
-async def test_guard_cog_loads_through_composition() -> None:
+async def test_guard_cog_loads_through_composition(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = await _bot_with_guard(tmp)
+        bot = await _bot_with_guard(tmp, pg_url)
         try:
             from app.cogs.administration.guard import GuardCog
             from app.core.loader import load_cogs

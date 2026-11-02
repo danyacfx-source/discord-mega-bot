@@ -67,7 +67,7 @@ async def test_overlay_token_survives_redeploy_via_kv(tmp_path, make_panel_bot):
     from app.services.kv_service import KvService
 
     bot = make_panel_bot()
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
     bot.services = SimpleNamespace(kv=KvService(KvRepository(bot.db)))  # type: ignore[assignment]
     try:

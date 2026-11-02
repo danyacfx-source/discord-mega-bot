@@ -177,7 +177,4 @@ class _SettingsApiMixin(_BaseApi):
         }
 
     def _db_engine(self) -> str:
-        db = self.bot.db
-        if db is not None and getattr(db, "is_postgres", False):
-            return "PostgreSQL"
-        return "SQLite"
+        return "PostgreSQL"

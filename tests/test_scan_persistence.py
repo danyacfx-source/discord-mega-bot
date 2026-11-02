@@ -12,7 +12,7 @@ from app.db.database import Database
 
 
 async def _boot_db(bot) -> None:
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
 
 
@@ -54,6 +54,21 @@ async def test_expired_ban_keeps_counter_and_is_not_restored_as_active(make_pane
         await restarted._restore_scan_state()
         assert restarted._scan_offenses["10.0.0.5"] == (3, 1.0)
         assert "10.0.0.5" not in restarted._scan_bans
+    finally:
+        await bot.db.close()
+
+
+@pytest.mark.asyncio
+async def test_scan_location_survives_restart_and_is_not_erased(make_panel_bot):
+    bot = make_panel_bot()
+    await _boot_db(bot)
+    try:
+        panel = WebPanel(bot)
+        await panel._save_scan_ban("10.0.0.6", 1, 5e9, "Frankfurt, DE")
+        await panel._save_scan_ban("10.0.0.6", 2, 5e9)  # повторный бан без заголовков
+        restarted = WebPanel(bot)
+        await restarted._restore_scan_state()
+        assert restarted._scan_locations["10.0.0.6"] == "Frankfurt, DE"
     finally:
         await bot.db.close()
 

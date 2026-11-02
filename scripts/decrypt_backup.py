@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Расшифровывает зашифрованный backup (MGBENC1) в читаемый SQLite-файл.
+"""Расшифровывает зашифрованный backup (MGBENC1) в читаемый дамп pg_dump.
 
 Ключ берётся оттуда же, откуда при отправке: PANEL_ENCRYPTION_KEY или
 data/.panel-key. Плоские файлы просто копируются — скрипт работает и со
 старыми нешифрованными backup'ами.
 
-    python scripts/decrypt_backup.py --source data/backups/bot-20260101.db.enc
-    python scripts/decrypt_backup.py --source bot.db.enc --dest /tmp/bot.db
+    python scripts/decrypt_backup.py --source data/backups/bot-20260101.dump.enc
+    python scripts/decrypt_backup.py --source bot.dump.enc --dest /tmp/bot.dump
 """
 from __future__ import annotations
 

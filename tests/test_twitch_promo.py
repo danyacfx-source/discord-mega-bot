@@ -46,7 +46,7 @@ async def test_webpanel_saves_interval_and_sends_promo(make_panel_bot, monkeypat
         twitch_channels=("alice", "bob"),
         twitch_discord_url="https://discord.gg/twitch",
     )
-    database = Database(bot.config.db_path)
+    database = Database(bot.config.database_url)
     await database.connect()
     assemble(config=bot.config, db=database, bot=bot)
     panel = WebPanel(bot)

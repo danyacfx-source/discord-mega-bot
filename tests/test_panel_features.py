@@ -3,7 +3,6 @@
 Гарантируют, что вкладки «Автомод» и «Опросы» опираются на живые методы
 сервисов, а стоп-слова из БД реально блокируются фильтром.
 """
-import os
 from types import SimpleNamespace
 
 from app.config import Config
@@ -17,15 +16,15 @@ def _config(tmp: str) -> Config:
     return Config(
         token="x",
         prefix="!",
-        db_path=os.path.join(tmp, "bot.db"),
+        data_dir=tmp,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
     )
 
 
-async def _setup(tmp: str):
-    db = Database(os.path.join(tmp, "bot.db"))
+async def _setup(tmp: str, pg_url):
+    db = Database(pg_url)
     await db.connect()
     root = assemble(config=_config(tmp), db=db)
     return root.services, db
@@ -70,8 +69,8 @@ class TestAutomodAnalyze:
 # --- опросы ---
 
 class TestPollsService:
-    async def test_create_list_vote_end(self, tmp_path):
-        services, db = await _setup(str(tmp_path))
+    async def test_create_list_vote_end(self, tmp_path, pg_url):
+        services, db = await _setup(str(tmp_path), pg_url)
         try:
             polls = services.polls
             poll_id = await polls.create(GUILD_ID, 100, 42, "Лучшая игра?", ["WARDOGS", "CS2"])
@@ -102,8 +101,8 @@ class TestPollsService:
 # --- настройки автомода (то, что пишет вкладка) ---
 
 class TestAutomodSettings:
-    async def test_toggle_and_blocked_words_persist(self, tmp_path):
-        services, db = await _setup(str(tmp_path))
+    async def test_toggle_and_blocked_words_persist(self, tmp_path, pg_url):
+        services, db = await _setup(str(tmp_path), pg_url)
         try:
             settings = services.settings
             first = await settings.get(GUILD_ID)

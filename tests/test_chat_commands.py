@@ -1,7 +1,6 @@
 """Команды чата стримов: парсер Twitch IRC, диспетчер команд, монеты, опросы."""
 from __future__ import annotations
 
-import os
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -20,8 +19,8 @@ from app.services.viewer_sessions import ViewerSessionStore
 
 
 @pytest.fixture
-async def db(tmp_path):
-    database = Database(os.path.join(tmp_path, "chat.db"))
+async def db(tmp_path, pg_url):
+    database = Database(pg_url)
     await database.connect()
     try:
         yield database

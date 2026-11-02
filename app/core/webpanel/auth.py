@@ -56,13 +56,13 @@ class _AuthMixin(_BaseApi):
         now = time.time()
         if self._scan_bans.get(ip, 0.0) > now:
             # Попытки во время бана тоже считаются: эскалация продолжается, пока IP не угомонится.
-            await self._note_scan(ip, now, f"во время бана: {request.path}")
+            await self._note_scan(ip, now, f"во время бана: {request.path}", self._client_location(request))
             return web.Response(status=403)
         if is_scanner_ua(request.headers.get("User-Agent", "")):
-            await self._note_scan(ip, now, f"UA: {request.headers.get('User-Agent', '')}")
+            await self._note_scan(ip, now, f"UA: {request.headers.get('User-Agent', '')}", self._client_location(request))
             return web.Response(status=403)
         if is_scanner_path(request.path):
-            await self._note_scan(ip, now, f"путь: {request.path}")
+            await self._note_scan(ip, now, f"путь: {request.path}", self._client_location(request))
             return web.Response(status=404, text="Not Found")
         # Страницы, статика и прочие не-API маршруты не проходят через
         # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
@@ -259,12 +259,14 @@ class _AuthMixin(_BaseApi):
         if rows:
             logger.info("Восстановлено сессий панели из БД: %d", len(rows))
 
-    async def _note_scan(self, ip: str, now: float, detail: str) -> None:
+    async def _note_scan(self, ip: str, now: float, detail: str, location: str = "") -> None:
         """Считает попадание сканера; после _SCAN_LIMIT за _SCAN_WINDOW — бан IP.
 
         Счётчик нарушений не сбрасывается: эскалация идёт по всей истории IP,
         каждый бан пишется в БД и владельцу уходит ЛС. Постоянный бан не пересчитывается.
         """
+        if location:
+            self._scan_locations[ip] = location
         if self._scan_bans.get(ip) == float("inf"):
             return
         hits = self._scan_hits[ip]
@@ -279,18 +281,21 @@ class _AuthMixin(_BaseApi):
         self._scan_bans[ip] = until
         self._scan_offenses[ip] = (count, until)
         if until == float("inf"):
-            logger.warning("Бан IP за сканирование панели навсегда: ip=%s (нарушение %d)", ip, count)
+            logger.warning("Бан IP за сканирование панели навсегда: ip=%s (%s), нарушение %d", ip, location or "локация неизвестна", count)
         else:
-            logger.warning("Бан IP за сканирование панели: ip=%s на %d с (нарушение %d)", ip, int(until - now), count)
-        await self._save_scan_ban(ip, count, until)
+            logger.warning(
+                "Бан IP за сканирование панели: ip=%s (%s) на %d с, нарушение %d",
+                ip, location or "локация неизвестна", int(until - now), count,
+            )
+        await self._save_scan_ban(ip, count, until, self._scan_locations.get(ip, ""))
         await self._notify_scan_ban(ip, detail, count, until, now)
 
-    async def _save_scan_ban(self, ip: str, count: int, until: float) -> None:
+    async def _save_scan_ban(self, ip: str, count: int, until: float, location: str = "") -> None:
         db = self.bot.db
         if db is None:
             return
         try:
-            await PanelScanRepository(db).save(ip, count, until)
+            await PanelScanRepository(db).save(ip, count, until, location)
         except Exception:
             logger.warning("Не удалось сохранить бан сканера в БД — только в памяти", exc_info=True)
 
@@ -305,8 +310,10 @@ class _AuthMixin(_BaseApi):
             logger.warning("Не удалось восстановить нарушителей сканирования из БД", exc_info=True)
             return
         now = time.time()
-        for ip, count, until in rows:
+        for ip, count, until, location in rows:
             self._scan_offenses[ip] = (count, until)
+            if location:
+                self._scan_locations[ip] = location
             if until > now:
                 self._scan_bans[ip] = until
         if rows:
@@ -321,6 +328,7 @@ class _AuthMixin(_BaseApi):
         text = (
             "🚨 **Веб-панель: попытка сканирования**\n"
             f"IP: `{ip}`\n"
+            f"Локация: {self._scan_locations.get(ip) or 'неизвестна'}\n"
             f"Нарушение №{count}, бан {when}\n"
             f"Последний запрос: {detail[:200]}"
         )
@@ -360,6 +368,7 @@ class _AuthMixin(_BaseApi):
                 "banned": until > now,
                 "permanent": until == float("inf"),
                 "until": None if until == float("inf") else until,
+                "location": self._scan_locations.get(ip, ""),
             }
             for ip, (count, until) in self._scan_offenses.items()
         ]

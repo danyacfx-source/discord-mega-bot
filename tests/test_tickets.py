@@ -3,7 +3,6 @@
 Транскрипт обязан переживать удаление канала — иначе после закрытия
 историю тикета уже нигде не посмотреть (ключевой фикс веб-панели).
 """
-import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -21,16 +20,16 @@ def _config(tmp: str) -> Config:
     return Config(
         token="x",
         prefix="!",
-        db_path=os.path.join(tmp, "bot.db"),
+        data_dir=tmp,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
     )
 
 
-async def _setup(tmp: str):
+async def _setup(tmp: str, pg_url):
     """Сборка сервисов с отдельной БД; возвращает (tickets, db)."""
-    db = Database(os.path.join(tmp, "bot.db"))
+    db = Database(pg_url)
     await db.connect()
     root = assemble(config=_config(tmp), db=db)
     return root.services.tickets, db
@@ -92,8 +91,8 @@ class _Creator:
         return self.name
 
 
-async def test_create_and_persist_transcript(tmp_path) -> None:
-    tickets, db = await _setup(str(tmp_path))
+async def test_create_and_persist_transcript(tmp_path, pg_url) -> None:
+    tickets, db = await _setup(str(tmp_path), pg_url)
     try:
         channel = _channel(555)
         guild = _guild([channel])
@@ -127,8 +126,8 @@ async def test_create_and_persist_transcript(tmp_path) -> None:
         await db.close()
 
 
-async def test_close_missing_ticket(tmp_path) -> None:
-    tickets, db = await _setup(str(tmp_path))
+async def test_close_missing_ticket(tmp_path, pg_url) -> None:
+    tickets, db = await _setup(str(tmp_path), pg_url)
     try:
         guild = _guild([])
         result = await tickets.close_by_id(guild, 9999, MagicMock(id=99, mention="<@99>"))
@@ -137,9 +136,9 @@ async def test_close_missing_ticket(tmp_path) -> None:
         await db.close()
 
 
-async def test_close_sends_transcript_to_log_channel(tmp_path) -> None:
+async def test_close_sends_transcript_to_log_channel(tmp_path, pg_url) -> None:
     """При настроенном log_channel_id транскрипт уходит в этот канал."""
-    tickets, db = await _setup(str(tmp_path))
+    tickets, db = await _setup(str(tmp_path), pg_url)
     try:
         await tickets._settings.update(GILD_ID, log_channel_id=777)
 
@@ -167,8 +166,8 @@ async def test_close_sends_transcript_to_log_channel(tmp_path) -> None:
         await db.close()
 
 
-async def test_has_open_limits_creator(tmp_path) -> None:
-    tickets, db = await _setup(str(tmp_path))
+async def test_has_open_limits_creator(tmp_path, pg_url) -> None:
+    tickets, db = await _setup(str(tmp_path), pg_url)
     try:
         channel1 = _channel(555)
         guild = _guild([channel1])
@@ -191,10 +190,10 @@ async def test_has_open_limits_creator(tmp_path) -> None:
         await db.close()
 
 
-async def test_create_uses_editable_texts(tmp_path) -> None:
+async def test_create_uses_editable_texts(tmp_path, pg_url) -> None:
     from app.core.views import TicketCloseView
 
-    tickets, db = await _setup(str(tmp_path))
+    tickets, db = await _setup(str(tmp_path), pg_url)
     try:
         await tickets._settings.update(
             GILD_ID,

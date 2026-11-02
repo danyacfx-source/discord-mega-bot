@@ -74,6 +74,34 @@ def _single_int(value: str | None) -> int | None:
     return None
 
 
+def _data_dir_from_env() -> str:
+    """Каталог файловых данных: DATA_DIR, иначе родитель устаревшего DB_PATH, иначе ``data``.
+
+    Фолбэк на DB_PATH сохраняет расположение загрузок, токенов и оверлея у
+    существующих деплоев, где каталог данных задавался через путь к файлу БД.
+    """
+    explicit = os.getenv("DATA_DIR", "").strip()
+    if explicit:
+        return explicit
+    legacy = os.getenv("DB_PATH", "").strip()
+    if legacy:
+        return str(Path(legacy).parent)
+    return str(_PROJECT_ROOT / "data")
+
+
+def _database_url_from_env() -> str:
+    """DATABASE_URL обязателен и должен быть postgres(ql):// — иначе падаем сразу."""
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        raise RuntimeError(
+            "Не задана переменная окружения DATABASE_URL: бот работает только с PostgreSQL "
+            "(пример: postgresql://user:password@host:5432/dbname)"
+        )
+    if not url.startswith(("postgresql://", "postgres://")):
+        raise RuntimeError("DATABASE_URL должен начинаться с postgresql:// или postgres://")
+    return url
+
+
 def _bool(value: str | None, default: bool = False) -> bool:
     if not value:
         return default
@@ -98,9 +126,11 @@ class ApiConfig:
 
 @dataclass(slots=True, frozen=True)
 class DbConfig:
-    """Хранилище и резервные копии."""
+    """Хранилище (PostgreSQL), каталог данных и резервные копии."""
 
-    path: str = str(_PROJECT_ROOT / "data" / "bot.db")
+    #: Каталог файловых данных (загрузки панели, токены, оверлей).
+    data_dir: str = str(_PROJECT_ROOT / "data")
+    #: DSN PostgreSQL; в ``Config.from_env`` обязателен.
     url: str | None = None
     backup_dir: str = str(_PROJECT_ROOT / "data" / "backups")
     backup_interval_hours: float = 24.0
@@ -617,7 +647,7 @@ for _flat, _inner in _FEATURES_FIELDS.items():
 
 #: DB/API/Spotify поля проксируются напрямую (имена совпадают или имеют префикс)
 _DIRECT_PROXY = {
-    "db_path": ("db", "path"),
+    "data_dir": ("db", "data_dir"),
     "database_url": ("db", "url"),
     "db_backup_dir": ("db", "backup_dir"),
     "db_backup_interval_hours": ("db", "backup_interval_hours"),
@@ -667,7 +697,7 @@ class Config:
 
     Поля-домены собраны в под-dataclass'ы (``config.panel.port``);
     плоский доступ (``config.panel_port``) и плоский конструктор
-    (``Config(token=..., db_path=..., twitch_channels=...)``) сохранены.
+    (``Config(token=..., data_dir=..., twitch_channels=...)``) сохранены.
     """
 
     # Ядро
@@ -758,6 +788,7 @@ class Config:
         if missing:
             raise RuntimeError(f"Отсутствуют обязательные переменные окружения: {', '.join(missing)}")
 
+        database_url = _database_url_from_env()
         owner_raw = os.getenv("OWNER_ID")
         return cls(
             token=os.environ["BOT_TOKEN"],
@@ -774,8 +805,8 @@ class Config:
                 circuit_reset_seconds=max(5.0, min(900.0, float(os.getenv("API_CIRCUIT_RESET_SECONDS", "60")))),
             ),
             db=DbConfig(
-                path=os.getenv("DB_PATH", str(_PROJECT_ROOT / "data" / "bot.db")),
-                url=os.getenv("DATABASE_URL") or None,
+                data_dir=_data_dir_from_env(),
+                url=database_url,
                 backup_dir=os.getenv("DB_BACKUP_DIR", str(_PROJECT_ROOT / "data" / "backups")),
                 backup_interval_hours=max(1.0, float(os.getenv("DB_BACKUP_INTERVAL_HOURS", "24"))),
                 backup_retention=max(1, min(90, int(os.getenv("DB_BACKUP_RETENTION", "7")))),

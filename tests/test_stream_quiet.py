@@ -13,7 +13,6 @@ def _config(window, tz: str = "Europe/Moscow"):
     return Config(
         token="x",
         prefix="!",
-        db_path=":",
         log_level="INFO",
         status_activity="",
         owner_id=None,

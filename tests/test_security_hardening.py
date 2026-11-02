@@ -43,7 +43,7 @@ def test_crypto_text_roundtrip_and_legacy_passthrough(at_rest_key):
 
 
 def test_crypto_file_roundtrip_and_tamper_detection(at_rest_key):
-    payload = b"SQLite format 3\x00" + b"x" * 4096
+    payload = b"PGDMP\x00" + b"x" * 4096
     sealed = encrypt_file(payload)
     assert is_encrypted_file(sealed)
     # Overhead ровно 35 байт: иначе backup раздулся бы за лимит Discord.
@@ -57,44 +57,31 @@ def test_crypto_file_roundtrip_and_tamper_detection(at_rest_key):
     assert decrypt_file(sealed[: len(sealed) - 4]) is None
 
 
-async def test_encrypted_backup_restores(tmp_path, at_rest_key):
-    """Backup, зашифрованный для Discord, возвращается в рабочую базу целиком."""
-    from app.db.restore import restore_backup
-
-    source = tmp_path / "source.db"
-    database = Database(str(source))
+async def test_encrypted_backup_roundtrip(pg_url, tmp_path, at_rest_key):
+    """pg_dump-backup, зашифрованный для Discord, расшифровывается байт в байт."""
+    database = Database(pg_url)
     await database.connect()
     await database.execute("INSERT INTO kv(key, value) VALUES ('marker', 'secret')")
-    backup = tmp_path / "backup.db"
+    backup = tmp_path / "backup.dump"
     await database.backup(backup)
     await database.close()
 
-    encrypted = tmp_path / "backup.db.enc"
-    encrypted.write_bytes(encrypt_file(backup.read_bytes()))
-    backup.unlink()
+    original = backup.read_bytes()
+    encrypted = encrypt_file(original)
+    assert is_encrypted_file(encrypted)
+    assert decrypt_file(encrypted) == original
 
-    target = tmp_path / "target.db"
-    restore_backup(encrypted, target)
-    restored = Database(str(target))
-    await restored.connect()
-    row = await restored.fetchone("SELECT value FROM kv WHERE key = ?", ("marker",))
-    assert row is not None and row["value"] == "secret"
-    await restored.close()
-
-    # Подделанный шифрованный backup не должен затирать цель.
-    tampered = tmp_path / "tampered.db.enc"
-    raw = encrypted.read_bytes()
-    tampered.write_bytes(raw[:-1] + bytes([raw[-1] ^ 1]))
-    with pytest.raises(RuntimeError, match="расшифровать"):
-        restore_backup(tampered, target)
+    # Подделанный шифрованный backup не должен расшифровываться.
+    tampered = encrypted[:-1] + bytes([encrypted[-1] ^ 1])
+    assert decrypt_file(tampered) is None
 
 
 @pytest.mark.asyncio
 async def test_backup_upload_to_discord_is_encrypted(make_panel_bot, tmp_path, at_rest_key):
     """Дамп БД, уходящий в канал Discord, не должен быть открытым текстом."""
     bot = make_panel_bot(db_backup_discord_channel_id=123)
-    db_file = tmp_path / "bot.db"
-    db_file.write_bytes(b"SQLite format 3\x00" + b"\x01" * 2048)
+    db_file = tmp_path / "bot.dump"
+    db_file.write_bytes(b"PGDMP\x00" + b"\x01" * 2048)
 
     captured: dict[str, object] = {}
 
@@ -108,9 +95,9 @@ async def test_backup_upload_to_discord_is_encrypted(make_panel_bot, tmp_path, a
     await bot._upload_backup_to_discord(db_file)
 
     data = captured["data"]
-    assert captured["filename"] == "bot.db.enc"
+    assert captured["filename"] == "bot.dump.enc"
     assert isinstance(data, bytes) and is_encrypted_file(data)
-    assert b"SQLite format 3" not in data
+    assert b"PGDMP" not in data
     assert decrypt_file(data) == db_file.read_bytes()
     assert "зашифрован" in str(captured["content"])
 
@@ -190,7 +177,7 @@ async def test_login_without_totp_configured_ignores_colon_suffix(make_panel_bot
 async def test_login_lockout_survives_panel_restart(make_panel_bot):
     """Счётчик неудач живёт в БД: «рестарт» (новый WebPanel) блокировку не сбрасывает."""
     bot = make_panel_bot(panel_password="hunter2")
-    bot.db = Database(bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
     try:
         first = WebPanel(bot)
@@ -216,7 +203,7 @@ async def test_login_lockout_survives_panel_restart(make_panel_bot):
 async def test_login_success_clears_persistent_counter(make_panel_bot):
     """Успешный вход убирает запись из durable-счётчика, а не копит её."""
     bot = make_panel_bot(panel_password="hunter2")
-    bot.db = Database(bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
     try:
         panel = WebPanel(bot)

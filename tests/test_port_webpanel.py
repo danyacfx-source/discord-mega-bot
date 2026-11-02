@@ -39,8 +39,8 @@ def _fake_send_capture(target: list) -> discord.TextChannel:
 
 
 async def _boot_db(bot) -> None:
-    """Загрузки хранятся в БД: поднимаем реальную SQLite без setup_hook."""
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    """Загрузки хранятся в БД: поднимаем реальный PostgreSQL без setup_hook."""
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
 
 
@@ -606,8 +606,7 @@ async def test_webpanel_audit_page(make_panel_bot):
 
 @pytest.mark.asyncio
 async def test_webpanel_backup_db_postgres_uses_pg_dump(make_panel_bot):
-    """На PostgreSQL бэкап-эндпоинт не падает на отсутствии файла sqlite,
-    а отдаёт дамп из Database.backup() (pg_dump) с расширением .dump."""
+    """Бэкап-эндпоинт отдаёт дамп из Database.backup() (pg_dump) с расширением .dump."""
     from pathlib import Path as _Path
 
     bot = make_panel_bot()
@@ -615,7 +614,6 @@ async def test_webpanel_backup_db_postgres_uses_pg_dump(make_panel_bot):
 
     class _FakeDb:
         path = "postgresql://user:pass@localhost:5432/bot"
-        is_postgres = True
 
         async def backup(self, destination):
             target = _Path(destination)
@@ -814,7 +812,7 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
     from app.services.kv_service import KvService
 
     bot = make_panel_bot()
-    bot.db = Database(bot.config.database_url or bot.config.db_path)
+    bot.db = Database(bot.config.database_url)
     await bot.db.connect()
     bot.services = SimpleNamespace(kv=KvService(KvRepository(bot.db)))  # type: ignore[assignment]
     try:

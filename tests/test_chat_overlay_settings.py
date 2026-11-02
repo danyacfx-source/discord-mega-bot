@@ -74,11 +74,11 @@ async def test_chat_settings_roundtrip_and_backward_compatibility() -> None:
 
 
 @pytest.mark.asyncio
-async def test_panel_chat_settings_roundtrip_and_obs_source_url_preserved(tmp_path) -> None:
+async def test_panel_chat_settings_roundtrip_and_obs_source_url_preserved(tmp_path, pg_url) -> None:
     config = Config(
         token="x",
         prefix="!",
-        db_path=str(tmp_path / "bot.db"),
+        data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,

@@ -72,9 +72,9 @@ async def test_ideas_persist_votes_and_status_over_redeploy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cog_autoloads_and_vote_view_is_persistent(tmp_path) -> None:
+async def test_cog_autoloads_and_vote_view_is_persistent(tmp_path, pg_url) -> None:
     bot = MegaBot(Config(
-        token="test", prefix="!", db_path=str(tmp_path / "bot.db"),
+        token="test", prefix="!", data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR", status_activity="s", owner_id=None,
     ))
     try:

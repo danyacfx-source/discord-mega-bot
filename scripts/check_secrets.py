@@ -41,7 +41,7 @@ _SKIP_DIRS = {
     "backups",
     "dist",
 }
-_SKIP_SUFFIXES = {".pyc", ".pyo", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".db", ".sqlite", ".woff", ".woff2", ".ttf"}
+_SKIP_SUFFIXES = {".pyc", ".pyo", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".db", ".woff", ".woff2", ".ttf"}
 _SKIP_NAMES = {".env", "bot_out.log", "bot_err.log", "panel_out.log", "panel_err.log"}
 
 #: Значения по умолчанию, которые выглядят как секреты, но публичны by design

@@ -36,7 +36,7 @@ class ModerationCasesRepository(BaseRepository):
             ),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID moderation case")
+            raise RuntimeError("БД не вернула ID moderation case")
         return int(cursor.lastrowid)
 
     async def get(self, guild_id: int, case_id: int) -> ModerationCaseRow | None:

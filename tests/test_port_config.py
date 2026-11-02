@@ -1,7 +1,6 @@
 """Конфиг, репозитории, DI-синглтоны и прочие не-panel тесты."""
 from __future__ import annotations
 
-import os
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -172,8 +171,8 @@ def test_config_new_options(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_kv_repository_roundtrip(tmp_path):
-    db = Database(str(tmp_path / "kv.db"))
+async def test_kv_repository_roundtrip(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = KvRepository(db)
@@ -190,8 +189,8 @@ async def test_kv_repository_roundtrip(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_donations_repository(tmp_path):
-    db = Database(str(tmp_path / "donations.db"))
+async def test_donations_repository(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = DonationsRepository(db)
@@ -206,8 +205,8 @@ async def test_donations_repository(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_scheduled_messages_repository(tmp_path):
-    db = Database(str(tmp_path / "scheduled.db"))
+async def test_scheduled_messages_repository(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = ScheduledRepository(db)
@@ -228,8 +227,8 @@ async def test_scheduled_messages_repository(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_scheduled_messages_service(tmp_path):
-    db = Database(str(tmp_path / "sched_service.db"))
+async def test_scheduled_messages_service(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = ScheduledRepository(db)
@@ -267,8 +266,8 @@ def test_scheduler_cog_higher_than_panel():
 
 
 @pytest.mark.asyncio
-async def test_temp_voices_repository(tmp_path):
-    db = Database(str(tmp_path / "tempvoice.db"))
+async def test_temp_voices_repository(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = TempVoicesRepository(db)
@@ -283,8 +282,8 @@ async def test_temp_voices_repository(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_birthdays_repository(tmp_path):
-    db = Database(str(tmp_path / "birthdays.db"))
+async def test_birthdays_repository(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         repo = BirthdaysRepository(db)
@@ -308,14 +307,14 @@ async def test_birthdays_repository(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_donation_service_codes(tmp_path):
-    db = Database(str(tmp_path / "codes.db"))
+async def test_donation_service_codes(tmp_path, pg_url):
+    db = Database(pg_url)
     await db.connect()
     try:
         config = Config(
             token="x",
             prefix="!",
-            db_path=str(tmp_path / "bot.db"),
+            data_dir=str(tmp_path),
             log_level="ERROR",
             status_activity="s",
             owner_id=None,
@@ -341,9 +340,9 @@ async def test_donation_service_codes(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ported_services_available_as_singletons(tmp_path):
+async def test_ported_services_available_as_singletons(tmp_path, pg_url):
     with tempfile.TemporaryDirectory() as tmp:
-        config = Config(token="x", prefix="!", db_path=os.path.join(tmp, "bot.db"), log_level="ERROR", status_activity="s", owner_id=None)
+        config = Config(token="x", prefix="!", data_dir=tmp, database_url=pg_url, log_level="ERROR", status_activity="s", owner_id=None)
         bot = MegaBot(config)
         await bot.setup_hook()
         try:
@@ -360,3 +359,26 @@ async def test_ported_services_available_as_singletons(tmp_path):
             assert kick_cog.kick is services.kick
         finally:
             await bot.close()
+
+
+def test_from_env_requires_postgres_database_url(tmp_path, monkeypatch):
+    """Без DATABASE_URL (или не postgres) бот падает сразу, с понятной ошибкой."""
+    monkeypatch.setenv("BOT_TOKEN", "t")
+    monkeypatch.delenv("DATABASE_URL")
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        Config.from_env(tmp_path / "missing.env")
+    monkeypatch.setenv("DATABASE_URL", "data/bot.db")
+    with pytest.raises(RuntimeError, match="postgresql://"):
+        Config.from_env(tmp_path / "missing.env")
+    monkeypatch.setenv("DATABASE_URL", "postgres://u:p@h:5432/db")
+    assert Config.from_env(tmp_path / "missing.env").database_url == "postgres://u:p@h:5432/db"
+
+
+def test_from_env_data_dir_and_legacy_db_path(tmp_path, monkeypatch):
+    """DATA_DIR приоритетен; старый DB_PATH задаёт каталог данных у существующих деплоев."""
+    monkeypatch.setenv("BOT_TOKEN", "t")
+    monkeypatch.delenv("DATA_DIR", raising=False)
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "legacy" / "bot.db"))
+    assert Config.from_env(tmp_path / "missing.env").data_dir == str(tmp_path / "legacy")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "explicit"))
+    assert Config.from_env(tmp_path / "missing.env").data_dir == str(tmp_path / "explicit")

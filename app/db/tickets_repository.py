@@ -17,7 +17,7 @@ class TicketsRepository(BaseRepository):
             (guild_id, channel_id, creator_id, created_at.isoformat()),
         )
         if cursor.lastrowid is None:
-            raise RuntimeError("SQLite не вернул ID тикета")
+            raise RuntimeError("БД не вернула ID тикета")
         return int(cursor.lastrowid)
 
     async def by_channel(self, channel_id: int) -> TicketRow | None:

@@ -97,6 +97,21 @@ class _BaseApi:
                     return client
         return peer
 
+    def _client_location(self, request: web.Request) -> str:
+        """Город и страна клиента из заголовков Cloudflare (Managed Transform), иначе пустая строка.
+
+        Как и IP, заголовки верим только от диапазонов Cloudflare: иначе их подставит кто угодно.
+        """
+        if not (self._trusted_proxy and is_trusted_peer(request.remote or "", self._trusted_networks)):
+            return ""
+        parts = []
+        for header in ("CF-IPCity", "CF-IPCountry"):
+            value = "".join(ch for ch in request.headers.get(header, "") if ch.isprintable()).strip()[:64]
+            # XX и T1 — служебные значения Cloudflare: страна неизвестна / Tor.
+            if value and value not in ("XX", "T1"):
+                parts.append(value)
+        return ", ".join(parts)
+
     def _rate_ok(self, request: web.Request) -> bool:
         key = self._rate_key(request)
         now = time.time()

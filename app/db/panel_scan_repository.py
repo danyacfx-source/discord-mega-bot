@@ -11,18 +11,24 @@ from app.db.base_repository import BaseRepository
 class PanelScanRepository(BaseRepository):
     """Нарушители сканирования по IP."""
 
-    async def save(self, ip: str, offenses: int, banned_until: float) -> None:
+    async def save(self, ip: str, offenses: int, banned_until: float, location: str = "") -> None:
+        # Пустая локация не затирает ранее известную.
         await self.db.execute(
             """
-            INSERT INTO panel_scan_offenses(ip, offenses, banned_until)
-            VALUES (?, ?, ?)
+            INSERT INTO panel_scan_offenses(ip, offenses, banned_until, location)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(ip) DO UPDATE SET
                 offenses = excluded.offenses,
-                banned_until = excluded.banned_until
+                banned_until = excluded.banned_until,
+                location = CASE WHEN excluded.location = '' THEN panel_scan_offenses.location
+                                ELSE excluded.location END
             """,
-            (ip, offenses, banned_until),
+            (ip, offenses, banned_until, location),
         )
 
-    async def load_all(self) -> list[tuple[str, int, float]]:
-        rows = await self.db.fetchall("SELECT ip, offenses, banned_until FROM panel_scan_offenses")
-        return [(str(row["ip"]), int(row["offenses"]), float(row["banned_until"])) for row in rows]
+    async def load_all(self) -> list[tuple[str, int, float, str]]:
+        rows = await self.db.fetchall("SELECT ip, offenses, banned_until, location FROM panel_scan_offenses")
+        return [
+            (str(row["ip"]), int(row["offenses"]), float(row["banned_until"]), str(row["location"] or ""))
+            for row in rows
+        ]

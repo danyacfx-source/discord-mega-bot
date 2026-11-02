@@ -10,11 +10,11 @@ from app.core.webpanel.webpanel import WebPanel
 
 
 @pytest.mark.asyncio
-async def test_overlay_chat_test_shows_in_existing_browser_source(tmp_path) -> None:
+async def test_overlay_chat_test_shows_in_existing_browser_source(tmp_path, pg_url) -> None:
     config = Config(
         token="test",
         prefix="!",
-        db_path=str(tmp_path / "bot.db"),
+        data_dir=str(tmp_path), database_url=pg_url,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
@@ -73,9 +73,9 @@ async def test_overlay_chat_test_shows_in_existing_browser_source(tmp_path) -> N
 
 
 @pytest.mark.asyncio
-async def test_overlay_chat_test_is_disabled_when_overlay_off(tmp_path) -> None:
+async def test_overlay_chat_test_is_disabled_when_overlay_off(tmp_path, pg_url) -> None:
     config = Config(
-        token="test", prefix="!", db_path=str(tmp_path / "bot.db"), log_level="ERROR",
+        token="test", prefix="!", data_dir=str(tmp_path), database_url=pg_url, log_level="ERROR",
         status_activity="s", owner_id=None, panel_port=17685,
     )
     bot = MegaBot(config)

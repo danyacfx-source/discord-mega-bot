@@ -1,7 +1,6 @@
 """Лента чата (ChatFeed): кольцо сообщений и питание из диспетчера команд."""
 from __future__ import annotations
 
-import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -16,8 +15,8 @@ from app.services.chat_feed import ChatFeed
 
 
 @pytest.fixture
-async def db(tmp_path):
-    database = Database(os.path.join(tmp_path, "feed.db"))
+async def db(tmp_path, pg_url):
+    database = Database(pg_url)
     await database.connect()
     try:
         yield database

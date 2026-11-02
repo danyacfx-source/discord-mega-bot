@@ -100,7 +100,7 @@ class WebPanel(
         self._trusted_proxy = bool(config.panel_trusted_proxy)
         self._trusted_networks = CLOUDFLARE_NETWORKS
         self._cf_next_refresh = 0.0
-        self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
+        self._uploads_dir = Path(config.data_dir) / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
         # Статический токен — только для loopback-хоста без пароля и без OAuth.
@@ -144,6 +144,8 @@ class WebPanel(
         self._scan_bans: dict[str, float] = {}
         #: Число нарушений и конец последнего бана по IP — основа эскалации.
         self._scan_offenses: dict[str, tuple[int, float]] = {}
+        # Локация из заголовков Cloudflare; только в памяти, после рестарта заполняется заново.
+        self._scan_locations: dict[str, str] = {}
         #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
         self._login_gc: int = 0
         self._runner: web.AppRunner | None = None
@@ -173,7 +175,7 @@ class WebPanel(
         return (self.host or "").strip() in _LOCAL_HOSTS
 
     def _load_static_token(self) -> str:
-        path = Path(self.bot.config.db_path).parent / _TOKEN_FILE
+        path = Path(self.bot.config.data_dir) / _TOKEN_FILE
         path.parent.mkdir(parents=True, exist_ok=True)
         if path.is_file():
             stored = path.read_text(encoding="utf-8").strip()

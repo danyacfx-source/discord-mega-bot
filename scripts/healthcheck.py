@@ -37,8 +37,11 @@ def probe(url: str, token: str | None) -> int:
 
 
 def _panel_token() -> str | None:
-    db_path = Path(os.getenv("DB_PATH", "data/bot.db"))
-    token_path = db_path.parent / PANEL_TOKEN_FILE
+    # Тот же каталог данных, что и у бота: DATA_DIR, иначе родитель устаревшего DB_PATH.
+    data_dir = os.getenv("DATA_DIR", "").strip()
+    if not data_dir and os.getenv("DB_PATH", "").strip():
+        data_dir = str(Path(os.environ["DB_PATH"]).parent)
+    token_path = Path(data_dir or "data") / PANEL_TOKEN_FILE
     try:
         return token_path.read_text(encoding="utf-8").strip() or None
     except OSError:

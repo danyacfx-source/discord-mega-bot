@@ -6,7 +6,6 @@
 """
 import importlib
 import inspect
-import os
 import pkgutil
 import tempfile
 
@@ -23,21 +22,22 @@ from app.services.kick_service import KickService
 from app.services.settings_service import SettingsService
 
 
-def _config(tmp: str) -> Config:
+def _config(tmp: str, pg_url: str | None = None) -> Config:
     return Config(
         token="x",
         prefix="!",
-        db_path=os.path.join(tmp, "bot.db"),
+        data_dir=tmp,
+        database_url=pg_url,
         log_level="ERROR",
         status_activity="s",
         owner_id=None,
     )
 
 
-def test_assemble_builds_full_graph_once() -> None:
+def test_assemble_builds_full_graph_once(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        db = Database(os.path.join(tmp, "bot.db"))
-        root = assemble(config=_config(tmp), db=db)
+        db = Database(pg_url)
+        root = assemble(config=_config(tmp, pg_url), db=db)
 
         # Все сервисы — реальные классы из app/.
         assert root.services.settings.__class__ is SettingsService
@@ -79,9 +79,9 @@ def test_cogs_never_accept_repositories() -> None:
 
 
 @pytest.mark.asyncio
-async def test_setup_hook_injects_cog_with_services() -> None:
+async def test_setup_hook_injects_cog_with_services(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = MegaBot(_config(tmp))
+        bot = MegaBot(_config(tmp, pg_url))
         await bot.setup_hook()
         try:
             # bot.services собран через composition root.
@@ -98,9 +98,9 @@ async def test_setup_hook_injects_cog_with_services() -> None:
 
 
 @pytest.mark.asyncio
-async def test_all_cogs_load_through_composition() -> None:
+async def test_all_cogs_load_through_composition(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        bot = MegaBot(_config(tmp))
+        bot = MegaBot(_config(tmp, pg_url))
         await bot.setup_hook()
         try:
             loaded = bot.cogs
@@ -118,11 +118,11 @@ async def test_all_cogs_load_through_composition() -> None:
             await bot.close()
 
 
-def test_build_cog_fallback_uses_constructor_defaults() -> None:
+def test_build_cog_fallback_uses_constructor_defaults(pg_url) -> None:
     """Ког без сервисов строится через cls(bot): поведение не потеряно с контейнером."""
     from app.cogs.general.ping import PingCog
 
     with tempfile.TemporaryDirectory() as tmp:
-        bot = MegaBot(_config(tmp))
+        bot = MegaBot(_config(tmp, pg_url))
         cog = _build_cog(bot, PingCog)
         assert isinstance(cog, PingCog)
