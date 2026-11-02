@@ -22,6 +22,7 @@ import TestSection from "./test.jsx";
 import FilesSection from "./files.jsx";
 import LogsSection from "./logs.jsx";
 import AuditSection from "./audit.jsx";
+import ScanBansSection from "./scanbans.jsx";
 import StatsSection from "./stats.jsx";
 import BackupSection from "./backup.jsx";
 import MediaSection from "./media.jsx";
@@ -71,6 +72,7 @@ export const NAV = [
       { id: "files", icon: "image", title: "Файлы", desc: "Изображения, доступные для оформления сообщений.", Component: FilesSection },
       { id: "logs", icon: "file-text", title: "Логи", desc: "Технические события и ошибки в реальном времени.", Component: LogsSection },
       { id: "audit", icon: "eye", title: "Логи Discord", desc: "События Discord: сообщения, участники и модерация.", Component: AuditSection },
+      { id: "scanbans", icon: "shield", title: "Защита", desc: "Баны сканеров: снять бан с IP вручную.", Component: ScanBansSection },
       { id: "stats", icon: "trending", title: "Статистика", desc: "Аналитика активности и динамика сообщества.", Component: StatsSection },
       { id: "backup", icon: "database", title: "Бэкап", desc: "Экспорт данных и состояние резервных копий.", Component: BackupSection },
     ],

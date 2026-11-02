@@ -55,6 +55,8 @@ class _AuthMixin(_BaseApi):
         ip = self._rate_key(request)
         now = time.time()
         if self._scan_bans.get(ip, 0.0) > now:
+            # Попытки во время бана тоже считаются: эскалация продолжается, пока IP не угомонится.
+            await self._note_scan(ip, now, f"во время бана: {request.path}")
             return web.Response(status=403)
         if is_scanner_ua(request.headers.get("User-Agent", "")):
             await self._note_scan(ip, now, f"UA: {request.headers.get('User-Agent', '')}")
@@ -261,8 +263,10 @@ class _AuthMixin(_BaseApi):
         """Считает попадание сканера; после _SCAN_LIMIT за _SCAN_WINDOW — бан IP.
 
         Счётчик нарушений не сбрасывается: эскалация идёт по всей истории IP,
-        каждый бан пишется в БД и владельцу уходит ЛС.
+        каждый бан пишется в БД и владельцу уходит ЛС. Постоянный бан не пересчитывается.
         """
+        if self._scan_bans.get(ip) == float("inf"):
+            return
         hits = self._scan_hits[ip]
         hits.append(now)
         while hits and hits[0] < now - _SCAN_WINDOW:
@@ -345,6 +349,36 @@ class _AuthMixin(_BaseApi):
             except Exception:
                 logger.warning("Не удалось очистить протухшие сессии в БД", exc_info=True)
         await self._login_prune(now)
+
+    async def _api_scan_bans_get(self, request: web.Request) -> web.Response:
+        """Нарушители сканирования: активные баны сверху, затем история."""
+        now = time.time()
+        items = [
+            {
+                "ip": ip,
+                "offenses": count,
+                "banned": until > now,
+                "permanent": until == float("inf"),
+                "until": None if until == float("inf") else until,
+            }
+            for ip, (count, until) in self._scan_offenses.items()
+        ]
+        items.sort(key=lambda item: (not item["banned"], not item["permanent"], -item["offenses"]))
+        return self._json({"ok": True, "items": items[:500], "total": len(items)})
+
+    async def _api_scan_ban_clear(self, request: web.Request) -> web.Response:
+        """Снимает действующий бан IP. Счётчик нарушений остаётся: эскалация не обнуляется."""
+        payload = await self._read_json(request)
+        ip = str(payload.get("ip") or "").strip()
+        if ip not in self._scan_offenses:
+            return self._json({"ok": False, "error": "IP нет среди нарушителей сканирования"}, status=404)
+        count, _ = self._scan_offenses[ip]
+        self._scan_bans.pop(ip, None)
+        self._scan_hits.pop(ip, None)
+        self._scan_offenses[ip] = (count, 0.0)
+        await self._save_scan_ban(ip, count, 0.0)
+        logger.warning("Бан сканера снят вручную из панели: ip=%s (нарушений всего %d)", ip, count)
+        return self._json({"ok": True, "ip": ip, "offenses": count})
 
     async def _api_logout(self, request: web.Request) -> web.Response:
         token = request.headers.get("X-Panel-Token", "")
