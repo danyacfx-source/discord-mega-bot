@@ -16,6 +16,10 @@ _ACCESS_LOGGER = "aiohttp.access"
 class TokenMaskFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.getMessage()
+        # Почти все строки лога не содержат токена: дешёвая проверка подстроки
+        # отсекает regex до его запуска.
+        if "token=" not in message.lower():
+            return True
         masked = _TOKEN_RE.sub(r"\1***", message)
         if masked != message:
             record.msg = masked
