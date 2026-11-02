@@ -137,6 +137,8 @@ class WebPanel(
         #: Попадания сканеров по IP и баны; в памяти, сбрасываются при рестарте.
         self._scan_hits: dict[str, deque[float]] = defaultdict(deque)
         self._scan_bans: dict[str, float] = {}
+        #: Число нарушений и конец последнего бана по IP — основа эскалации.
+        self._scan_offenses: dict[str, tuple[int, float]] = {}
         #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
         self._login_gc: int = 0
         self._runner: web.AppRunner | None = None
