@@ -136,8 +136,10 @@ class DonationService:
         prefix = self._config.donation_code_prefix
         pattern = re.compile(rf"{re.escape(prefix)}-[A-Fa-f0-9]{{8}}", re.IGNORECASE) if prefix else None
         new_donations: list[dict[str, Any]] = []
-        for item in await self.fetch_recent(limit):
-            if await self._repo.is_known(item["da_id"]):
+        items = await self.fetch_recent(limit)
+        known = await self._repo.known_ids([int(item["da_id"]) for item in items])
+        for item in items:
+            if int(item["da_id"]) in known:
                 continue
             message = item["message"]
             match = pattern.search(message) if pattern else None
