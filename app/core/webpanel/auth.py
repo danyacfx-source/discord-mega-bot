@@ -16,7 +16,7 @@ from argon2.exceptions import VerificationError
 
 from app.core.shield import is_scanner_path, is_scanner_ua
 from app.core.totp import verify as verify_totp
-from app.core.webpanel.base_api import _BaseApi
+from app.core.webpanel.base_api import RATE_LIMIT_KEY, _BaseApi
 from app.core.webpanel.payload import (
     _CSP,
     _CSP_REST,
@@ -52,7 +52,9 @@ class _AuthMixin(_BaseApi):
         # _authorized, поэтому лимит считаем здесь. /api и /ws учитываются
         # в своих обработчиках, чтобы не считать дважды.
         if not request.path.startswith(("/api/", "/ws/")) and not self._rate_ok(request):
-            return self._json({"ok": False, "error": "Слишком много запросов"}, status=429)
+            limited = self._json({"ok": False, "error": "Слишком много запросов"}, status=429)
+            limited.headers["Retry-After"] = str(request[RATE_LIMIT_KEY]["reset"])
+            return limited
         try:
             response = await handler(request)
         except web.HTTPException as exc:
@@ -75,6 +77,11 @@ class _AuthMixin(_BaseApi):
         proto = request.headers.get("X-Forwarded-Proto") or request.scheme
         if proto == "https":
             headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        rate = request.get(RATE_LIMIT_KEY)
+        if rate:
+            headers["X-RateLimit-Limit"] = str(rate["limit"])
+            headers["X-RateLimit-Remaining"] = str(rate["remaining"])
+            headers["X-RateLimit-Reset"] = str(rate["reset"])
         response.headers.update(headers)
         return response
 

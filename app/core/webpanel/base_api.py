@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     from app.services import Services
 
 
+RATE_LIMIT_KEY = web.RequestKey("rate_limit", dict)
+
 class _BaseApi:
     """Общие методы для всех миксинов веб-панели.
 
@@ -98,9 +100,16 @@ class _BaseApi:
         hits = self._rate_hits[key]
         while hits and hits[0] < now - _RATE_LIMIT_WINDOW:
             hits.popleft()
+        reset = int(hits[0] + _RATE_LIMIT_WINDOW - now) + 1 if hits else _RATE_LIMIT_WINDOW
         if len(hits) >= _RATE_LIMIT_MAX:
+            request[RATE_LIMIT_KEY] = {"limit": _RATE_LIMIT_MAX, "remaining": 0, "reset": reset}
             return False
         hits.append(now)
+        request[RATE_LIMIT_KEY] = {
+            "limit": _RATE_LIMIT_MAX,
+            "remaining": _RATE_LIMIT_MAX - len(hits),
+            "reset": reset,
+        }
         self._rate_gc += 1
         if self._rate_gc % 500 == 0:
             self._prune_rate_hits(now)
