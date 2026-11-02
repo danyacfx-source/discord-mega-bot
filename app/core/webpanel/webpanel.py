@@ -144,6 +144,8 @@ class WebPanel(
         self._scan_bans: dict[str, float] = {}
         #: Число нарушений и конец последнего бана по IP — основа эскалации.
         self._scan_offenses: dict[str, tuple[int, float]] = {}
+        # Локация из заголовков Cloudflare; только в памяти, после рестарта заполняется заново.
+        self._scan_locations: dict[str, str] = {}
         #: Счётчик вызовов логина — через каждые 100 чистится таблица блокировок.
         self._login_gc: int = 0
         self._runner: web.AppRunner | None = None
