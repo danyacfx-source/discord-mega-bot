@@ -484,6 +484,30 @@ async def test_webpanel_login_lockout_isolated_by_forwarded_ip(make_panel_bot):
 
 
 @pytest.mark.asyncio
+async def test_webpanel_login_lockout_isolated_by_cf_connecting_ip(make_panel_bot):
+    """За доверенным Cloudflare лок-аут считается по CF-Connecting-IP,
+    а не по адресу edge-узла, общему для многих клиентов."""
+    bot = make_panel_bot(panel_password="hunter2")
+    panel = WebPanel(bot)
+    panel._trusted_proxy = True
+    async with TestServer(panel._create_app()) as server:
+        async with TestClient(server) as client:
+            for _ in range(_LOGIN_LIMIT):
+                resp = await client.post(
+                    "/api/login", json={"password": "nope"}, headers={"CF-Connecting-IP": "203.0.113.7"}
+                )
+                assert resp.status == 401
+            locked = await client.post(
+                "/api/login", json={"password": "hunter2"}, headers={"CF-Connecting-IP": "203.0.113.7"}
+            )
+            assert locked.status == 429
+            other = await client.post(
+                "/api/login", json={"password": "hunter2"}, headers={"CF-Connecting-IP": "198.51.100.9"}
+            )
+            assert other.status == 200
+
+
+@pytest.mark.asyncio
 async def test_webpanel_login_success_resets_attempts(make_panel_bot):
     """Успешный вход сбрасывает счётчик неудач — старые опечатки не блокируют."""
     bot = make_panel_bot(panel_password="hunter2")
