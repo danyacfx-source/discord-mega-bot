@@ -71,6 +71,10 @@ _PERM_NAMES = {
 
 
 class SetupCog(MegaCog, name="Setup"):
+    # The group must be a class attribute for discord.py's CogMeta to collect
+    # it when the cog is loaded.
+    setup = setup_group
+
     def __init__(self, bot: MegaBot, settings: SettingsService) -> None:
         super().__init__(bot)
         self.settings = settings

@@ -18,6 +18,10 @@ ticket_group = app_commands.Group(name="ticket", description="Управлени
 
 
 class TicketCog(MegaCog, name="Tickets"):
+    # The group must be a class attribute for discord.py's CogMeta to collect
+    # it when the cog is loaded.
+    ticket = ticket_group
+
     def __init__(self, bot: MegaBot, tickets: TicketService) -> None:
         super().__init__(bot)
         self.tickets = tickets
