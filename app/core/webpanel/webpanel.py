@@ -46,6 +46,7 @@ from app.core.webpanel.settings_api import _SettingsApiMixin
 from app.core.webpanel.showcase_api import _ShowcaseApiMixin
 from app.core.webpanel.status_api import _StatusApiMixin
 from app.core.webpanel.tools_api import _ToolsApiMixin
+from app.core.webpanel.trusted_proxy import CLOUDFLARE_NETWORKS
 from app.core.webpanel.uploads_api import _UploadsApiMixin
 from app.core.webpanel.workboard_api import _WorkboardApiMixin
 from app.services.wardogs_service import WardogsService, WardogsUnavailable
@@ -95,6 +96,7 @@ class WebPanel(
             if part.isdigit():
                 self._admin_role_ids.add(int(part))
         self._trusted_proxy = bool(config.panel_trusted_proxy)
+        self._trusted_networks = CLOUDFLARE_NETWORKS
         self._uploads_dir = Path(config.db_path).parent / _UPLOAD_DIRNAME
         self._logs_html = _LOGS_PAGE_PATH.read_text(encoding="utf-8") if _LOGS_PAGE_PATH.exists() else ""
         self._audit_html = _AUDIT_PAGE_PATH.read_text(encoding="utf-8") if _AUDIT_PAGE_PATH.exists() else ""
