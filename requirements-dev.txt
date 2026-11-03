@@ -3,6 +3,6 @@ pytest-asyncio>=0.24.0
 ruff>=0.7.0
 mypy>=1.11.0
 types-psutil>=5.9.0
-types-yt-dlp>=2024.10.7
+types-yt-dlp>=2026.8.19.20261030
 # Встроенный PostgreSQL для тестов (tests/conftest.py); либо задайте TEST_DATABASE_URL
 pgserver>=0.1.4
