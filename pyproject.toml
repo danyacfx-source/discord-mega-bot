@@ -4,7 +4,7 @@ version = "3.4.0"
 description = "Модульный Discord-бот: модерация, музыка, администрирование"
 requires-python = ">=3.11"
 dependencies = [
-    "discord.py>=2.4.0,<2.6",
+    "discord.py>=2.4.0,<2.8",
     "asyncpg>=0.29.0",
     "aiohttp>=3.9.0",
     "python-dotenv>=1.0.1",
