@@ -9,13 +9,13 @@ from typing import Any
 import discord
 from aiohttp import web
 
-from app.cogs.ai.chat_ai import DEFAULT_PROMPT, resolve_ai_system_prompt
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _STREAM_CARDS_KEY,
     _WELCOME_PRESET_KEY,
     _clean_cards_preset,
 )
+from app.features.ai.commands import DEFAULT_PROMPT, resolve_ai_system_prompt
 from app.services.stream_rsvp import resolve_rsvp_role
 from app.services.stream_session import session_is_live
 from app.services.twitch_command_settings import (

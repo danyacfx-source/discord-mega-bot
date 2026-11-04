@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.cogs.ai.chat_ai import DEFAULT_PROMPT, resolve_ai_system_prompt
+from app.features.ai.commands import DEFAULT_PROMPT, resolve_ai_system_prompt
 
 
 def test_default_ai_character_is_dendich_control_radio_silence() -> None:

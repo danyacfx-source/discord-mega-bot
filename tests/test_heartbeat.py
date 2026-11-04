@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch
 import discord
 import pytest
 
-from app.cogs.monitoring.heartbeat import HeartbeatCog
 from app.config import Config
+from app.features.monitoring.heartbeat import HeartbeatCog
 
 
 class _Chan:
@@ -140,7 +140,7 @@ async def test_send_alert_delivers_embed_to_targets() -> None:
         return {"bot_log_channel_id": 7}
 
     cog = _cog(guilds=[guild], settings_get=get)
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         await cog._send_alert(["нет сообщений уже 35 мин"])
     channel.send.assert_awaited_once()
     assert cog._alerted is True
@@ -165,7 +165,7 @@ async def test_log_targets_settings_channels_and_env_fallback() -> None:
         return {"bot_log_channel_id": 100 if guild_id == 1 else 200}
 
     cog = _cog(guilds=[guild_a, guild_b], settings_get=get)
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         targets = await cog._log_targets()
     assert {t.id for t in targets} == {100, 200}
 
@@ -174,7 +174,7 @@ async def test_log_targets_settings_channels_and_env_fallback() -> None:
 
     fallback = _Guild(3, [_Chan(55)])
     cog = _cog(guilds=[fallback], bot_log=55, settings_get=empty)
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         targets = await cog._log_targets()
     assert [t.id for t in targets] == [55]
 
@@ -187,7 +187,7 @@ async def test_log_targets_skips_guild_without_channel() -> None:
         return {"bot_log_channel_id": 9}
 
     cog = _cog(guilds=[guild], settings_get=get)
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         assert await cog._log_targets() == []
 
 
@@ -225,7 +225,7 @@ async def test_service_alerts_are_deduplicated_and_report_recovery() -> None:
     guild = _Guild(1, [channel])
     state = {"failed": ["StreamChat.link_loop"]}
     cog = _cog(guilds=[guild], bot_log=7, task_status=lambda: {"running": [], "failed": state["failed"]})
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         await cog._check_service_alerts()
         await cog._check_service_alerts()
         state["failed"] = []
@@ -241,7 +241,7 @@ async def test_twitch_read_only_and_overlay_failure_are_reported() -> None:
     guild = _Guild(1, [channel])
     chat = SimpleNamespace(twitch_control_status=AsyncMock(return_value={"state": "read_only"}))
     cog = _cog(guilds=[guild], bot_log=7, twitch_channels=("main",), overlay_port=8765, stream_chat=chat)
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         await cog._check_service_alerts()
     text = channel.send.await_args.kwargs["embed"].description or ""
     assert "Twitch-чат" in text and "OBS-оверлей" in text
@@ -249,7 +249,7 @@ async def test_twitch_read_only_and_overlay_failure_are_reported() -> None:
 
 @pytest.mark.asyncio
 async def test_disk_alert_fires_once_and_rearms(monkeypatch) -> None:
-    import app.cogs.monitoring.heartbeat as hb
+    import app.features.monitoring.heartbeat as hb
 
     cog = _cog(silence=0, disk_mb=1000)
     cog._log_targets = AsyncMock(return_value=[])
@@ -313,7 +313,7 @@ async def test_latency_alert_ignores_not_ready_gateway() -> None:
 @pytest.mark.asyncio
 async def test_silence_and_disk_report_together(monkeypatch) -> None:
     """Обе проблемы в одном тике — один эмбед со всеми причинами."""
-    import app.cogs.monitoring.heartbeat as hb
+    import app.features.monitoring.heartbeat as hb
 
     channel = _Chan(7)
     guild = _Guild(1, [channel])
@@ -324,7 +324,7 @@ async def test_silence_and_disk_report_together(monkeypatch) -> None:
     cog = _cog(guilds=[guild], silence=30, disk_mb=1000, settings_get=get)
     cog._last_activity = datetime.now(UTC) - timedelta(minutes=40)
     monkeypatch.setattr(hb.shutil, "disk_usage", lambda p: SimpleNamespace(free=100 * 1024**2))
-    with patch("app.cogs.monitoring.heartbeat.discord.TextChannel", _Chan):
+    with patch("app.features.monitoring.heartbeat.discord.TextChannel", _Chan):
         await cog._tick()
     channel.send.assert_awaited_once()
     embed = channel.send.await_args.kwargs["embed"]
