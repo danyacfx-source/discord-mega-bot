@@ -1,8 +1,8 @@
 """Сессии веб-панели переживают рестарт: лежат в БД по хэшу токена."""
 
+from app.core.webpanel.panel_session_repository import PanelSessionRepository
 from app.core.webpanel.payload import _token_key
 from app.db.database import Database
-from app.db.panel_session_repository import PanelSessionRepository
 
 
 async def test_panel_sessions_survive_restart_and_expired_are_pruned(pg_url) -> None:

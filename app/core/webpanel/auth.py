@@ -17,7 +17,10 @@ from argon2.exceptions import VerificationError
 
 from app.core.shield import is_scanner_path, is_scanner_ua
 from app.core.totp import verify as verify_totp
+from app.core.webpanel.admin_audit_repository import AdminAuditRepository
 from app.core.webpanel.base_api import RATE_LIMIT_KEY, _BaseApi
+from app.core.webpanel.panel_login_lock_repository import PanelLoginLockRepository
+from app.core.webpanel.panel_session_repository import PanelSessionRepository
 from app.core.webpanel.payload import (
     _CSP,
     _CSP_REST,
@@ -33,9 +36,6 @@ from app.core.webpanel.payload import (
     _SESSION_TTL,
     _token_key,
 )
-from app.db.admin_audit_repository import AdminAuditRepository
-from app.db.panel_login_lock_repository import PanelLoginLockRepository
-from app.db.panel_session_repository import PanelSessionRepository
 from app.features.scan_bans.repository import PanelScanRepository
 
 logger = logging.getLogger("bot.webpanel")
