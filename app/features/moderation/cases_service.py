@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.db.moderation_cases_repository import ModerationCasesRepository
+    from app.features.moderation.cases_repository import ModerationCasesRepository
 from app.types import ModerationCaseRow
 
 

@@ -32,12 +32,12 @@ testpaths = ["tests"]
 python_version = "3.11"
 files = [
     "app/types.py",
-    "app/db/moderation_cases_repository.py",
+    "app/features/moderation/cases_repository.py",
     "app/features/reminders/repository.py",
     "app/features/scheduler/repository.py",
     "app/features/giveaways/repository.py",
     "app/db/media_files_repository.py",
-    "app/services/moderation_case_service.py",
+    "app/features/moderation/cases_service.py",
 ]
 follow_imports = "skip"
 check_untyped_defs = true

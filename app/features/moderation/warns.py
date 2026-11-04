@@ -9,7 +9,7 @@ from discord import app_commands
 from app.core import embeds
 from app.core.base import MegaCog
 from app.core.views import ConfirmView
-from app.services.moderation_service import ModerationService
+from app.features.moderation.service import ModerationService
 from app.utils.format import plural
 
 if TYPE_CHECKING:

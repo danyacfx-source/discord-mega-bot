@@ -16,6 +16,8 @@ from app.features.event_logs.service import LoggingService
 from app.features.giveaways.service import GiveawayService
 from app.features.guard.service import CommandGuardService
 from app.features.ideas.service import IdeaBoardService
+from app.features.moderation.cases_service import ModerationCaseService
+from app.features.moderation.service import ModerationService
 from app.features.polls.service import PollService
 from app.features.reaction_roles.service import ReactionRolesService
 from app.features.reminders.service import ReminderService
@@ -28,8 +30,6 @@ from app.services.chat_commands_service import ChatCommandsService
 from app.services.chat_feed import ChatFeed
 from app.services.kick_service import KickService
 from app.services.live_vote_service import LiveVoteService
-from app.services.moderation_case_service import ModerationCaseService
-from app.services.moderation_service import ModerationService
 from app.services.music_service import MusicService
 from app.services.twitch_service import TwitchService
 from app.services.vk_video_service import VkVideoService

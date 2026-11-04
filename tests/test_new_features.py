@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.db.database import Database
-from app.db.warns_repository import WarnsRepository
 from app.features.giveaways.repository import GiveawaysRepository
+from app.features.moderation.warns_repository import WarnsRepository
 from app.features.polls.repository import PollsRepository
 from app.features.reaction_roles.repository import ReactionRolesRepository
 from app.features.reminders.repository import RemindersRepository

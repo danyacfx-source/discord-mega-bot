@@ -1,5 +1,5 @@
 """Тесты авто-модерации."""
-from app.cogs.moderation.automod import _is_caps
+from app.features.moderation.automod import _is_caps
 
 
 class TestCapsDetector:

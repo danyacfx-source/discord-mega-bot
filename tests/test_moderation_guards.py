@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 
-from app.cogs.moderation.moderation import ModerationCog
+from app.features.moderation.commands import ModerationCog
 from app.utils.time import parse_duration
 
 
@@ -114,7 +114,7 @@ async def test_timeout_allows_exactly_28_days() -> None:
     interaction = _interaction(invoker, _guild())
     target.timeout = AsyncMock()
 
-    with patch("app.cogs.moderation.moderation.moderation_reason", return_value="reason"):
+    with patch("app.features.moderation.commands.moderation_reason", return_value="reason"):
         await ModerationCog.timeout.callback(cog, interaction, target, "28d")
 
     target.timeout.assert_awaited_once()

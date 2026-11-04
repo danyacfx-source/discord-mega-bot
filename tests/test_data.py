@@ -3,7 +3,7 @@
 import pytest
 
 from app.db.database import Database
-from app.db.warns_repository import WarnsRepository
+from app.features.moderation.warns_repository import WarnsRepository
 from app.features.tickets.repository import TicketsRepository
 from app.shared.settings_repository import SettingsRepository
 from app.shared.settings_service import SettingsService

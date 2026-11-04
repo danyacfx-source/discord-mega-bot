@@ -14,8 +14,8 @@ from app.core import embeds
 from app.core.base import MegaCog
 from app.core.checks import moderation_reason
 from app.features.event_logs.service import LoggingService
-from app.services.moderation_case_service import ModerationCaseService
-from app.services.moderation_service import SLOWMODE_SUGGESTIONS, TIMEOUT_SUGGESTIONS, ModerationService
+from app.features.moderation.cases_service import ModerationCaseService
+from app.features.moderation.service import SLOWMODE_SUGGESTIONS, TIMEOUT_SUGGESTIONS, ModerationService
 from app.utils.pagination import PaginatorView
 
 if TYPE_CHECKING:

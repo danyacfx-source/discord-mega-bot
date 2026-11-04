@@ -10,7 +10,7 @@ from app.core.checks import can_moderate
 from app.utils.time import parse_duration
 
 if TYPE_CHECKING:
-    from app.db.warns_repository import WarnsRepository
+    from app.features.moderation.warns_repository import WarnsRepository
     from app.shared.settings_service import SettingsService
 
 from app.types import WarnRow
