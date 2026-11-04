@@ -2,7 +2,7 @@
 # (Ghostscript-RCE и др. — scripts/audit_deps.py). Без этого pip считал бы
 # уже стоящую уязвимую версию удовлетворённой и не обновлял её.
 # Точные версии и sha256 каждого вина — в requirements.lock.
-discord.py>=2.4.0,<2.6
+discord.py>=2.4.0,<2.8
 aiohttp>=3.14.5
 python-dotenv>=1.0.1
 tzdata>=2024.1
