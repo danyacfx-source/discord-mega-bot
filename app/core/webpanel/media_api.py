@@ -87,7 +87,8 @@ class _MediaApiMixin(_BaseApi):
         like_key = self._media_like_key(request)
         rows = [
             self._media_row(item, like_key)
-            for item in sorted(items, key=lambda i: str(i.get("created_at") or ""), reverse=True)
+            # reversed: при одинаковом времени новые записи (они в конце списка) идут первыми.
+            for item in sorted(reversed(items), key=lambda i: str(i.get("created_at") or ""), reverse=True)
         ]
         return self._json({"ok": True, "items": rows, "count": len(rows)})
 
