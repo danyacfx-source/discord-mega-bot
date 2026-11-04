@@ -14,8 +14,8 @@ import aiohttp
 import discord
 from aiohttp import web
 
+from app.core.webpanel.activity_repository import ActivityRepository
 from app.core.webpanel.base_api import _BaseApi
-from app.db.activity_repository import ActivityRepository
 
 logger = logging.getLogger("bot.webpanel")
 

@@ -63,8 +63,8 @@ async def test_overlay_token_survives_redeploy_via_kv(tmp_path, make_panel_bot):
     from types import SimpleNamespace
 
     from app.db.database import Database
-    from app.db.kv_repository import KvRepository
-    from app.services.kv_service import KvService
+    from app.shared.kv_repository import KvRepository
+    from app.shared.kv_service import KvService
 
     bot = make_panel_bot()
     bot.db = Database(bot.config.database_url)

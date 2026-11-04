@@ -25,7 +25,7 @@ from app.core.webpanel.trusted_proxy import is_trusted_peer
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services import Services
+    from app.core.services import Services
 
 
 RATE_LIMIT_KEY = web.RequestKey("rate_limit", dict)

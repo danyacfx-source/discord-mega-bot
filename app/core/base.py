@@ -7,8 +7,8 @@ from discord.ext import commands
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
+    from app.core.services import Services
     from app.db.base_repository import BaseRepository
-    from app.services import Services
 
 
 async def wait_ready_or_stop(bot: Any, loop: Any = None) -> bool:

@@ -191,7 +191,7 @@ async def test_has_open_limits_creator(tmp_path, pg_url) -> None:
 
 
 async def test_create_uses_editable_texts(tmp_path, pg_url) -> None:
-    from app.core.views import TicketCloseView
+    from app.features.tickets.views import TicketCloseView
 
     tickets, db = await _setup(str(tmp_path), pg_url)
     try:
@@ -227,7 +227,7 @@ async def test_create_uses_editable_texts(tmp_path, pg_url) -> None:
 
 
 async def test_open_view_applies_custom_label():
-    from app.core.views import TicketOpenView
+    from app.features.tickets.views import TicketOpenView
 
     view = TicketOpenView(MagicMock(), label="Проблема?", emoji="")
     assert view.open_ticket.label == "Проблема?"

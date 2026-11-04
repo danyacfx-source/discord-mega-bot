@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.services.viewer_sessions import ViewerSessionStore
+from app.features.streams.viewer_sessions import ViewerSessionStore
 
 
 class FakeKv:

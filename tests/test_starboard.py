@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.cogs.general.starboard import StarboardCog
 from app.config import Config
+from app.features.starboard.commands import StarboardCog
 
 
 def _config(**overrides) -> Config:

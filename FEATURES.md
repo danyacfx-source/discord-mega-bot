@@ -28,62 +28,32 @@ app/
 │   ├── embeds.py              #   единый стиль embed (success/error/info/warning)
 │   ├── checks.py              #   права/роли: bot_has_permissions, can_moderate
 │   └── logger.py              #   логгер: консоль + ротация файлов
-├── db/                        # слой данных
-│   ├── __init__.py            #   реэкспорт репозиториев
-│   ├── database.py            #   подключение, WAL, PRAGMAs, схема всех таблиц
+├── db/                        # общий слой данных
+│   ├── database.py            #   подключение
+│   ├── postgres_database.py   #   backend PostgreSQL
+│   ├── schema.py              #   схема таблиц
 │   ├── base_repository.py
-│   ├── settings_repository.py #   настройки серверов
-│   ├── warns_repository.py    #   предупреждения
-│   ├── tickets_repository.py  #   тикеты
-│   ├── reminders_repository.py#   напоминания
-│   ├── polls_repository.py    #   опросы + голоса
-│   ├── giveaways_repository.py#   розыгрыши + участники
-│   ├── reaction_roles_repository.py
-│   ├── kv_repository.py      #   key-value хранилище (sticky-сообщения стримов)
-│   ├── donations_repository.py#  обработанные донаты DonationAlerts
-│   └── temp_voices_repository.py # владельцы временных голосовых
-├── services/                  # бизнес-логика (сервисы поверх репозиториев)
-│   ├── __init__.py            #   типизированная Services-обвязка (15 сервисов)
-│   ├── settings_service.py
-│   ├── moderation_service.py  #   warn-система и иерархия
-│   ├── music_service.py
-│   ├── ticket_service.py      #   открытие/закрытие тикетов, транскрипты
-│   ├── logging_service.py     #   логирование мод-действий
-│   ├── reminder_service.py
-│   ├── poll_service.py        #   голоса, результаты, рендер опроса
-│   ├── giveaway_service.py    #   участие, жеребьёвка, рендер
-│   ├── reaction_roles_service.py
-│   ├── donation_service.py   #   DonationAlerts: поллинг, refresh токена, VIP-код
-│   ├── twitch_service.py     #   статус стрима (Helix), sticky-сообщения
-│   ├── kick_service.py       #   статус стрима + модерация Kick (Dev API)
-│   ├── temp_voice_service.py #   владельцы персональных голосовых
-│   └── audio/                #   Track, GuildPlayer (очередь, FFmpeg), yt-dlp resolver
-├── cogs/                      # 33 модуля (32 кога), сервисы приходят конструктором
-│   ├── di.py                  #   границы пакета: сервисы доступны, слой данных запрещён
-│   ├── general/               #   Ping, Info, About, Help
-│   ├── moderation/            #   Moderation, AutoMod, Warns
-│   ├── music/                 #   Music
-│   ├── administration/        #   Setup, Tickets, LoggingEvents (расширенные логи), Greetings
-│   ├── events/start.py        #   Lifecycle (on_ready, статус)
-│   ├── reminders/             #   Reminders + фоновая доставка
-│   ├── polls/                 #   Polls
-│   ├── giveaways/             #   Giveaways + фоновая проверка таймеров
-│   ├── reaction_roles/        #   ReactionRoles
-│   ├── snipe/                 #   Snipe
-│   ├── utility/               #   Utility
-│   ├── donations/             #   Donations: поллинг донатов, роль «Спонсор», /donate
-│   ├── streams/               #   TwitchStatus и Kick: уведомления о стримах
-│   ├── streams/kick.py        #   модерация Kick + автомод чата (Pusher)
-│   ├── rules_gate/            #   RulesGate: реакция ✅ → роль
-│   ├── role_menu/             #   RoleMenu: select-панели «получить/снять роль» (порт с Node)
-│   ├── socials/               #   Socials: /socials — ссылки на соцсети (порт с Node)
-│   ├── permissions/           #   Permissions: права категорий из конфига (порт с Node)
-│   ├── server_stats/          #   ServerStats: счётчики сервера в голосовых каналах (порт с Node)
-│   ├── ai/                    #   ChatAI: Gemini-ответы в разрешённых каналах (порт с Node)
-│   ├── embed/                 #   EmbedBuilder: дискорд-конструктор эмбеда /embed
-│   ├── birthdays/             #   Birthdays: /birthday (set/remove/list) + ежедневный анонс
-│   ├── monitoring/            #   RamReport: периодический отчёт по ОЗУ в канал
-│   └── tempvoice/             #   TempVoice: персональные голосовые + панель
+│   └── backup_manager.py      #   backup через pg_dump и retention
+├── shared/                    # сервисы, нужные многим фичам
+│   ├── settings_service.py, settings_repository.py  # настройки серверов
+│   ├── kv_service.py, kv_repository.py              # key-value хранилище
+│   └── event_bus.py
+├── features/                  # фичи: всё про одну функцию лежит в её папке
+│   ├── polls/                 #   commands.py, service.py, repository.py, views.py
+│   ├── giveaways/             #   commands.py, service.py, repository.py, views.py
+│   ├── tickets/               #   commands.py, service.py, repository.py, views.py
+│   ├── reminders/, reaction_roles/, scheduler/, seasons/, birthdays/, tempvoice/, donations/
+│   │                          #   commands.py, service.py, repository.py
+│   ├── moderation/            #   commands.py, automod.py, warns.py, service.py, cases_service.py, репозитории
+│   ├── music/                 #   commands.py, service.py, repository.py, audio/ (Track, GuildPlayer, resolver)
+│   ├── streams/               #   Twitch, Kick, VK Видео, YouTube: уведомления, архив, чат-команды, RSVP
+│   ├── monitoring/            #   digest.py, heartbeat.py, ram_report.py
+│   ├── event_logs/            #   events.py (расширенные логи), service.py
+│   ├── guard/, ideas/, wardogs/, scan_bans/, setup/, greetings/
+│   │                          #   commands.py + service.py, repository.py или data.py, где нужны
+│   ├── startup/               #   events.py: Lifecycle (on_ready, статус)
+│   └── ai/, autorespond/, embed/, health/, help/, info/, permissions/, ping/, role_menu/,
+│       rules_gate/, server_stats/, snipe/, socials/, starboard/, utility/  #   commands.py
 ├── core/webpanel/             #   вебпанель конструктора эмбедов (aiohttp, /api/*)
 ├── core/overlay/              #   OBS-оверлей OBS (aiohttp): /overlay + /overlay/api + /overlay/health
 └── utils/
@@ -104,9 +74,9 @@ tests/                         # тесты структур, сервисов, 
 ```
 
 app/core/composition.assemble(config, db)
-├── app.db.*Repository(db)            → репозитории
-├── app.services.*Service(repo, ...)  → сервисы (настройки, моды, подписки…)
-├── app.services.*Service(settings, bot)  ← сервисы, зависящие от бота (логи, тикеты)
+├── app.features.<фича>.repository     → репозитории
+├── app.features.<фича>.service(repo, ...)  → сервисы (настройки, моды, подписки…)
+├── app.features.<фича>.service(settings, bot)  ← сервисы, зависящие от бота (логи, тикеты)
 └── Services → прошивается в MegaBot (bot.services)
     ↓
 app/core/loader.load_cogs(bot)        → коги по таблице COG_PROVIDERS

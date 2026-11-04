@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-from app.cogs.monitoring.digest import DigestCog
 from app.config import Config
+from app.features.monitoring.digest import DigestCog
 
 
 def _config(**overrides) -> Config:

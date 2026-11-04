@@ -6,20 +6,18 @@
 """
 import importlib
 import inspect
-import pkgutil
 import tempfile
 
 import pytest
 from discord.ext import commands
 
-from app.cogs import COGS_PACKAGE
 from app.config import Config
 from app.core.bot import MegaBot
 from app.core.composition import assemble
-from app.core.loader import COG_PROVIDERS, _build_cog
+from app.core.loader import COG_PROVIDERS, _build_cog, iter_cog_modules
 from app.db.database import Database
-from app.services.kick_service import KickService
-from app.services.settings_service import SettingsService
+from app.features.streams.kick_service import KickService
+from app.shared.settings_service import SettingsService
 
 
 def _config(tmp: str, pg_url: str | None = None) -> Config:
@@ -55,15 +53,10 @@ def test_assemble_builds_full_graph_once(pg_url) -> None:
 
 def test_cogs_never_accept_repositories() -> None:
     """Статическая граница слоёв: параметры когов = bot + ключи COG_PROVIDERS."""
-    package = importlib.import_module(COGS_PACKAGE)
-    modules = sorted(
-        (m for m in pkgutil.walk_packages(package.__path__, prefix=f"{COGS_PACKAGE}.") if not m.ispkg),
-        key=lambda m: m.name,
-    )
     allowed = {"bot"} | set(COG_PROVIDERS)
     checked = 0
-    for module in modules:
-        mod = importlib.import_module(module.name)
+    for module_name in iter_cog_modules():
+        mod = importlib.import_module(module_name)
         for member_name, member in vars(mod).items():
             if not (isinstance(member, type) and issubclass(member, commands.Cog)):
                 continue
@@ -107,7 +100,7 @@ async def test_all_cogs_load_through_composition(pg_url) -> None:
             assert len(loaded) >= 30, f"когов загружено: {len(loaded)}"
             assert {"Setup", "Kick", "Moderation", "TwitchStatus", "AutoMod", "StreamRsvp", "StreamStats"} <= set(loaded)
 
-            from app.cogs.general.help import _CATEGORIES, _category_embed, _flatten
+            from app.features.help.commands import _CATEGORIES, _category_embed, _flatten
 
             entries = _flatten(bot)
             assert entries
@@ -120,7 +113,7 @@ async def test_all_cogs_load_through_composition(pg_url) -> None:
 
 def test_build_cog_fallback_uses_constructor_defaults(pg_url) -> None:
     """Ког без сервисов строится через cls(bot): поведение не потеряно с контейнером."""
-    from app.cogs.general.ping import PingCog
+    from app.features.ping.commands import PingCog
 
     with tempfile.TemporaryDirectory() as tmp:
         bot = MegaBot(_config(tmp, pg_url))

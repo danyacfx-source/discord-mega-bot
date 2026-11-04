@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import discord
 
-from app.cogs.snipe.snipe import SnipeCog
-from app.cogs.utility.utility import UtilityCog
+from app.features.snipe.commands import SnipeCog
+from app.features.utility.commands import UtilityCog
 
 
 def _message(guild_id: int, channel_id: int) -> MagicMock:
@@ -60,7 +60,7 @@ async def test_snipe_guild_remove_drops_history() -> None:
 
 
 async def test_snipe_tracked_channels_capped() -> None:
-    from app.cogs.snipe.snipe import _MAX_TRACKED_CHANNELS
+    from app.features.snipe.commands import _MAX_TRACKED_CHANNELS
 
     cog = SnipeCog(MagicMock())
     message = _message(1, 0)

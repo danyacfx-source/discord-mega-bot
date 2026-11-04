@@ -114,6 +114,14 @@ def test_pg_env_keeps_password_out_of_process_args() -> None:
     assert env["PGDATABASE"] == "megabot"
 
 
+def test_pg_env_reads_unix_socket_from_query() -> None:
+    db = PostgresDatabase("postgresql://panel:@/megabot?host=/run/postgresql&port=5433")
+    env = db._pg_env()
+    assert env["PGHOST"] == "/run/postgresql"
+    assert env["PGPORT"] == "5433"
+    assert env["PGDATABASE"] == "megabot"
+
+
 def test_database_rejects_non_postgres_url() -> None:
     with pytest.raises(ValueError):
         Database("data/bot.db")

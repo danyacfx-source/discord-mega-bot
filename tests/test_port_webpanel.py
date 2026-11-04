@@ -653,7 +653,7 @@ async def test_logging_service_writes_to_web_ring(make_panel_bot):
     import logging
 
     from app.core.webpanel.log_ring import RingBufferHandler
-    from app.services.logging_service import LoggingService
+    from app.features.event_logs.service import LoggingService
 
     ring = RingBufferHandler(50)
     root = logging.getLogger()
@@ -731,7 +731,7 @@ async def test_logging_service_channel_only_when_configured(make_panel_bot):
     """send_embed не шлёт в Discord-канал без настройки; с настройкой — шлёт."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from app.services.logging_service import LoggingService
+    from app.features.event_logs.service import LoggingService
 
     bot = make_panel_bot()
 
@@ -808,8 +808,8 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
     """Файл .panel-token умер при редеплое — токен возвращается из БД для API-скриптов."""
     from types import SimpleNamespace
 
-    from app.db.kv_repository import KvRepository
-    from app.services.kv_service import KvService
+    from app.shared.kv_repository import KvRepository
+    from app.shared.kv_service import KvService
 
     bot = make_panel_bot()
     bot.db = Database(bot.config.database_url)

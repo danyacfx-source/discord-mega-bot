@@ -22,10 +22,10 @@ from app.core.stream_state import stream_activity
 if TYPE_CHECKING:
     from app.core.overlay import Overlay
     from app.core.root import Root
+    from app.core.services import Services
     from app.core.webpanel import WebPanel
     from app.db.backup_manager import DatabaseBackupManager
     from app.db.database import Database
-    from app.services import Services
 
 logger = logging.getLogger("bot")
 

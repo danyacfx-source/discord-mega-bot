@@ -202,14 +202,18 @@ class PostgresDatabase:
 
         DSN не передаётся в argv: пароль не должен быть виден в `ps`.
         """
-        from urllib.parse import unquote, urlparse
+        from urllib.parse import parse_qs, unquote, urlparse
 
         parsed = urlparse(self.url)
         env = dict(os.environ)
-        if parsed.hostname:
-            env["PGHOST"] = parsed.hostname
-        if parsed.port:
-            env["PGPORT"] = str(parsed.port)
+        # Unix-сокет задаётся в query: postgresql://user@/db?host=/run/postgresql
+        query = parse_qs(parsed.query)
+        host = parsed.hostname or query.get("host", [None])[0]
+        port = parsed.port or query.get("port", [None])[0]
+        if host:
+            env["PGHOST"] = host
+        if port:
+            env["PGPORT"] = str(port)
         if parsed.username:
             env["PGUSER"] = unquote(parsed.username)
         if parsed.password:

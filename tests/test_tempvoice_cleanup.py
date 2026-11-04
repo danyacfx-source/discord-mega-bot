@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 import discord
 from discord import HTTPException
 
-from app.cogs.tempvoice.tempvoice import TempVoiceCog
+from app.features.tempvoice.commands import TempVoiceCog
 
 _VoiceChannel = type("VoiceChannel2", (discord.VoiceChannel,), {})
 
@@ -34,7 +34,7 @@ def _channel(channel_id=101):
     return channel
 
 
-@patch("app.cogs.tempvoice.tempvoice.discord.VoiceChannel", new=_VoiceChannel)
+@patch("app.features.tempvoice.commands.discord.VoiceChannel", new=_VoiceChannel)
 async def test_empty_temp_channel_deleted_on_leave():
     cog = _cog()
     channel = _channel(101)
@@ -50,7 +50,7 @@ async def test_empty_temp_channel_deleted_on_leave():
     cog.tempvoice.delete.assert_awaited_once_with(101)
 
 
-@patch("app.cogs.tempvoice.tempvoice.discord.VoiceChannel", new=_VoiceChannel)
+@patch("app.features.tempvoice.commands.discord.VoiceChannel", new=_VoiceChannel)
 async def test_nonempty_temp_channel_not_deleted_on_leave():
     cog = _cog()
     channel = _channel(102)
@@ -63,7 +63,7 @@ async def test_nonempty_temp_channel_not_deleted_on_leave():
     channel.delete.assert_not_awaited()
 
 
-@patch("app.cogs.tempvoice.tempvoice.discord.VoiceChannel", new=_VoiceChannel)
+@patch("app.features.tempvoice.commands.discord.VoiceChannel", new=_VoiceChannel)
 async def test_delete_failure_keeps_db_row():
     cog = _cog()
     channel = _channel(101)

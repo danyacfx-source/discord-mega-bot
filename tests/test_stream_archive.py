@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from app.cogs.streams.archive import needs_seal, seal_archive
-from app.cogs.streams.stats import _entry_line, _fmt_minutes, _is_fresh, _summary
-from app.services.stream_archive import ARCHIVE_LIMIT, StreamArchiveStore
+from app.features.streams.archive import needs_seal, seal_archive
+from app.features.streams.stats import _entry_line, _fmt_minutes, _is_fresh, _summary
+from app.features.streams.stream_archive import ARCHIVE_LIMIT, StreamArchiveStore
 
 
 class FakeKv:

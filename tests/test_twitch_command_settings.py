@@ -9,8 +9,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from app.core.composition import assemble
 from app.core.webpanel.webpanel import WebPanel
 from app.db.database import Database
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.twitch_command_settings import (
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.twitch_command_settings import (
     default_twitch_command_settings,
     save_twitch_command_settings,
     save_twitch_commands_paused,

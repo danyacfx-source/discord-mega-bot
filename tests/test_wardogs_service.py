@@ -1,4 +1,4 @@
-from app.services.wardogs_service import WardogsService
+from app.features.wardogs.service import WardogsService
 
 
 def test_select_requires_exact_server_name() -> None:

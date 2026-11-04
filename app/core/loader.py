@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING
 
 from discord.ext import commands
 
-from app.cogs import COGS_PACKAGE
+from app.features import FEATURES_PACKAGE
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services import Services
+    from app.core.services import Services
 
 logger = logging.getLogger("bot")
 
@@ -86,8 +86,14 @@ def _build_cog(bot: MegaBot, cls: type) -> object:
     return cls(bot, **kwargs)
 
 
+def iter_cog_modules() -> list[str]:
+    """Имена всех модулей, в которых могут лежать коги, в стабильном порядке."""
+    package = importlib.import_module(FEATURES_PACKAGE)
+    return sorted(m.name for m in pkgutil.walk_packages(package.__path__, prefix=f"{FEATURES_PACKAGE}.") if not m.ispkg)
+
+
 async def load_cogs(bot: MegaBot) -> list[str]:
-    """Обходит app.cogs детерминированно и регистрирует коги по одному.
+    """Обходит фичи детерминированно и регистрирует коги по одному.
 
     - порядок определяется именами модулей (стабильный лог);
     - сбой одного кога не мешает остальным (ошибка логируется);
@@ -96,18 +102,12 @@ async def load_cogs(bot: MegaBot) -> list[str]:
     loaded: list[str] = []
     failures: list[tuple[str, str]] = []
     used_names: set[str] = set()
-    package = importlib.import_module(COGS_PACKAGE)
-    modules = sorted(
-        (m for m in pkgutil.walk_packages(package.__path__, prefix=f"{COGS_PACKAGE}.") if not m.ispkg),
-        key=lambda m: m.name,
-    )
-
-    for module in modules:
+    for module_name in iter_cog_modules():
         try:
-            mod = importlib.import_module(module.name)
+            mod = importlib.import_module(module_name)
         except Exception:
-            logger.exception("Не удалось импортировать модуль кога %s", module.name)
-            failures.append((module.name, "import"))
+            logger.exception("Не удалось импортировать модуль кога %s", module_name)
+            failures.append((module_name, "import"))
             continue
 
         for member_name, member in vars(mod).items():
@@ -116,19 +116,19 @@ async def load_cogs(bot: MegaBot) -> list[str]:
             if member is commands.Cog or member.__module__ != mod.__name__:
                 continue
             if member.__name__ in used_names:
-                logger.error("Ког %s пропущен: имя %s уже занято", module.name, member_name)
-                failures.append((module.name, f"duplicate:{member_name}"))
+                logger.error("Ког %s пропущен: имя %s уже занято", module_name, member_name)
+                failures.append((module_name, f"duplicate:{member_name}"))
                 continue
             try:
                 instance = _build_cog(bot, member)
                 await bot.add_cog(instance)
             except Exception:
-                logger.exception("Не удалось загрузить ког %s.%s", module.name, member_name)
-                failures.append((module.name, "add_cog"))
+                logger.exception("Не удалось загрузить ког %s.%s", module_name, member_name)
+                failures.append((module_name, "add_cog"))
                 continue
             used_names.add(member.__name__)
-            loaded.append(module.name)
-            logger.info("Ког загружен: %s.%s", module.name, member_name)
+            loaded.append(module_name)
+            logger.info("Ког загружен: %s.%s", module_name, member_name)
 
     if failures:
         logger.error("Загружено когов: %d, с ошибками: %d", len(loaded), len(failures))
@@ -141,7 +141,9 @@ async def register_persistent_views(bot: MegaBot) -> None:
     """Регистрирует кнопки тикетов, опросов и розыгрышей, которые переживают рестарт бота."""
     import json
 
-    from app.core.views import GiveawayView, PollView, TicketCloseView, TicketOpenView
+    from app.features.giveaways.views import GiveawayView
+    from app.features.polls.views import PollView
+    from app.features.tickets.views import TicketCloseView, TicketOpenView
 
     services = bot.services
     if services is None:

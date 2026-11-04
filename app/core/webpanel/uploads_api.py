@@ -15,13 +15,13 @@ from typing import Any
 from aiohttp import web
 
 from app.core.webpanel.base_api import _BaseApi
+from app.core.webpanel.media_files_repository import MediaFilesRepository
 from app.core.webpanel.payload import (
     _MAGIC,
     _MAX_UPLOAD_BYTES,
     _UPLOAD_EXTS,
     _UPLOAD_NAME_RE,
 )
-from app.db.media_files_repository import MediaFilesRepository
 
 _MIME_BY_EXT = {
     ".png": "image/png",

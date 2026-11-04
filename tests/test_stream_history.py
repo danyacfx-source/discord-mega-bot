@@ -5,9 +5,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.cogs.streams.stream_cards import live_card
-from app.services.stream_session import StreamSessionStore
-from app.utils.stream_history import sparkline, trend
+from app.features.streams.stream_cards import live_card
+from app.features.streams.stream_history import sparkline, trend
+from app.features.streams.stream_session import StreamSessionStore
 
 
 class FakeKv:

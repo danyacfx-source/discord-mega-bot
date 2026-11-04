@@ -49,7 +49,7 @@ from app.core.webpanel.tools_api import _ToolsApiMixin
 from app.core.webpanel.trusted_proxy import CLOUDFLARE_NETWORKS, fetch_cloudflare_networks
 from app.core.webpanel.uploads_api import _UploadsApiMixin
 from app.core.webpanel.workboard_api import _WorkboardApiMixin
-from app.services.wardogs_service import WardogsService, WardogsUnavailable
+from app.features.wardogs.service import WardogsService, WardogsUnavailable
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

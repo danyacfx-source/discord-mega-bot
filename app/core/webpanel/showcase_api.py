@@ -277,7 +277,7 @@ class _ShowcaseApiMixin(_BaseApi):
             youtube_active = await self.services.kv.get("stream:youtube:active")
             session = None
             if youtube_active:
-                from app.services.stream_session import StreamSessionStore
+                from app.features.streams.stream_session import StreamSessionStore
 
                 session = await StreamSessionStore(
                     self.services.kv, "stream:session:youtube:dendosich"

@@ -78,7 +78,7 @@ _CSP = f"default-src 'self'; {_CSP_SCRIPT_SRC}; {_CSP_REST}"
 _LOG_RING_SIZE = 2000
 _WELCOME_PRESET_KEY = "welcome_preset"
 
-#: Пресеты карточек стримов (см. app.cogs.streams.stream_cards.CARDS_KEY).
+#: Пресеты карточек стримов (см. app.features.streams.stream_cards.CARDS_KEY).
 _STREAM_CARDS_KEY = "stream:cards"
 _CARD_PLATFORMS = ("twitch", "kick", "vk_video")
 _CARD_HEX_RE = re.compile(r"#?[0-9a-fA-F]{6}\Z")

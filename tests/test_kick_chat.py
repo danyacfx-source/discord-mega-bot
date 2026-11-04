@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from app.services.kick_service import KickService, truncate_chat_content
+from app.features.streams.kick_service import KickService, truncate_chat_content
 
 
 def _service(token: str = "dev-token") -> KickService:

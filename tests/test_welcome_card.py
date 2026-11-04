@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-from app.cogs.administration.greetings import GreetingsCog
 from app.config import Config
-from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
+from app.features.greetings.commands import GreetingsCog
+from app.features.greetings.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
 
 def _config(**overrides) -> Config:

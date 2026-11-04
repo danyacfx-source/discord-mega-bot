@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from app.cogs.donations.donations import DonationsCog
+from app.features.donations.commands import DonationsCog
 
 GUILD_ID = 1524743223866556456
 DONATION_CHANNEL = 1550271635045490688

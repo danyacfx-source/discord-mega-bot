@@ -33,7 +33,7 @@ async def _setup(tmp: str, pg_url):
 # --- автомод: _analyze с учётом БД-слов ---
 
 def _automod_cog(env_banned: str = "") -> object:
-    from app.cogs.moderation.automod import AutoModCog
+    from app.features.moderation.automod import AutoModCog
 
     cfg = SimpleNamespace(
         automod_banned_words=env_banned,

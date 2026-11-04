@@ -11,7 +11,7 @@ from typing import Any
 import asyncpg
 
 from app.db.database import Database, _is_availability_error
-from app.services.settings_service import SettingsService
+from app.shared.settings_service import SettingsService
 
 _URL = "postgresql://u:p@localhost:5432/x"
 

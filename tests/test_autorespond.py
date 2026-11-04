@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.cogs.general.autorespond import AutorespondCog
 from app.config import Config
+from app.features.autorespond.commands import AutorespondCog
 
 
 def _config(**overrides) -> Config:

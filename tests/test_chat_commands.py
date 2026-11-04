@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.cogs.streams.chat_commands import parse_privmsg
 from app.config import Config
-from app.db.chat_coins_repository import ChatCoinsRepository
 from app.db.database import Database
-from app.services.chat_coins_service import ChatCoinsService
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.chat_feed import ChatFeed
-from app.services.viewer_sessions import ViewerSessionStore
+from app.features.streams.chat_coins_repository import ChatCoinsRepository
+from app.features.streams.chat_coins_service import ChatCoinsService
+from app.features.streams.chat_commands import parse_privmsg
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.chat_feed import ChatFeed
+from app.features.streams.viewer_sessions import ViewerSessionStore
 
 
 @pytest.fixture
@@ -205,7 +205,7 @@ async def test_command_cooldown(kick) -> None:
 async def test_slots_jackpot(kick, monkeypatch) -> None:
     service, recorder = kick
     await service._coins.add("kick", "viewer", "Viewer", 100)
-    monkeypatch.setattr("app.services.chat_commands_service.secrets.choice", lambda seq: "7️⃣")
+    monkeypatch.setattr("app.features.streams.chat_commands_service.secrets.choice", lambda seq: "7️⃣")
     await service.handle(_msg("!слоты 10"))
     assert "ВЫИГРЫШ" in recorder.last
     row = await service._coins.get("kick", "viewer")
@@ -227,7 +227,7 @@ async def test_flip_win(kick, monkeypatch) -> None:
     service, recorder = kick
     await service._coins.add("kick", "viewer", "Viewer", 100)
     answers = iter(("heads", "heads"))  # ставка выбрана орлом, выпал орёл
-    monkeypatch.setattr("app.services.chat_commands_service.secrets.choice", lambda seq: next(answers))
+    monkeypatch.setattr("app.features.streams.chat_commands_service.secrets.choice", lambda seq: next(answers))
     await service.handle(_msg("!монетка 20 орёл"))
     assert "выигрыш" in recorder.last.lower()
     row = await service._coins.get("kick", "viewer")
@@ -354,7 +354,7 @@ async def test_so_only_for_mods(kick) -> None:
 async def test_kick_dispatch_maps_identity(service, tmp_path, monkeypatch) -> None:
     from types import SimpleNamespace
 
-    from app.cogs.streams.kick import KickCog
+    from app.features.streams.kick import KickCog
 
     recorder = _Recorder()
     service.register_platform("kick", reply=recorder)
@@ -421,7 +421,7 @@ class _FakeTwitch:
 
 @pytest.mark.asyncio
 async def test_on_message_touches_viewer_session_and_caches_stream_key() -> None:
-    from app.cogs.streams.chat_commands import StreamChatCog
+    from app.features.streams.chat_commands import StreamChatCog
 
     twitch = _FakeTwitch()
     chat = SimpleNamespace(handle=AsyncMock())
@@ -452,7 +452,7 @@ async def test_on_message_touches_viewer_session_and_caches_stream_key() -> None
 @pytest.mark.asyncio
 async def test_kick_feed_works_with_commands_disabled(db, tmp_path, monkeypatch) -> None:
     """Kick пишет в оверлей-чат даже при CHAT_COMMANDS_ENABLED=0 — как Twitch."""
-    from app.cogs.streams.kick import KickCog
+    from app.features.streams.kick import KickCog
 
     config = _config(tmp_path, monkeypatch, CHAT_COMMANDS_ENABLED="0")
     feed = ChatFeed()

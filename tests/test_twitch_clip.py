@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from app.config import Config
-from app.services.twitch_service import TwitchService
+from app.features.streams.twitch_service import TwitchService
 
 
 class FakeKv:

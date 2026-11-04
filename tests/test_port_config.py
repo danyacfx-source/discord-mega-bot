@@ -9,18 +9,18 @@ import pytest
 
 from app.config import Config
 from app.core.bot import MegaBot
-from app.db.birthdays_repository import BirthdaysRepository
 from app.db.database import Database
-from app.db.donations_repository import DonationsRepository
-from app.db.kv_repository import KvRepository
-from app.db.scheduled_repository import ScheduledRepository
-from app.db.temp_voices_repository import TempVoicesRepository
-from app.services.birthday_service import BirthdayService
-from app.services.donation_service import DonationService
-from app.services.kick_service import KickService
-from app.services.scheduler_service import ScheduledMessagesService
-from app.services.temp_voice_service import TempVoiceService
-from app.services.twitch_service import TwitchService
+from app.features.birthdays.repository import BirthdaysRepository
+from app.features.birthdays.service import BirthdayService
+from app.features.donations.repository import DonationsRepository
+from app.features.donations.service import DonationService
+from app.features.scheduler.repository import ScheduledRepository
+from app.features.scheduler.service import ScheduledMessagesService
+from app.features.streams.kick_service import KickService
+from app.features.streams.twitch_service import TwitchService
+from app.features.tempvoice.repository import TempVoicesRepository
+from app.features.tempvoice.service import TempVoiceService
+from app.shared.kv_repository import KvRepository
 
 
 def test_panel_api_token_header():

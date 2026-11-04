@@ -5,7 +5,7 @@ import pytest
 
 from app.config import Config
 from app.core.bot import MegaBot
-from app.services.idea_board_service import IdeaBoardService, IdeaError
+from app.features.ideas.service import IdeaBoardService, IdeaError
 
 
 class _KV:

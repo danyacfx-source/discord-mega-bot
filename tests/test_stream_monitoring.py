@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from app.cogs.streams.abort_alert import abort_alert
-from app.cogs.streams.poll_guard import PollGuard
+from app.features.streams.abort_alert import abort_alert
+from app.features.streams.poll_guard import PollGuard
 
 
 def _fail_once(guard: PollGuard, key: str = "twitch:a") -> None:

@@ -6,11 +6,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.db.database import Database
-from app.db.giveaways_repository import GiveawaysRepository
-from app.db.polls_repository import PollsRepository
-from app.db.reaction_roles_repository import ReactionRolesRepository
-from app.db.reminders_repository import RemindersRepository
-from app.db.warns_repository import WarnsRepository
+from app.features.giveaways.repository import GiveawaysRepository
+from app.features.moderation.warns_repository import WarnsRepository
+from app.features.polls.repository import PollsRepository
+from app.features.reaction_roles.repository import ReactionRolesRepository
+from app.features.reminders.repository import RemindersRepository
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ async def test_giveaways_join_draw_and_expire(db):
     entries = await repo.entries(gid)
     assert len(entries) == 5
 
-    from app.services.giveaway_service import GiveawayService
+    from app.features.giveaways.service import GiveawayService
 
     service = GiveawayService(repo)
     winners = service.draw(entries, 2)

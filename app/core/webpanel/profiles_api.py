@@ -9,30 +9,30 @@ from typing import Any
 import discord
 from aiohttp import web
 
-from app.cogs.ai.chat_ai import DEFAULT_PROMPT, resolve_ai_system_prompt
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _STREAM_CARDS_KEY,
     _WELCOME_PRESET_KEY,
     _clean_cards_preset,
 )
-from app.services.stream_rsvp import resolve_rsvp_role
-from app.services.stream_session import session_is_live
-from app.services.twitch_command_settings import (
+from app.features.ai.commands import DEFAULT_PROMPT, resolve_ai_system_prompt
+from app.features.greetings.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
+from app.features.streams.stream_history import trend
+from app.features.streams.stream_rsvp import resolve_rsvp_role
+from app.features.streams.stream_session import session_is_live
+from app.features.streams.twitch_command_settings import (
     command_settings_payload,
     load_twitch_commands_paused,
     save_twitch_command_settings,
     save_twitch_commands_paused,
 )
-from app.services.twitch_promo import (
+from app.features.streams.twitch_promo import (
     TWITCH_PROMO_KEY,
     clean_promo_text,
     load_twitch_promo_settings,
     normalize_promo_interval,
 )
-from app.services.viewer_sessions import ViewerSessionStore
-from app.utils.stream_history import trend
-from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
+from app.features.streams.viewer_sessions import ViewerSessionStore
 
 logger = logging.getLogger("bot.webpanel")
 

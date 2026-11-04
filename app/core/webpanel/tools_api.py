@@ -31,6 +31,7 @@ from app.core.overlay.layout import (
     save_layout,
     save_layouts,
 )
+from app.core.webpanel.admin_audit_repository import AdminAuditRepository
 from app.core.webpanel.base_api import _BaseApi
 from app.core.webpanel.payload import (
     _PANEL_ROLE_KEY,
@@ -40,8 +41,7 @@ from app.core.webpanel.payload import (
     _trim_embeds,
     overlay_url_base,
 )
-from app.db.admin_audit_repository import AdminAuditRepository
-from app.services.live_vote_service import VoteError
+from app.features.streams.live_vote_service import VoteError
 
 logger = logging.getLogger("bot.webpanel")
 
