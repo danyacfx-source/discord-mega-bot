@@ -14,7 +14,7 @@ from app.core import embeds
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from app.services import Services
+    from app.core.services import Services
     from app.services.ticket_service import TicketService
 
 TICKET_OPEN_ID = "ticket:open"

@@ -32,6 +32,7 @@ def assemble(
 ) -> Root:
     """Строит и возвращает Root со всеми сервисами и ботом."""
     from app.core.bot import MegaBot
+    from app.core.services import Services
     from app.db.birthdays_repository import BirthdaysRepository
     from app.db.chat_coins_repository import ChatCoinsRepository
     from app.db.donations_repository import DonationsRepository
@@ -48,7 +49,6 @@ def assemble(
     from app.db.temp_voices_repository import TempVoicesRepository
     from app.db.tickets_repository import TicketsRepository
     from app.db.warns_repository import WarnsRepository
-    from app.services import Services
     from app.services.birthday_service import BirthdayService
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService

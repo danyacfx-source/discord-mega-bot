@@ -1,0 +1,68 @@
+"""Реестр сервисов всех фич.
+
+Сервисы не знают, кто их создал: граф собирается в composition root
+(``app/core/composition.py``), где репозитории подставляются явно.
+Как добавить сервис:
+  1. создать ``app/features/<фича>/service.py`` (класс наследует ``BaseService``);
+  2. добавить поле в :class:`Services` и строку в ``assemble()``.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.services.birthday_service import BirthdayService
+from app.services.chat_coins_service import ChatCoinsService
+from app.services.chat_commands_service import ChatCommandsService
+from app.services.chat_feed import ChatFeed
+from app.services.command_guard_service import CommandGuardService
+from app.services.donation_service import DonationService
+from app.services.event_bus import EventBus
+from app.services.giveaway_service import GiveawayService
+from app.services.idea_board_service import IdeaBoardService
+from app.services.kick_service import KickService
+from app.services.kv_service import KvService
+from app.services.live_vote_service import LiveVoteService
+from app.services.logging_service import LoggingService
+from app.services.moderation_case_service import ModerationCaseService
+from app.services.moderation_service import ModerationService
+from app.services.music_service import MusicService
+from app.services.poll_service import PollService
+from app.services.reaction_roles_service import ReactionRolesService
+from app.services.reminder_service import ReminderService
+from app.services.scheduler_service import ScheduledMessagesService
+from app.services.season_service import SeasonService
+from app.services.settings_service import SettingsService
+from app.services.temp_voice_service import TempVoiceService
+from app.services.ticket_service import TicketService
+from app.services.twitch_service import TwitchService
+from app.services.vk_video_service import VkVideoService
+
+
+@dataclass(slots=True)
+class Services:
+    settings: SettingsService
+    kv: KvService
+    moderation: ModerationService
+    cases: ModerationCaseService
+    music: MusicService
+    tickets: TicketService
+    logging: LoggingService
+    reminders: ReminderService
+    polls: PollService
+    giveaways: GiveawayService
+    idea_board: IdeaBoardService
+    reaction_roles: ReactionRolesService
+    donations: DonationService
+    twitch: TwitchService
+    kick: KickService
+    vk_video: VkVideoService
+    tempvoice: TempVoiceService
+    birthdays: BirthdayService
+    seasons: SeasonService
+    scheduled: ScheduledMessagesService
+    chat_coins: ChatCoinsService
+    chat_commands: ChatCommandsService
+    chat_feed: ChatFeed
+    live_vote: LiveVoteService
+    guard: CommandGuardService
+    events: EventBus

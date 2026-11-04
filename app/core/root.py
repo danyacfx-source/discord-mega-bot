@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 from app.config import Config
 from app.core.bot import MegaBot
+from app.core.services import Services
 from app.db.database import Database
-from app.services import Services
 
 
 @dataclass(slots=True)
