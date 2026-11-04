@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from app.core import embeds
-from app.core.views import TicketCloseView
+from app.features.tickets.views import TicketCloseView
 from app.types import TicketRow
 
 if TYPE_CHECKING:

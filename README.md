@@ -195,11 +195,13 @@ Docker/Kubernetes secrets. Логи хранятся вне репозитори
 main.py                 # точка входа
 app/
   config.py             # конфигурация из .env
-  core/                 # ядро: бот, composition root (assemble), порты, логгер, загрузчик когов, embed-фабрика, views, checks
-  db/                   # слой данных: БД (PostgreSQL) + репозитории
-  services/             # бизнес-логика: settings, moderation, tickets, logging, music, reminders…
-  services/audio/       # Track, GuildPlayer (очередь/воспроизведение), yt-dlp resolver
-  cogs/                 # коги: сервисы приходят конструктором (собирает loader по COG_PROVIDERS)
+  core/                 # ядро: бот, composition root (assemble), реестр Services, логгер, загрузчик фич, embed-фабрика, checks, webpanel, overlay
+  db/                   # общий слой данных: подключение к PostgreSQL, схема, базовый репозиторий, backup
+  shared/               # сервисы, нужные многим фичам: settings, kv, event_bus
+  features/             # фичи: у каждой своя папка
+    polls/              #   commands.py (команды), service.py (логика), repository.py (БД), views.py (кнопки)
+    music/              #   + audio/: Track, GuildPlayer, yt-dlp resolver
+    moderation/  streams/  tickets/  ...
   utils/                # helpers: time, format, pagination
 systemd/                # юнит для автозапуска на Linux
 scripts/                # install_ubuntu.sh, healthcheck.py, check_secrets.py, lock_requirements.py, audit_deps.py

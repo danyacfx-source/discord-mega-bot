@@ -119,7 +119,7 @@ class _CommunityApiMixin(_BaseApi):
         )
 
     def _giveaway_view(self) -> Any:
-        from app.core.views import GiveawayView
+        from app.features.giveaways.views import GiveawayView
 
         return GiveawayView()
 
@@ -237,7 +237,7 @@ class _CommunityApiMixin(_BaseApi):
             channel = self._resolve_channel(raw_channel)
             if channel is None or channel.guild.id != guild.id:
                 return self._json({"ok": False, "error": "Канал не найден на этом сервере"}, status=400)
-            from app.core.views import TicketOpenView
+            from app.features.tickets.views import TicketOpenView
 
             embed = embeds.info(
                 settings.get("ticket_panel_title") or _TICKET_DEFAULTS["ticket_panel_title"],
@@ -467,7 +467,7 @@ class _CommunityApiMixin(_BaseApi):
         service = self.services.polls
         poll_id = await service.create(guild.id, channel.id, guild.me.id if guild.me else 0, question, options)
         embed = await service.embed(poll_id)
-        from app.core.views import PollView
+        from app.features.polls.views import PollView
 
         view = PollView(poll_id, len(options))
         try:

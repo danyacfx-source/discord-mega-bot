@@ -8,8 +8,8 @@ from discord import app_commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.core.views import PollView
 from app.features.polls.service import PollService
+from app.features.polls.views import PollView
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

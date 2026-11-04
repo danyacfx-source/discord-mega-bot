@@ -8,8 +8,8 @@ from discord import app_commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.core.views import TicketOpenView
 from app.features.tickets.service import TicketService
+from app.features.tickets.views import TicketOpenView
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

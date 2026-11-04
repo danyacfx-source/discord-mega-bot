@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 
 from discord.ext import commands
 
-from app.cogs import COGS_PACKAGE
 from app.features import FEATURES_PACKAGE
 
 if TYPE_CHECKING:
@@ -89,11 +88,8 @@ def _build_cog(bot: MegaBot, cls: type) -> object:
 
 def iter_cog_modules() -> list[str]:
     """Имена всех модулей, в которых могут лежать коги, в стабильном порядке."""
-    names: list[str] = []
-    for package_name in (FEATURES_PACKAGE, COGS_PACKAGE):
-        package = importlib.import_module(package_name)
-        names += [m.name for m in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}.") if not m.ispkg]
-    return sorted(names)
+    package = importlib.import_module(FEATURES_PACKAGE)
+    return sorted(m.name for m in pkgutil.walk_packages(package.__path__, prefix=f"{FEATURES_PACKAGE}.") if not m.ispkg)
 
 
 async def load_cogs(bot: MegaBot) -> list[str]:
@@ -145,7 +141,9 @@ async def register_persistent_views(bot: MegaBot) -> None:
     """Регистрирует кнопки тикетов, опросов и розыгрышей, которые переживают рестарт бота."""
     import json
 
-    from app.core.views import GiveawayView, PollView, TicketCloseView, TicketOpenView
+    from app.features.giveaways.views import GiveawayView
+    from app.features.polls.views import PollView
+    from app.features.tickets.views import TicketCloseView, TicketOpenView
 
     services = bot.services
     if services is None:

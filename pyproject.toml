@@ -50,5 +50,12 @@ warn_unused_ignores = true
 # reports false positives for valid declarations such as ``class X(MegaCog,
 # name="X")``. Other call-site errors remain enabled.
 [[tool.mypy.overrides]]
-module = ["app.cogs.*"]
+module = [
+    "app.features.*.commands",
+    "app.features.*.events",
+    "app.features.moderation.automod",
+    "app.features.moderation.warns",
+    "app.features.monitoring.*",
+    "app.features.streams.*",
+]
 disable_error_code = ["call-arg"]

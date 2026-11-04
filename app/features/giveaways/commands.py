@@ -12,8 +12,8 @@ from discord.ext import tasks
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.core.views import GiveawayView
 from app.features.giveaways.service import GiveawayService
+from app.features.giveaways.views import GiveawayView
 from app.types import GiveawayRow
 from app.utils.format import relative
 from app.utils.time import parse_duration
