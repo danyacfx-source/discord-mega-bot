@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from app.core.base import BaseService
-from app.db.birthdays_repository import BirthdaysRepository
+from app.features.birthdays.repository import BirthdaysRepository
 from app.types import BirthdayRow
 
 

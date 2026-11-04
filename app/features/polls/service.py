@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 import discord
 
 from app.core.base import BaseService
-from app.db.polls_repository import PollsRepository
+from app.features.polls.repository import PollsRepository
 
 if TYPE_CHECKING:
-    from app.db.polls_repository import PollsRepository
+    from app.features.polls.repository import PollsRepository
 
 
 class PollService(BaseService[PollsRepository]):

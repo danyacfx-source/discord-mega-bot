@@ -33,14 +33,12 @@ def assemble(
     """Строит и возвращает Root со всеми сервисами и ботом."""
     from app.core.bot import MegaBot
     from app.core.services import Services
-    from app.db.birthdays_repository import BirthdaysRepository
     from app.db.chat_coins_repository import ChatCoinsRepository
     from app.db.donations_repository import DonationsRepository
     from app.db.giveaways_repository import GiveawaysRepository
     from app.db.kv_repository import KvRepository
     from app.db.moderation_cases_repository import ModerationCasesRepository
     from app.db.music_repository import MusicRepository
-    from app.db.polls_repository import PollsRepository
     from app.db.reaction_roles_repository import ReactionRolesRepository
     from app.db.reminders_repository import RemindersRepository
     from app.db.scheduled_repository import ScheduledRepository
@@ -49,7 +47,10 @@ def assemble(
     from app.db.temp_voices_repository import TempVoicesRepository
     from app.db.tickets_repository import TicketsRepository
     from app.db.warns_repository import WarnsRepository
-    from app.services.birthday_service import BirthdayService
+    from app.features.birthdays.repository import BirthdaysRepository
+    from app.features.birthdays.service import BirthdayService
+    from app.features.polls.repository import PollsRepository
+    from app.features.polls.service import PollService
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService
     from app.services.chat_feed import ChatFeed
@@ -65,7 +66,6 @@ def assemble(
     from app.services.moderation_case_service import ModerationCaseService
     from app.services.moderation_service import ModerationService
     from app.services.music_service import MusicService
-    from app.services.poll_service import PollService
     from app.services.reaction_roles_service import ReactionRolesService
     from app.services.reminder_service import ReminderService
     from app.services.scheduler_service import ScheduledMessagesService

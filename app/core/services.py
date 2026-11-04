@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.services.birthday_service import BirthdayService
+from app.features.birthdays.service import BirthdayService
+from app.features.polls.service import PollService
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService
 from app.services.chat_feed import ChatFeed
@@ -26,7 +27,6 @@ from app.services.logging_service import LoggingService
 from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import ModerationService
 from app.services.music_service import MusicService
-from app.services.poll_service import PollService
 from app.services.reaction_roles_service import ReactionRolesService
 from app.services.reminder_service import ReminderService
 from app.services.scheduler_service import ScheduledMessagesService

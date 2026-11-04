@@ -13,7 +13,7 @@ from discord import app_commands
 
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.services.birthday_service import BirthdayService
+from app.features.birthdays.service import BirthdayService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
