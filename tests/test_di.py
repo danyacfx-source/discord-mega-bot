@@ -16,7 +16,7 @@ from app.core.bot import MegaBot
 from app.core.composition import assemble
 from app.core.loader import COG_PROVIDERS, _build_cog, iter_cog_modules
 from app.db.database import Database
-from app.services.kick_service import KickService
+from app.features.streams.kick_service import KickService
 from app.shared.settings_service import SettingsService
 
 

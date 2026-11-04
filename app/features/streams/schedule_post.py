@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands, tasks
 
-from app.cogs.streams.quiet import resolve_tz
-from app.cogs.streams.stats import _segment_line
-from app.services.twitch_service import TwitchService
+from app.features.streams.quiet import resolve_tz
+from app.features.streams.stats import _segment_line
+from app.features.streams.twitch_service import TwitchService
 from app.shared.kv_service import KvService
 
 if TYPE_CHECKING:

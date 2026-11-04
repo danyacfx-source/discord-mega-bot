@@ -11,7 +11,7 @@ import re
 from typing import Any
 
 from app.core.api_client import ApiRequestError
-from app.services.stream_platform import StreamPlatformService
+from app.features.streams.stream_platform import StreamPlatformService
 
 logger = logging.getLogger("bot.services")
 

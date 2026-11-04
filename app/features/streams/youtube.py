@@ -11,14 +11,14 @@ import discord
 from discord.ext import tasks
 from yt_dlp.utils import UserNotLive
 
-from app.cogs.streams.poll_guard import PollGuard
-from app.cogs.streams.quiet import is_quiet
-from app.cogs.streams.stream_announce import pin_sticky, unpin_sticky
-from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.services.stream_session import StreamSessionStore
-from app.services.youtube_data_api import YouTubeDataAPI
-from app.services.youtube_live import probe_youtube_live
+from app.features.streams.poll_guard import PollGuard
+from app.features.streams.quiet import is_quiet
+from app.features.streams.stream_announce import pin_sticky, unpin_sticky
+from app.features.streams.stream_cards import card_presets, live_card, offline_card
+from app.features.streams.stream_session import StreamSessionStore
+from app.features.streams.youtube_data_api import YouTubeDataAPI
+from app.features.streams.youtube_live import probe_youtube_live
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

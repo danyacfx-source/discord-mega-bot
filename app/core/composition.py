@@ -33,7 +33,6 @@ def assemble(
     """Строит и возвращает Root со всеми сервисами и ботом."""
     from app.core.bot import MegaBot
     from app.core.services import Services
-    from app.db.chat_coins_repository import ChatCoinsRepository
     from app.features.birthdays.repository import BirthdaysRepository
     from app.features.birthdays.service import BirthdayService
     from app.features.donations.repository import DonationsRepository
@@ -59,17 +58,18 @@ def assemble(
     from app.features.scheduler.service import ScheduledMessagesService
     from app.features.seasons.repository import SeasonRepository
     from app.features.seasons.service import SeasonService
+    from app.features.streams.chat_coins_repository import ChatCoinsRepository
+    from app.features.streams.chat_coins_service import ChatCoinsService
+    from app.features.streams.chat_commands_service import ChatCommandsService
+    from app.features.streams.chat_feed import ChatFeed
+    from app.features.streams.kick_service import KickService
+    from app.features.streams.live_vote_service import LiveVoteService
+    from app.features.streams.twitch_service import TwitchService
+    from app.features.streams.vk_video_service import VkVideoService
     from app.features.tempvoice.repository import TempVoicesRepository
     from app.features.tempvoice.service import TempVoiceService
     from app.features.tickets.repository import TicketsRepository
     from app.features.tickets.service import TicketService
-    from app.services.chat_coins_service import ChatCoinsService
-    from app.services.chat_commands_service import ChatCommandsService
-    from app.services.chat_feed import ChatFeed
-    from app.services.kick_service import KickService
-    from app.services.live_vote_service import LiveVoteService
-    from app.services.twitch_service import TwitchService
-    from app.services.vk_video_service import VkVideoService
     from app.shared.event_bus import EventBus
     from app.shared.kv_repository import KvRepository
     from app.shared.kv_service import KvService

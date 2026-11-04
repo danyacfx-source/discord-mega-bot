@@ -9,17 +9,17 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 
-from app.cogs.streams.abort_alert import abort_alert
-from app.cogs.streams.archive import needs_seal, seal_archive
-from app.cogs.streams.poll_guard import PollGuard
-from app.cogs.streams.quiet import is_quiet
-from app.cogs.streams.stream_announce import pin_sticky, post_rsvp, rsvp_stream_end, unpin_sticky
-from app.cogs.streams.stream_cards import card_presets, live_card, offline_card
-from app.cogs.streams.stream_role import update_stream_role
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
 from app.core.stream_state import stream_activity
-from app.services.twitch_service import TwitchService
+from app.features.streams.abort_alert import abort_alert
+from app.features.streams.archive import needs_seal, seal_archive
+from app.features.streams.poll_guard import PollGuard
+from app.features.streams.quiet import is_quiet
+from app.features.streams.stream_announce import pin_sticky, post_rsvp, rsvp_stream_end, unpin_sticky
+from app.features.streams.stream_cards import card_presets, live_card, offline_card
+from app.features.streams.stream_role import update_stream_role
+from app.features.streams.twitch_service import TwitchService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

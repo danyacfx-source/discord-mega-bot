@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams import chat_commands as chat_module
-from app.cogs.streams.chat_commands import StreamChatCog
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.chat_feed import ChatFeed
+from app.features.streams import chat_commands as chat_module
+from app.features.streams.chat_commands import StreamChatCog
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.chat_feed import ChatFeed
 
 
 def _config(*, commands: bool = True) -> SimpleNamespace:

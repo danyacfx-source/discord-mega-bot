@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams.youtube import YouTubeCog
-from app.services.youtube_data_api import YouTubeDataAPI, video_live_status
-from app.services.youtube_live import parse_youtube_live, probe_youtube_live
+from app.features.streams.youtube import YouTubeCog
+from app.features.streams.youtube_data_api import YouTubeDataAPI, video_live_status
+from app.features.streams.youtube_live import parse_youtube_live, probe_youtube_live
 
 VIDEO_ID = "Abc_123-xYz"
 CHANNEL_ID = "UC012345678901234567890"

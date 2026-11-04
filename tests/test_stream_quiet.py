@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta, timezone
 
-from app.cogs.streams.quiet import is_quiet
 from app.config import Config, _hour_range
+from app.features.streams.quiet import is_quiet
 
 MSK = timezone(timedelta(hours=3))
 

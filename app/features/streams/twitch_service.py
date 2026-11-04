@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from app.core.api_client import ApiRequestError
-from app.services.stream_archive import parse_dt
-from app.services.stream_platform import StreamPlatformService
+from app.features.streams.stream_archive import parse_dt
+from app.features.streams.stream_platform import StreamPlatformService
 
 if TYPE_CHECKING:
     from app.config import Config

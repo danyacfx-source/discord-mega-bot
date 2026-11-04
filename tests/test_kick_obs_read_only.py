@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams.kick import KickCog
+from app.features.streams.kick import KickCog
 
 
 @pytest.mark.asyncio

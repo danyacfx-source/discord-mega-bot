@@ -16,8 +16,8 @@ from typing import Any
 import discord
 
 from app.core.embeds import NEUTRAL
+from app.features.streams.stream_history import sparkline, trend
 from app.utils.format import truncate
-from app.utils.stream_history import sparkline, trend
 
 #: KV-ключ пресетов карточек (JSON, см. вебпанель «Карточки стримов»).
 CARDS_KEY = "stream:cards"

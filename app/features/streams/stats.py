@@ -9,19 +9,19 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from app.cogs.streams.quiet import resolve_tz
 from app.core import embeds
 from app.core.embeds import NEUTRAL
-from app.services.stream_archive import parse_dt
+from app.features.streams.quiet import resolve_tz
+from app.features.streams.stream_archive import parse_dt
 from app.utils.format import truncate
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services.kick_service import KickService
-    from app.services.stream_archive import StreamArchiveStore
-    from app.services.stream_session import StreamSessionStore
-    from app.services.twitch_service import TwitchService
-    from app.services.vk_video_service import VkVideoService
+    from app.features.streams.kick_service import KickService
+    from app.features.streams.stream_archive import StreamArchiveStore
+    from app.features.streams.stream_session import StreamSessionStore
+    from app.features.streams.twitch_service import TwitchService
+    from app.features.streams.vk_video_service import VkVideoService
 
 _PLATFORM_NAMES = {"twitch": "Twitch", "kick": "Kick", "vk_video": "VK Видео"}
 _MAX_LINES = 10

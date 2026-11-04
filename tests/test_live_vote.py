@@ -9,8 +9,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from app.config import Config
 from app.core.bot import MegaBot
 from app.core.webpanel.webpanel import WebPanel
-from app.services.chat_commands_service import ChatMessage
-from app.services.live_vote_service import LiveVoteService, VoteError
+from app.features.streams.chat_commands_service import ChatMessage
+from app.features.streams.live_vote_service import LiveVoteService, VoteError
 
 
 class _KV:

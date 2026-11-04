@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from app.cogs.streams.rsvp import StreamRsvp
-from app.cogs.streams.stream_announce import RSVP_EMOJI, post_rsvp, rsvp_stream_end, rsvp_users
-from app.services.stream_rsvp import StreamRsvpStore
+from app.features.streams.rsvp import StreamRsvp
+from app.features.streams.stream_announce import RSVP_EMOJI, post_rsvp, rsvp_stream_end, rsvp_users
+from app.features.streams.stream_rsvp import StreamRsvpStore
 
 
 class FakeKv:
@@ -132,7 +132,7 @@ async def test_rsvp_users_none_when_announce_message_deleted():
 
 @pytest.mark.asyncio
 async def test_pin_helpers_track_and_survive_errors():
-    from app.cogs.streams.stream_announce import pin_sticky, unpin_sticky
+    from app.features.streams.stream_announce import pin_sticky, unpin_sticky
 
     class PinnableMessage(FakeMessage):
         def __init__(self) -> None:

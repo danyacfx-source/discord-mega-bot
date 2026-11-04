@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from app.cogs.streams.stream_role import update_stream_role
+from app.features.streams.stream_role import update_stream_role
 
 
 class FakeRole:

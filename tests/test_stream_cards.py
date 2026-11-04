@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.cogs.streams.stream_cards import CARDS_KEY, _duration, card_presets, live_card, offline_card
-from app.services.stream_session import StreamSessionStore
+from app.features.streams.stream_cards import CARDS_KEY, _duration, card_presets, live_card, offline_card
+from app.features.streams.stream_session import StreamSessionStore
 
 
 class FakeKv:

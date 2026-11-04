@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from app.services.twitch_command_settings import (
+from app.features.streams.twitch_command_settings import (
     load_twitch_command_settings,
     load_twitch_commands_paused,
     twitch_command_alias_map,
@@ -25,9 +25,9 @@ from app.services.twitch_command_settings import (
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.services.chat_coins_service import ChatCoinsService
-    from app.services.chat_feed import ChatFeed
-    from app.services.live_vote_service import LiveVoteService
+    from app.features.streams.chat_coins_service import ChatCoinsService
+    from app.features.streams.chat_feed import ChatFeed
+    from app.features.streams.live_vote_service import LiveVoteService
     from app.shared.kv_service import KvService
 
 logger = logging.getLogger("bot.services")

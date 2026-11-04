@@ -8,16 +8,16 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from app.cogs.streams.stream_announce import RSVP_EMOJI, rsvp_users
 from app.core import embeds
-from app.services.stream_rsvp import RSVP_ROLE_NAME, StreamRsvpStore, resolve_rsvp_role
-from app.services.stream_session import session_is_live
+from app.features.streams.stream_announce import RSVP_EMOJI, rsvp_users
+from app.features.streams.stream_rsvp import RSVP_ROLE_NAME, StreamRsvpStore, resolve_rsvp_role
+from app.features.streams.stream_session import session_is_live
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services.kick_service import KickService
-    from app.services.twitch_service import TwitchService
-    from app.services.vk_video_service import VkVideoService
+    from app.features.streams.kick_service import KickService
+    from app.features.streams.twitch_service import TwitchService
+    from app.features.streams.vk_video_service import VkVideoService
 
 logger = logging.getLogger("bot.cogs")
 

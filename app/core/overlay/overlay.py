@@ -16,7 +16,7 @@ from app.core.crypto import decrypt_text, encrypt_text, is_encrypted
 from app.core.overlay.chat_settings import filter_chat_messages, get_chat_paused, load_chat_settings
 from app.core.overlay.layout import load_layout
 from app.core.shield import is_scanner_path, is_scanner_ua
-from app.utils.stream_history import sparkline, trend
+from app.features.streams.stream_history import sparkline, trend
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

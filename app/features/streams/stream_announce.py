@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from app.services.stream_rsvp import StreamRsvpStore, resolve_rsvp_role
+from app.features.streams.stream_rsvp import StreamRsvpStore, resolve_rsvp_role
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

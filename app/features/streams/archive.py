@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from app.services.stream_archive import StreamArchiveStore, parse_dt
+from app.features.streams.stream_archive import StreamArchiveStore, parse_dt
 
 
 async def needs_seal(store: StreamArchiveStore, session: dict[str, Any] | None) -> bool:

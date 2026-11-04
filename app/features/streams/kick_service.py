@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 from app.core.api_client import ApiRequestError
-from app.services.stream_platform import StreamPlatformService
+from app.features.streams.stream_platform import StreamPlatformService
 
 if TYPE_CHECKING:
     from app.config import Config

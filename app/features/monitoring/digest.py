@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord.ext import commands, tasks
 
-from app.cogs.streams.quiet import resolve_tz
 from app.core import embeds
 from app.core.base import MegaCog
 from app.features.event_logs.service import LoggingService
+from app.features.streams.quiet import resolve_tz
 from app.shared.kv_service import KvService
 
 if TYPE_CHECKING:

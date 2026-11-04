@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from app.cogs.streams.chat_commands import StreamChatCog
 from app.core.composition import assemble
 from app.core.webpanel.webpanel import WebPanel
 from app.db.database import Database
-from app.services.twitch_promo import (
+from app.features.streams.chat_commands import StreamChatCog
+from app.features.streams.twitch_promo import (
     load_twitch_promo_settings,
     normalize_promo_interval,
 )

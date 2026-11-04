@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 import aiohttp
 
 from app.core.api_client import ApiClient
-from app.services.stream_archive import StreamArchiveStore
-from app.services.stream_rsvp import StreamRsvpStore
-from app.services.stream_session import StreamSessionStore
-from app.services.viewer_sessions import ViewerSessionStore
+from app.features.streams.stream_archive import StreamArchiveStore
+from app.features.streams.stream_rsvp import StreamRsvpStore
+from app.features.streams.stream_session import StreamSessionStore
+from app.features.streams.viewer_sessions import ViewerSessionStore
 
 if TYPE_CHECKING:
     from app.config import Config

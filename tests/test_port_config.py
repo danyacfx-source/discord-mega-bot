@@ -16,10 +16,10 @@ from app.features.donations.repository import DonationsRepository
 from app.features.donations.service import DonationService
 from app.features.scheduler.repository import ScheduledRepository
 from app.features.scheduler.service import ScheduledMessagesService
+from app.features.streams.kick_service import KickService
+from app.features.streams.twitch_service import TwitchService
 from app.features.tempvoice.repository import TempVoicesRepository
 from app.features.tempvoice.service import TempVoiceService
-from app.services.kick_service import KickService
-from app.services.twitch_service import TwitchService
 from app.shared.kv_repository import KvRepository
 
 

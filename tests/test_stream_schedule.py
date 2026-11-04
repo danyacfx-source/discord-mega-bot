@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from app.cogs.streams.stats import _segment_line
-from app.services.twitch_service import _parse_schedule
+from app.features.streams.stats import _segment_line
+from app.features.streams.twitch_service import _parse_schedule
 
 _NOW = datetime(2026, 10, 2, 12, 0, tzinfo=UTC)
 

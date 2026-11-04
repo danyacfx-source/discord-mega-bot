@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.config import Config
-from app.db.chat_coins_repository import ChatCoinsRepository
 from app.db.database import Database
-from app.services.chat_coins_service import ChatCoinsService
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.chat_feed import ChatFeed
+from app.features.streams.chat_coins_repository import ChatCoinsRepository
+from app.features.streams.chat_coins_service import ChatCoinsService
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.chat_feed import ChatFeed
 
 
 @pytest.fixture

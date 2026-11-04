@@ -41,7 +41,7 @@ from app.core.webpanel.payload import (
     overlay_url_base,
 )
 from app.db.admin_audit_repository import AdminAuditRepository
-from app.services.live_vote_service import VoteError
+from app.features.streams.live_vote_service import VoteError
 
 logger = logging.getLogger("bot.webpanel")
 

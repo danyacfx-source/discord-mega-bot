@@ -17,14 +17,14 @@ import aiohttp
 from discord.ext import tasks
 
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.twitch_bot_auth import TwitchBotAuth
-from app.services.twitch_promo import (
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.twitch_bot_auth import TwitchBotAuth
+from app.features.streams.twitch_promo import (
     clean_promo_text,
     load_twitch_promo_settings,
     normalize_promo_interval,
 )
-from app.services.twitch_service import TwitchService
+from app.features.streams.twitch_service import TwitchService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.cogs.streams.schedule_post import SchedulePostCog
 from app.config import Config
+from app.features.streams.schedule_post import SchedulePostCog
 
 
 def _config(**overrides) -> Config:
@@ -127,7 +127,7 @@ async def test_hour_gate_skips_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # сейчас не 21-й час по Москве — часовые ворота должны закрыть цикл
     fixed = dt(2026, 10, 2, 10, 0, tzinfo=ZoneInfo("Europe/Moscow"))
-    import app.cogs.streams.schedule_post as mod
+    import app.features.streams.schedule_post as mod
 
     real_now = mod.datetime.now
 

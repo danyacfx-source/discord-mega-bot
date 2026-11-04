@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.db.chat_coins_repository import ChatCoinsRepository
+    from app.features.streams.chat_coins_repository import ChatCoinsRepository
 
 
 class ChatCoinsService:

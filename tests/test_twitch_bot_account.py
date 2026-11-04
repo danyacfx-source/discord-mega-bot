@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.cogs.streams.chat_commands import TwitchIrc, _safe_auth_reason
 from app.core.crypto import decrypt_file, is_encrypted_file
-from app.services.chat_commands_service import ChatCommandsService, ChatMessage
-from app.services.twitch_bot_auth import TwitchBotAuth
+from app.features.streams.chat_commands import TwitchIrc, _safe_auth_reason
+from app.features.streams.chat_commands_service import ChatCommandsService, ChatMessage
+from app.features.streams.twitch_bot_auth import TwitchBotAuth
 
 
 def test_oauth_diagnostic_does_not_expose_private_error_messages() -> None:
@@ -104,7 +104,7 @@ async def test_anonymous_chat_keeps_broadcaster_commands() -> None:
 @pytest.mark.asyncio
 async def test_manual_chat_token_does_not_need_same_app_client_id(monkeypatch, tmp_path) -> None:
     """External IRC bot token works even when Twitch stream API uses another app."""
-    from app.services import twitch_bot_auth as auth_module
+    from app.features.streams import twitch_bot_auth as auth_module
 
     session = MagicMock()
     response = MagicMock(status=200)
@@ -132,7 +132,7 @@ async def test_manual_chat_token_does_not_need_same_app_client_id(monkeypatch, t
 @pytest.mark.asyncio
 async def test_managed_refresh_token_still_checks_app_client_id(monkeypatch, tmp_path) -> None:
     """Protect app-owned refresh tokens against accepting the wrong OAuth app."""
-    from app.services import twitch_bot_auth as auth_module
+    from app.features.streams import twitch_bot_auth as auth_module
 
     session = MagicMock()
     response = MagicMock(status=200)
@@ -159,7 +159,7 @@ async def test_managed_refresh_token_still_checks_app_client_id(monkeypatch, tmp
 
 @pytest.mark.asyncio
 async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, tmp_path, at_rest_key) -> None:
-    from app.services import twitch_bot_auth as auth_module
+    from app.features.streams import twitch_bot_auth as auth_module
 
     client_id = "generator_application"
     session = MagicMock()
@@ -226,7 +226,7 @@ async def test_ttg_refresh_rotates_access_and_refresh_persistently(monkeypatch, 
 
 @pytest.mark.asyncio
 async def test_ttg_refuses_wrong_generator_client_id(monkeypatch, tmp_path) -> None:
-    from app.services import twitch_bot_auth as auth_module
+    from app.features.streams import twitch_bot_auth as auth_module
 
     session = MagicMock()
     session.__aenter__.return_value = session
@@ -253,7 +253,7 @@ async def test_ttg_refuses_wrong_generator_client_id(monkeypatch, tmp_path) -> N
 
 @pytest.mark.asyncio
 async def test_ttg_does_not_follow_redirects_or_log_tokens(monkeypatch, tmp_path) -> None:
-    from app.services import twitch_bot_auth as auth_module
+    from app.features.streams import twitch_bot_auth as auth_module
 
     session = MagicMock()
     session.__aenter__.return_value = session
