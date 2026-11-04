@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.core.services import Services
-    from app.services.ticket_service import TicketService
+    from app.features.tickets.service import TicketService
 
 TICKET_OPEN_ID = "ticket:open"
 TICKET_CLOSE_ID = "ticket:close"

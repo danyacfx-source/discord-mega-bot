@@ -166,7 +166,7 @@ async def test_clear_scan_ban_helper_keeps_counter_and_reports_unknown_ip(make_p
 
 @pytest.mark.asyncio
 async def test_scanbans_unban_command_is_owner_only_and_clears_ban(make_panel_bot):
-    from app.cogs.administration.scan_bans import ScanBansCog
+    from app.features.scan_bans.commands import ScanBansCog
 
     bot = make_panel_bot()
     await _boot_db(bot)

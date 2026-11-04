@@ -7,7 +7,7 @@ from aiohttp.test_utils import TestClient, TestServer
 from app.config import Config
 from app.core.bot import MegaBot
 from app.core.webpanel.webpanel import WebPanel
-from app.utils.welcome_card import WelcomePreset
+from app.features.greetings.welcome_card import WelcomePreset
 
 
 def _panel(tmp_path, pg_url) -> MegaBot:

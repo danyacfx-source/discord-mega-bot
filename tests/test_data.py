@@ -3,8 +3,8 @@
 import pytest
 
 from app.db.database import Database
-from app.db.tickets_repository import TicketsRepository
 from app.db.warns_repository import WarnsRepository
+from app.features.tickets.repository import TicketsRepository
 from app.shared.settings_repository import SettingsRepository
 from app.shared.settings_service import SettingsService
 

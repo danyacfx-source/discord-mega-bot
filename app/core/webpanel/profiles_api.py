@@ -16,6 +16,7 @@ from app.core.webpanel.payload import (
     _clean_cards_preset,
 )
 from app.features.ai.commands import DEFAULT_PROMPT, resolve_ai_system_prompt
+from app.features.greetings.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 from app.services.stream_rsvp import resolve_rsvp_role
 from app.services.stream_session import session_is_live
 from app.services.twitch_command_settings import (
@@ -32,7 +33,6 @@ from app.services.twitch_promo import (
 )
 from app.services.viewer_sessions import ViewerSessionStore
 from app.utils.stream_history import trend
-from app.utils.welcome_card import WelcomePreset, make_placeholder_avatar, render_welcome_card
 
 logger = logging.getLogger("bot.webpanel")
 

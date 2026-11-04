@@ -9,7 +9,7 @@ from discord import app_commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.core.setup_data import CHANNEL_CATEGORIES, EXTRA_ROLES, ROLE_SETTINGS
+from app.features.setup.data import CHANNEL_CATEGORIES, EXTRA_ROLES, ROLE_SETTINGS
 from app.shared.settings_service import SettingsService
 
 if TYPE_CHECKING:

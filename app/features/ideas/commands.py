@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 
 from app.core.base import MegaCog
-from app.services.idea_board_service import STATUS_LABELS, IdeaBoardService, IdeaError
+from app.features.ideas.service import STATUS_LABELS, IdeaBoardService, IdeaError
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

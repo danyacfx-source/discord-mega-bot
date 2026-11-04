@@ -100,7 +100,7 @@ async def test_all_cogs_load_through_composition(pg_url) -> None:
             assert len(loaded) >= 30, f"когов загружено: {len(loaded)}"
             assert {"Setup", "Kick", "Moderation", "TwitchStatus", "AutoMod", "StreamRsvp", "StreamStats"} <= set(loaded)
 
-            from app.cogs.general.help import _CATEGORIES, _category_embed, _flatten
+            from app.features.help.commands import _CATEGORIES, _category_embed, _flatten
 
             entries = _flatten(bot)
             assert entries
@@ -113,7 +113,7 @@ async def test_all_cogs_load_through_composition(pg_url) -> None:
 
 def test_build_cog_fallback_uses_constructor_defaults(pg_url) -> None:
     """Ког без сервисов строится через cls(bot): поведение не потеряно с контейнером."""
-    from app.cogs.general.ping import PingCog
+    from app.features.ping.commands import PingCog
 
     with tempfile.TemporaryDirectory() as tmp:
         bot = MegaBot(_config(tmp, pg_url))

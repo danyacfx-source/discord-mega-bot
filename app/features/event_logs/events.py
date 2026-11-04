@@ -8,7 +8,7 @@ from discord.ext import commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.logging_service import LoggingService
+from app.features.event_logs.service import LoggingService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

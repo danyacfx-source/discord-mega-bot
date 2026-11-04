@@ -9,7 +9,7 @@ from discord import app_commands
 from app.core import embeds
 from app.core.base import MegaCog
 from app.core.views import TicketOpenView
-from app.services.ticket_service import TicketService
+from app.features.tickets.service import TicketService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

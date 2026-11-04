@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from app.cogs.administration.guard import GuardCog
-from app.cogs.administration.scan_bans import ScanBansCog
-from app.cogs.administration.setup import SetupCog
-from app.cogs.administration.tickets import TicketCog
+from app.features.guard.commands import GuardCog
+from app.features.scan_bans.commands import ScanBansCog
+from app.features.setup.commands import SetupCog
+from app.features.tickets.commands import TicketCog
 
 
 @pytest.mark.parametrize(

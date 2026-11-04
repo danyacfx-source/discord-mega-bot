@@ -653,7 +653,7 @@ async def test_logging_service_writes_to_web_ring(make_panel_bot):
     import logging
 
     from app.core.webpanel.log_ring import RingBufferHandler
-    from app.services.logging_service import LoggingService
+    from app.features.event_logs.service import LoggingService
 
     ring = RingBufferHandler(50)
     root = logging.getLogger()
@@ -731,7 +731,7 @@ async def test_logging_service_channel_only_when_configured(make_panel_bot):
     """send_embed не шлёт в Discord-канал без настройки; с настройкой — шлёт."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from app.services.logging_service import LoggingService
+    from app.features.event_logs.service import LoggingService
 
     bot = make_panel_bot()
 

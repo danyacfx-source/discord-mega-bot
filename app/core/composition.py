@@ -36,14 +36,16 @@ def assemble(
     from app.db.chat_coins_repository import ChatCoinsRepository
     from app.db.moderation_cases_repository import ModerationCasesRepository
     from app.db.music_repository import MusicRepository
-    from app.db.tickets_repository import TicketsRepository
     from app.db.warns_repository import WarnsRepository
     from app.features.birthdays.repository import BirthdaysRepository
     from app.features.birthdays.service import BirthdayService
     from app.features.donations.repository import DonationsRepository
     from app.features.donations.service import DonationService
+    from app.features.event_logs.service import LoggingService
     from app.features.giveaways.repository import GiveawaysRepository
     from app.features.giveaways.service import GiveawayService
+    from app.features.guard.service import CommandGuardService
+    from app.features.ideas.service import IdeaBoardService
     from app.features.polls.repository import PollsRepository
     from app.features.polls.service import PollService
     from app.features.reaction_roles.repository import ReactionRolesRepository
@@ -56,18 +58,16 @@ def assemble(
     from app.features.seasons.service import SeasonService
     from app.features.tempvoice.repository import TempVoicesRepository
     from app.features.tempvoice.service import TempVoiceService
+    from app.features.tickets.repository import TicketsRepository
+    from app.features.tickets.service import TicketService
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_commands_service import ChatCommandsService
     from app.services.chat_feed import ChatFeed
-    from app.services.command_guard_service import CommandGuardService
-    from app.services.idea_board_service import IdeaBoardService
     from app.services.kick_service import KickService
     from app.services.live_vote_service import LiveVoteService
-    from app.services.logging_service import LoggingService
     from app.services.moderation_case_service import ModerationCaseService
     from app.services.moderation_service import ModerationService
     from app.services.music_service import MusicService
-    from app.services.ticket_service import TicketService
     from app.services.twitch_service import TwitchService
     from app.services.vk_video_service import VkVideoService
     from app.shared.event_bus import EventBus

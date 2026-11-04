@@ -16,8 +16,8 @@ from app.core.views import TicketCloseView
 from app.types import TicketRow
 
 if TYPE_CHECKING:
-    from app.db.tickets_repository import TicketsRepository
-    from app.services.logging_service import LoggingService
+    from app.features.event_logs.service import LoggingService
+    from app.features.tickets.repository import TicketsRepository
     from app.shared.settings_service import SettingsService
 
 _MAX_TRANSCRIPT_MESSAGES = 300

@@ -11,7 +11,7 @@ import discord
 from app.config import Config, GuardConfig
 from app.core.bot import MegaBot
 from app.core.composition import assemble
-from app.services.command_guard_service import CommandGuardService
+from app.features.guard.service import CommandGuardService
 from app.shared.kv_service import KvService
 
 
@@ -335,11 +335,11 @@ async def test_guard_cog_loads_through_composition(pg_url) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         bot = await _bot_with_guard(tmp, pg_url)
         try:
-            from app.cogs.administration.guard import GuardCog
             from app.core.loader import load_cogs
+            from app.features.guard.commands import GuardCog
 
             loaded = await load_cogs(bot)
-            assert any(name.endswith("administration.guard") for name in loaded), loaded
+            assert any(name.endswith("guard.commands") for name in loaded), loaded
 
             # loader уже прошёл по всем модулям — ког обязан быть собран и получить синглтон
             cog = bot.get_cog("Administration")

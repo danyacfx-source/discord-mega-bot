@@ -35,8 +35,8 @@ from app.core.webpanel.payload import (
 )
 from app.db.admin_audit_repository import AdminAuditRepository
 from app.db.panel_login_lock_repository import PanelLoginLockRepository
-from app.db.panel_scan_repository import PanelScanRepository
 from app.db.panel_session_repository import PanelSessionRepository
+from app.features.scan_bans.repository import PanelScanRepository
 
 logger = logging.getLogger("bot.webpanel")
 

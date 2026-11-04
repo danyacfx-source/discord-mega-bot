@@ -8,7 +8,7 @@ import discord
 import pytest
 
 from app.core.bot import MegaBot
-from app.services.logging_service import LoggingService
+from app.features.event_logs.service import LoggingService
 
 
 @pytest.mark.asyncio

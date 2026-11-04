@@ -10,7 +10,7 @@ from discord import app_commands
 from app.core import embeds
 from app.core.base import MegaCog
 from app.core.checks import is_owner
-from app.services.command_guard_service import CommandGuardService
+from app.features.guard.service import CommandGuardService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
