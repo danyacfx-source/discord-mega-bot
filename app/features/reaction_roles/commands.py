@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.reaction_roles_service import ReactionRolesService
+from app.features.reaction_roles.service import ReactionRolesService
 from app.utils.pagination import PaginatorView
 
 if TYPE_CHECKING:

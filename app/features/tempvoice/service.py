@@ -5,13 +5,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.core.base import BaseService
-from app.db.temp_voices_repository import TempVoicesRepository
+from app.features.tempvoice.repository import TempVoicesRepository
 from app.types import TempVoiceRow
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from app.db.temp_voices_repository import TempVoicesRepository
+    from app.features.tempvoice.repository import TempVoicesRepository
 
 
 class TempVoiceService(BaseService[TempVoicesRepository]):

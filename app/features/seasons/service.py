@@ -4,10 +4,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.base import BaseService
-from app.db.season_repository import SeasonRepository
+from app.features.seasons.repository import SeasonRepository
 
 if TYPE_CHECKING:
-    from app.db.season_repository import SeasonRepository
+    from app.features.seasons.repository import SeasonRepository
 
 
 class SeasonService(BaseService[SeasonRepository]):

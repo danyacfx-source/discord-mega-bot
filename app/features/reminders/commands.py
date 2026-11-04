@@ -12,7 +12,7 @@ from discord.ext import tasks
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.reminder_service import ReminderService
+from app.features.reminders.service import ReminderService
 from app.types import ReminderRow
 from app.utils.format import plural, relative
 from app.utils.time import parse_duration

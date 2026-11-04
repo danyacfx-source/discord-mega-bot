@@ -11,13 +11,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.features.birthdays.service import BirthdayService
+from app.features.donations.service import DonationService
+from app.features.giveaways.service import GiveawayService
 from app.features.polls.service import PollService
+from app.features.reaction_roles.service import ReactionRolesService
+from app.features.reminders.service import ReminderService
+from app.features.scheduler.service import ScheduledMessagesService
+from app.features.seasons.service import SeasonService
+from app.features.tempvoice.service import TempVoiceService
 from app.services.chat_coins_service import ChatCoinsService
 from app.services.chat_commands_service import ChatCommandsService
 from app.services.chat_feed import ChatFeed
 from app.services.command_guard_service import CommandGuardService
-from app.services.donation_service import DonationService
-from app.services.giveaway_service import GiveawayService
 from app.services.idea_board_service import IdeaBoardService
 from app.services.kick_service import KickService
 from app.services.live_vote_service import LiveVoteService
@@ -25,11 +30,6 @@ from app.services.logging_service import LoggingService
 from app.services.moderation_case_service import ModerationCaseService
 from app.services.moderation_service import ModerationService
 from app.services.music_service import MusicService
-from app.services.reaction_roles_service import ReactionRolesService
-from app.services.reminder_service import ReminderService
-from app.services.scheduler_service import ScheduledMessagesService
-from app.services.season_service import SeasonService
-from app.services.temp_voice_service import TempVoiceService
 from app.services.ticket_service import TicketService
 from app.services.twitch_service import TwitchService
 from app.services.vk_video_service import VkVideoService

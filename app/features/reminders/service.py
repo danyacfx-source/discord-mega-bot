@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.core.base import BaseService
-from app.db.reminders_repository import RemindersRepository
+from app.features.reminders.repository import RemindersRepository
 from app.types import ReminderRow, ReminderSummary
 
 

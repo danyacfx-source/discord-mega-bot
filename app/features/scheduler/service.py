@@ -9,7 +9,7 @@ import discord
 
 from app.core import embeds
 from app.core.base import BaseService
-from app.db.scheduled_repository import ScheduledRepository
+from app.features.scheduler.repository import ScheduledRepository
 from app.types import ScheduledMessageRow
 
 

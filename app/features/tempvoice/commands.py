@@ -11,7 +11,7 @@ from discord.ext import commands, tasks
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.temp_voice_service import TempVoiceService
+from app.features.tempvoice.service import TempVoiceService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

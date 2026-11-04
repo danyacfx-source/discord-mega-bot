@@ -14,7 +14,7 @@ from app.core.api_client import ApiClient, ApiRequestError
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.db.donations_repository import DonationsRepository
+    from app.features.donations.repository import DonationsRepository
     from app.shared.kv_repository import KvRepository
 
 logger = logging.getLogger("bot.services")

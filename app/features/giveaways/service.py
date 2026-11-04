@@ -8,7 +8,7 @@ from datetime import datetime
 import discord
 
 from app.core.base import BaseService
-from app.db.giveaways_repository import GiveawaysRepository
+from app.features.giveaways.repository import GiveawaysRepository
 from app.types import GiveawayRow
 
 

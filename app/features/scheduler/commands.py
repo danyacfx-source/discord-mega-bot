@@ -10,7 +10,7 @@ import discord
 from discord.ext import tasks
 
 from app.core.base import MegaCog
-from app.services.scheduler_service import ScheduledMessagesService
+from app.features.scheduler.service import ScheduledMessagesService
 from app.types import ScheduledMessageRow
 
 if TYPE_CHECKING:

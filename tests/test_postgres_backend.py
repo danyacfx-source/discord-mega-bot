@@ -1,9 +1,10 @@
 """Проверки PostgreSQL-адаптера без обязательного запущенного PostgreSQL."""
 from __future__ import annotations
 
-from app.db import reminders_repository, scheduled_repository
 from app.db.postgres_database import _translate_sql
 from app.db.schema import POSTGRES_SCHEMA, postgres_index_names, postgres_table_names
+from app.features.reminders import repository as reminders_repository
+from app.features.scheduler import repository as scheduled_repository
 
 
 def test_postgres_translates_placeholders_and_generated_id() -> None:

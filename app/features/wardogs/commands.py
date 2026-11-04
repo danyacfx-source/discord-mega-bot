@@ -4,7 +4,7 @@ from __future__ import annotations
 import discord
 
 from app.core.base import MegaCog
-from app.services.wardogs_service import WardogsService, WardogsUnavailable
+from app.features.wardogs.service import WardogsService, WardogsUnavailable
 
 
 class WardogsCog(MegaCog, name="Wardogs"):

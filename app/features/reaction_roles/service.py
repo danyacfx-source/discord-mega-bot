@@ -4,10 +4,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.core.base import BaseService
-from app.db.reaction_roles_repository import ReactionRolesRepository
+from app.features.reaction_roles.repository import ReactionRolesRepository
 
 if TYPE_CHECKING:
-    from app.db.reaction_roles_repository import ReactionRolesRepository
+    from app.features.reaction_roles.repository import ReactionRolesRepository
 
 
 class ReactionRolesService(BaseService[ReactionRolesRepository]):

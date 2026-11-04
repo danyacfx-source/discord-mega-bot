@@ -11,7 +11,7 @@ from discord.ext import commands, tasks
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.season_service import SeasonService
+from app.features.seasons.service import SeasonService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

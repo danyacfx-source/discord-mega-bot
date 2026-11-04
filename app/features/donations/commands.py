@@ -12,7 +12,7 @@ from discord.ext import tasks
 
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.services.donation_service import DonationService
+from app.features.donations.service import DonationService
 
 if TYPE_CHECKING:
     from app.config import Config
