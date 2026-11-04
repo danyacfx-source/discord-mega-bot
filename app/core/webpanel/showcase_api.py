@@ -227,7 +227,8 @@ class _ShowcaseApiMixin(_BaseApi):
 
     async def _showcase_media(self) -> list[dict[str, Any]]:
         items = await self._gallery_load()
-        public = [item for item in items if item.get("public")]
+        # reversed: при одинаковом времени новые записи (они в конце списка) идут первыми.
+        public = [item for item in reversed(items) if item.get("public")]
         public.sort(key=lambda i: str(i.get("created_at") or ""), reverse=True)
         return [
             self._media_row(item, "")

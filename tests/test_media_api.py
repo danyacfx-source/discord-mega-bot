@@ -116,3 +116,30 @@ async def test_media_corrupt_kv_degrades(tmp_path, pg_url):
                 assert body["ok"] and body["items"] == []
     finally:
         await bot.close()
+
+
+@pytest.mark.asyncio
+async def test_media_order_newest_first_when_timestamps_tie(tmp_path, pg_url):
+    """Часы могут выдать одно время двум записям: новая всё равно должна быть сверху."""
+    bot = _panel(tmp_path, pg_url)
+    await bot.setup_hook()
+    panel = WebPanel(bot)
+    headers = {"X-Panel-Token": panel._static_token or ""}
+    same_time = "2026-01-01T00:00:00.000000+00:00"
+
+    async def gallery() -> list[dict]:
+        return [
+            {"id": "older", "url": "/uploads/a.png", "public": True, "created_at": same_time},
+            {"id": "newer", "url": "/uploads/b.png", "public": True, "created_at": same_time},
+        ]
+
+    panel._gallery_load = gallery
+    try:
+        async with TestServer(panel._create_app()) as server:
+            async with TestClient(server) as client:
+                resp = await client.get("/api/media", headers=headers)
+                body = await resp.json()
+        assert [item["id"] for item in body["items"]] == ["newer", "older"]
+        assert [item["id"] for item in await panel._showcase_media()] == ["newer", "older"]
+    finally:
+        await bot.close()
