@@ -11,7 +11,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from app.db.kv_repository import KvRepository
+from app.shared.kv_repository import KvRepository
 
 #: Без сообщений столько секунд — зритель считается вышедшим из эфира.
 OFFLINE_AFTER_SECONDS = 300

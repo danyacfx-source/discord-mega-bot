@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.db.kv_repository import KvRepository
+from app.shared.kv_repository import KvRepository
 
 #: Сколько завершённых эфиров хранится на канал (старые отсекаются).
 ARCHIVE_LIMIT = 50

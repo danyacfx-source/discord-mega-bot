@@ -11,7 +11,7 @@ from app.services.stream_platform import StreamPlatformService
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.db.kv_repository import KvRepository
+    from app.shared.kv_repository import KvRepository
 
 logger = logging.getLogger("bot.services")
 

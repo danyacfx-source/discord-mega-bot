@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.db.kv_repository import KvRepository
+from app.shared.kv_repository import KvRepository
 
 #: Роль «На стриме» — выдаётся за 🔔 под старт-анонсом.
 RSVP_ROLE_NAME = "На стриме"

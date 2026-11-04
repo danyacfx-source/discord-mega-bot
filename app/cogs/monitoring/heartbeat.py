@@ -24,7 +24,7 @@ from discord.ext import commands, tasks
 
 from app.core import embeds
 from app.core.base import MegaCog, wait_ready_or_stop
-from app.services.settings_service import SettingsService
+from app.shared.settings_service import SettingsService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

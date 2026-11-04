@@ -18,7 +18,7 @@ from app.types import TicketRow
 if TYPE_CHECKING:
     from app.db.tickets_repository import TicketsRepository
     from app.services.logging_service import LoggingService
-    from app.services.settings_service import SettingsService
+    from app.shared.settings_service import SettingsService
 
 _MAX_TRANSCRIPT_MESSAGES = 300
 logger = logging.getLogger("bot.tickets")

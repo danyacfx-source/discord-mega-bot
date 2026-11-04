@@ -17,7 +17,7 @@ from app.core.composition import assemble
 from app.core.loader import COG_PROVIDERS, _build_cog, iter_cog_modules
 from app.db.database import Database
 from app.services.kick_service import KickService
-from app.services.settings_service import SettingsService
+from app.shared.settings_service import SettingsService
 
 
 def _config(tmp: str, pg_url: str | None = None) -> Config:

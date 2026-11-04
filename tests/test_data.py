@@ -3,10 +3,10 @@
 import pytest
 
 from app.db.database import Database
-from app.db.settings_repository import SettingsRepository
 from app.db.tickets_repository import TicketsRepository
 from app.db.warns_repository import WarnsRepository
-from app.services.settings_service import SettingsService
+from app.shared.settings_repository import SettingsRepository
+from app.shared.settings_service import SettingsService
 
 
 @pytest.fixture

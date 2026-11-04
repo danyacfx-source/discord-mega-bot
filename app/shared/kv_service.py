@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.db.kv_repository import KvRepository
+    from app.shared.kv_repository import KvRepository
 
 
 class KvService:

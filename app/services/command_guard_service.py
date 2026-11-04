@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.services.kv_service import KvService
+    from app.shared.kv_service import KvService
 
 logger = logging.getLogger("bot.guard")
 

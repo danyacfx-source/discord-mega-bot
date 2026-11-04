@@ -36,14 +36,12 @@ def assemble(
     from app.db.chat_coins_repository import ChatCoinsRepository
     from app.db.donations_repository import DonationsRepository
     from app.db.giveaways_repository import GiveawaysRepository
-    from app.db.kv_repository import KvRepository
     from app.db.moderation_cases_repository import ModerationCasesRepository
     from app.db.music_repository import MusicRepository
     from app.db.reaction_roles_repository import ReactionRolesRepository
     from app.db.reminders_repository import RemindersRepository
     from app.db.scheduled_repository import ScheduledRepository
     from app.db.season_repository import SeasonRepository
-    from app.db.settings_repository import SettingsRepository
     from app.db.temp_voices_repository import TempVoicesRepository
     from app.db.tickets_repository import TicketsRepository
     from app.db.warns_repository import WarnsRepository
@@ -56,11 +54,9 @@ def assemble(
     from app.services.chat_feed import ChatFeed
     from app.services.command_guard_service import CommandGuardService
     from app.services.donation_service import DonationService
-    from app.services.event_bus import EventBus
     from app.services.giveaway_service import GiveawayService
     from app.services.idea_board_service import IdeaBoardService
     from app.services.kick_service import KickService
-    from app.services.kv_service import KvService
     from app.services.live_vote_service import LiveVoteService
     from app.services.logging_service import LoggingService
     from app.services.moderation_case_service import ModerationCaseService
@@ -70,11 +66,15 @@ def assemble(
     from app.services.reminder_service import ReminderService
     from app.services.scheduler_service import ScheduledMessagesService
     from app.services.season_service import SeasonService
-    from app.services.settings_service import SettingsService
     from app.services.temp_voice_service import TempVoiceService
     from app.services.ticket_service import TicketService
     from app.services.twitch_service import TwitchService
     from app.services.vk_video_service import VkVideoService
+    from app.shared.event_bus import EventBus
+    from app.shared.kv_repository import KvRepository
+    from app.shared.kv_service import KvService
+    from app.shared.settings_repository import SettingsRepository
+    from app.shared.settings_service import SettingsService
 
     # --- Репозитории (слой данных) ---
     settings_repo = override_or(overrides, "settings_repo", SettingsRepository, db)

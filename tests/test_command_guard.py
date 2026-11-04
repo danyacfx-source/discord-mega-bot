@@ -12,7 +12,7 @@ from app.config import Config, GuardConfig
 from app.core.bot import MegaBot
 from app.core.composition import assemble
 from app.services.command_guard_service import CommandGuardService
-from app.services.kv_service import KvService
+from app.shared.kv_service import KvService
 
 
 class _DictRepo:

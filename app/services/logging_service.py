@@ -8,7 +8,7 @@ import discord
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.services.settings_service import SettingsService
+    from app.shared.settings_service import SettingsService
 
 logger = logging.getLogger("bot.services")
 

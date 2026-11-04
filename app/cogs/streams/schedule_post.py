@@ -16,8 +16,8 @@ from discord.ext import commands, tasks
 
 from app.cogs.streams.quiet import resolve_tz
 from app.cogs.streams.stats import _segment_line
-from app.services.kv_service import KvService
 from app.services.twitch_service import TwitchService
+from app.shared.kv_service import KvService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

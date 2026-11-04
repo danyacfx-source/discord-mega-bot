@@ -11,7 +11,7 @@ from app.utils.time import parse_duration
 
 if TYPE_CHECKING:
     from app.db.warns_repository import WarnsRepository
-    from app.services.settings_service import SettingsService
+    from app.shared.settings_service import SettingsService
 
 from app.types import WarnRow
 

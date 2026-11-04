@@ -12,7 +12,7 @@ import discord
 from discord.ext import commands
 
 from app.core.base import MegaCog
-from app.services.settings_service import SettingsService
+from app.shared.settings_service import SettingsService
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

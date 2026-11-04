@@ -5,7 +5,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from app.db.kv_repository import KvRepository
+from app.shared.kv_repository import KvRepository
 
 #: Хранится максимум столько сэмплов зрителей (60 × 60 с ≈ час эфира).
 _HISTORY_LIMIT = 60

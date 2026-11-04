@@ -18,7 +18,7 @@ from app.services.viewer_sessions import ViewerSessionStore
 
 if TYPE_CHECKING:
     from app.config import Config
-    from app.db.kv_repository import KvRepository
+    from app.shared.kv_repository import KvRepository
 
 
 class StreamPlatformService:

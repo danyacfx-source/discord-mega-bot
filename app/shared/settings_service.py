@@ -8,11 +8,11 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from app.db.settings_repository import _INT_COLUMNS
+from app.shared.settings_repository import _INT_COLUMNS
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot
-    from app.db.settings_repository import SettingsRepository
+    from app.shared.settings_repository import SettingsRepository
 
 logger = logging.getLogger("bot.services.settings")
 

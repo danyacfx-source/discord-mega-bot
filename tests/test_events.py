@@ -13,7 +13,7 @@ from app.config import Config
 from app.core.bot import MegaBot
 from app.core.webpanel.log_ring import RingBufferHandler
 from app.core.webpanel.webpanel import WebPanel
-from app.services.event_bus import EventBus
+from app.shared.event_bus import EventBus
 
 
 def _panel(tmp_path, port: int = 17892) -> tuple[MegaBot, WebPanel, EventBus]:

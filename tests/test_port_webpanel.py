@@ -808,8 +808,8 @@ async def test_panel_static_token_survives_redeploy_via_kv(tmp_path, make_panel_
     """Файл .panel-token умер при редеплое — токен возвращается из БД для API-скриптов."""
     from types import SimpleNamespace
 
-    from app.db.kv_repository import KvRepository
-    from app.services.kv_service import KvService
+    from app.shared.kv_repository import KvRepository
+    from app.shared.kv_service import KvService
 
     bot = make_panel_bot()
     bot.db = Database(bot.config.database_url)

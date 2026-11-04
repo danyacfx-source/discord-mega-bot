@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from app.config import Config
     from app.services.chat_coins_service import ChatCoinsService
     from app.services.chat_feed import ChatFeed
-    from app.services.kv_service import KvService
     from app.services.live_vote_service import LiveVoteService
+    from app.shared.kv_service import KvService
 
 logger = logging.getLogger("bot.services")
 
