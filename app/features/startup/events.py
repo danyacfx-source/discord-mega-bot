@@ -9,7 +9,7 @@ from discord.ext import commands
 
 from app.core.base import MegaCog
 from app.core.stream_state import stream_activity
-from app.services.music_service import ffmpeg_available
+from app.features.music.service import ffmpeg_available
 from app.shared.settings_service import SettingsService
 
 if TYPE_CHECKING:

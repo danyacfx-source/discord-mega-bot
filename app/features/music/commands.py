@@ -9,8 +9,8 @@ from discord.ext import commands
 
 from app.core import embeds
 from app.core.base import MegaCog
-from app.services.audio.track import Track
-from app.services.music_service import MusicService, ffmpeg_available
+from app.features.music.audio.track import Track
+from app.features.music.service import MusicService, ffmpeg_available
 from app.utils.pagination import PaginatorView
 
 if TYPE_CHECKING:

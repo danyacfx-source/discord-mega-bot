@@ -6,10 +6,10 @@ import discord
 import pytest
 
 from app.db.database import Database
-from app.db.music_repository import MusicRepository
-from app.services.audio.player import GuildPlayer
-from app.services.audio.track import Track
-from app.services.music_service import MusicService
+from app.features.music.audio.player import GuildPlayer
+from app.features.music.audio.track import Track
+from app.features.music.repository import MusicRepository
+from app.features.music.service import MusicService
 
 
 @pytest.fixture

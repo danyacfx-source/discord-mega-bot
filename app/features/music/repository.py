@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.db.base_repository import BaseRepository
-from app.services.audio.track import Track
+from app.features.music.audio.track import Track
 
 
 class MusicRepository(BaseRepository):

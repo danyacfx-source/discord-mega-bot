@@ -38,7 +38,7 @@ async def test_bot_bootstrap(pg_url):
             ):
                 assert expected in cog_names, f"Не загружен ког {expected}"
 
-            from app.services.audio.player import GuildPlayer
+            from app.features.music.audio.player import GuildPlayer
 
             player = bot.services.music.get_player(0)
             assert isinstance(player, GuildPlayer)

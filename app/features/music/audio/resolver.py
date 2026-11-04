@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import yt_dlp
 
-from app.services.audio.track import Track
+from app.features.music.audio.track import Track
 
 logger = logging.getLogger("bot.audio")
 

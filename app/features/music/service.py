@@ -5,10 +5,10 @@ import logging
 import shutil
 from typing import TYPE_CHECKING
 
-from app.services.audio.player import GuildPlayer
-from app.services.audio.resolver import TrackNotFoundError, TrackResolver
-from app.services.audio.spotify import SpotifyResolver
-from app.services.audio.track import Track
+from app.features.music.audio.player import GuildPlayer
+from app.features.music.audio.resolver import TrackNotFoundError, TrackResolver
+from app.features.music.audio.spotify import SpotifyResolver
+from app.features.music.audio.track import Track
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

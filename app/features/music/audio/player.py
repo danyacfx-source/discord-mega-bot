@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from app.services.audio.track import Track
+from app.features.music.audio.track import Track
 
 if TYPE_CHECKING:
     from app.core.bot import MegaBot

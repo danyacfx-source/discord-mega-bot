@@ -34,7 +34,6 @@ def assemble(
     from app.core.bot import MegaBot
     from app.core.services import Services
     from app.db.chat_coins_repository import ChatCoinsRepository
-    from app.db.music_repository import MusicRepository
     from app.features.birthdays.repository import BirthdaysRepository
     from app.features.birthdays.service import BirthdayService
     from app.features.donations.repository import DonationsRepository
@@ -48,6 +47,8 @@ def assemble(
     from app.features.moderation.cases_service import ModerationCaseService
     from app.features.moderation.service import ModerationService
     from app.features.moderation.warns_repository import WarnsRepository
+    from app.features.music.repository import MusicRepository
+    from app.features.music.service import MusicService
     from app.features.polls.repository import PollsRepository
     from app.features.polls.service import PollService
     from app.features.reaction_roles.repository import ReactionRolesRepository
@@ -67,7 +68,6 @@ def assemble(
     from app.services.chat_feed import ChatFeed
     from app.services.kick_service import KickService
     from app.services.live_vote_service import LiveVoteService
-    from app.services.music_service import MusicService
     from app.services.twitch_service import TwitchService
     from app.services.vk_video_service import VkVideoService
     from app.shared.event_bus import EventBus
